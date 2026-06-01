@@ -1,0 +1,7 @@
+// Base.xcconfig — committed base build configuration.
+//
+// Secrets (Claude API key + model) are layered in from the gitignored Secrets.xcconfig at the
+// repo root. The `#include?` form is OPTIONAL: if Secrets.xcconfig is absent (fresh clone / CI),
+// generation and build still succeed — the app simply launches without a live API key and the
+// composition root stays on mocks until one is provided.
+#include? "../Secrets.xcconfig"

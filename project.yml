@@ -1,0 +1,104 @@
+# EnglishHelper — xcodegen project definition (source of truth for the Xcode project).
+# Regenerate the .xcodeproj with:  xcodegen generate
+# The generated EnglishHelper.xcodeproj is gitignored; project.yml is committed instead.
+#
+# Clean Architecture as separate framework modules — the dependency rule is enforced by the
+# compiler (Domain literally cannot import outer layers):
+#   Domain  ◄── Data
+#   Domain  ◄── Presentation ──► DesignSystem
+#   (App depends on everything; nothing depends on App)
+
+name: EnglishHelper
+
+options:
+  bundleIdPrefix: com.englishhelper
+  deploymentTarget:
+    iOS: "26.0"
+  developmentLanguage: en
+  generateEmptyDirectories: true
+
+# Common build settings for every target.
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # Frameworks let Xcode synthesize their Info.plist; the app overrides with an explicit file.
+    GENERATE_INFOPLIST_FILE: "YES"
+
+# Layer the (gitignored) Secrets.xcconfig in via an optional include, so generation/build never
+# fails when secrets are absent (e.g. a fresh clone or CI).
+configFiles:
+  Debug: Config/Base.xcconfig
+  Release: Config/Base.xcconfig
+
+targets:
+
+  Domain:
+    type: framework
+    platform: iOS
+    sources: [Domain]
+
+  # Module is named `Adapters` (not `Data`) so it never shadows Foundation.Data in consumers.
+  # The on-disk folder stays `Data/` per the layer layout.
+  Adapters:
+    type: framework
+    platform: iOS
+    sources: [Data]
+    dependencies:
+      - target: Domain
+
+  DesignSystem:
+    type: framework
+    platform: iOS
+    sources: [DesignSystem]
+
+  Presentation:
+    type: framework
+    platform: iOS
+    sources: [Presentation]
+    dependencies:
+      - target: Domain
+      - target: DesignSystem
+
+  EnglishHelper:
+    type: application
+    platform: iOS
+    sources: [App]
+    dependencies:
+      - target: Domain
+      - target: Adapters
+      - target: DesignSystem
+      - target: Presentation
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.englishhelper.app
+        INFOPLIST_FILE: App/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1"   # iPhone
+        ENABLE_PREVIEWS: YES
+
+  EnglishHelperTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [Tests]
+    dependencies:
+      - target: Domain
+      - target: Adapters
+
+schemes:
+  EnglishHelper:
+    build:
+      targets:
+        EnglishHelper: all
+        EnglishHelperTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - EnglishHelperTests

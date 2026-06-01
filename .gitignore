@@ -1,1 +1,22 @@
+# Secrets (API keys) — never commit. Use Secrets.example.xcconfig as the template.
 Secrets.xcconfig
+
+# Generated Xcode project (source of truth is project.yml — run `xcodegen generate`).
+*.xcodeproj
+*.xcworkspace
+
+# Xcode user/build artifacts
+xcuserdata/
+DerivedData/
+build/
+*.xcuserstate
+*.xcscmblueprint
+*.moved-aside
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# macOS
+.DS_Store
