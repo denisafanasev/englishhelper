@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>EnglishHelper — Design System</title>
+<link rel="stylesheet" href="theme.css" />
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #f0eee9; overflow: hidden; }
+  #root { height: 100vh; width: 100vw; }
+  .boot { position: fixed; inset: 0; display: grid; place-items: center; color: #8a8175;
+    font: 500 15px -apple-system, system-ui, sans-serif; }
+</style>
+</head>
+<body>
+<div id="root"><div class="boot">Загрузка дизайн-системы…</div></div>
+
+<template id="__bundler_thumbnail">
+  <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect width="100" height="100" fill="#000"/>
+    <circle cx="50" cy="44" r="20" fill="none" stroke="#fff" stroke-width="3"/>
+    <rect x="44" y="30" width="12" height="20" rx="6" fill="#fff"/>
+    <path d="M36 44a14 14 0 0 0 28 0" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+    <text x="50" y="80" fill="#fff" font-size="11" font-family="sans-serif" font-weight="700" text-anchor="middle">EH</text>
+  </svg>
+</template>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="icons.jsx"></script>
+<script type="text/babel" src="kit-core.jsx"></script>
+<script type="text/babel" src="kit-parts.jsx"></script>
+<script type="text/babel" src="foundations.jsx"></script>
+<script type="text/babel" src="components.jsx"></script>
+<script type="text/babel" src="screens.jsx"></script>
+
+<script type="text/babel" data-presets="react">
+  function App() {
+    return (
+      <DesignCanvas minScale={0.1} maxScale={3}>
+        {window.FoundationsSections()}
+        {window.ComponentSections()}
+        {window.ScreenSections()}
+      </DesignCanvas>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
