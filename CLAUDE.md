@@ -81,15 +81,27 @@ extractable** — acceptable for this personal/dev app; a production build would
 
 ## Current Status
 
-**Step 1 — Scaffold: COMPLETE.** Clean-architecture skeleton compiles and launches to a
-placeholder screen, entirely on mock adapters.
+**Scaffold (Prompt 1): COMPLETE.** Clean-architecture skeleton, mocks, DI, tests.
 
-- ✅ All Domain ports + 4 prompt templates defined; each port has a `Mock*` in Data; DI
-  (`AppContainer.bootMock()`) wires the full use-case graph on mocks.
-- ✅ `DesignSystem/Tokens.swift` is the single source of truth (extracted in Step 0, committed).
-- ✅ `Secrets.xcconfig` gitignored; `Secrets.example.xcconfig` committed; Info.plist usage strings set.
-- ✅ Tests: `ForbiddenImportTests` (Domain purity), `DIBootTests` (boots on mocks).
+**v1 (Prompt 2) — Build order:**
+- ✅ **1. Adapters + forbidden-import guardrail.** Live adapters wired; app boots LIVE with a mock
+  fallback, builds + launches on iOS 26, 24/24 tests green.
+  - `ClaudeLLMClient` (Messages API; fence-strip + typed decode + timeout/malformed/offline paths).
+  - `NativeSpeechRecognizer` (iOS 26 `SpeechAnalyzer`/`SpeechTranscriber`, ru-RU on-device, (text,isFinal) stream, cancel).
+  - `NativeSpeechSynthesizer` (`AVSpeechSynthesizer`, EN, state + stop).
+  - `VisionTextRecognizer` (`RecognizeTextRequest` → text + normalized top-left boxes).
+  - `SwiftDataExpressionRepository` / `SwiftDataHistoryRepository` (`@ModelActor`) + `@Model` types.
+  - `AlgoAppXMLExporter` (deterministic 4-line cards → escaped XML, validated by `XMLParser`).
+  - OCR port evolved: `TextRecognizing` now returns `RecognizedText` (text + boxes).
+  - `Stub*` (latency + failure) for LLM/ASR/TTS/OCR alongside `Mock*`.
+  - Engine swap = ONE line in `AppContainer.bootLive` (see README).
+- ⏳ **2. "Как сказать"** (Voice: mic→STT→Claude→TTS→save→enrich) — NOT STARTED (next).
+- ⏳ 3. "Перевод" · 4. "Фото-перевод" · 5. "Список" + export · 6. "История" · 7. "Настройки".
 
-**Next — Step 2 (v1):** implement live adapters (ClaudeLLMClient, Speech/Vision, SwiftData repos,
-deck exporter) and the three screens (Voice / Study / Camera), screen by screen. See
-`docs/02-v1-development.md`. No feature logic or non-placeholder UI exists yet.
+**Notes / trade-offs so far:**
+- `NativeSpeechRecognizer` compiles against the real iOS 26 API but its live mic→STT path needs
+  on-device verification (no mic in CI); the architecture/stream contract is covered by `Stub*`.
+- `XMLDocument` is macOS-only → the exporter uses a dedicated escaping `XMLWriter` + `XMLParser` validation.
+- SDK name collisions handled by qualification: `Domain.Expression` vs `Foundation.Expression`,
+  `Domain.RecognizedText`/`NormalizedRect` vs Vision's; Data layer module is `Adapters` (not `Data`).
+- Liquid-Glass-vs-readability trade-offs arrive with the screens (step 2+); none yet.

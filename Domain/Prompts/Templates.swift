@@ -178,6 +178,17 @@ public struct EnrichCardTemplate: PromptTemplate {
     }
 
     public func decode(_ rawJSON: String) throws -> CardEnrichment {
-        try decodeJSON(CardEnrichment.self, from: rawJSON)
+        let raw = try decodeJSON(CardEnrichment.self, from: rawJSON)
+        // Enforce the contract regardless of what the model returned:
+        // plain text only, and 0–3 non-empty synonyms.
+        let synonyms = raw.synonyms
+            .map(PlainText.clean)
+            .filter { !$0.isEmpty }
+            .prefix(3)
+        return CardEnrichment(
+            ru: PlainText.clean(raw.ru),
+            example: PlainText.clean(raw.example),
+            synonyms: Array(synonyms)
+        )
     }
 }

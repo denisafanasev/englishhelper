@@ -60,14 +60,15 @@ public struct TranslateTextInteractor: TranslateTextUseCase {
 
 // MARK: - photoTranslate
 
-/// OCR result + its translation.
+/// OCR result + its translation. `blocks` carry the boxes the overlay draws.
 public struct PhotoTranslation: Sendable, Equatable {
     public let recognizedText: String
+    public let blocks: [RecognizedTextBlock]
     public let ru: String
 }
 
 public protocol PhotoTranslateUseCase: Sendable {
-    /// Image → OCR'd English → Russian translation (also appended to history).
+    /// Image → OCR'd English (+ boxes) → Russian translation (also appended to history).
     func callAsFunction(_ image: RecognizableImage) async throws -> PhotoTranslation
 }
 
@@ -84,11 +85,12 @@ public struct PhotoTranslateInteractor: PhotoTranslateUseCase {
 
     public func callAsFunction(_ image: RecognizableImage) async throws -> PhotoTranslation {
         let recognized = try await ocr.recognizeText(in: image)
-        let result = try await llm.run(PhotoTranslateTemplate(), input: recognized)
+        guard !recognized.isEmpty else { throw TextRecognitionError.noTextFound }
+        let result = try await llm.run(PhotoTranslateTemplate(), input: recognized.fullText)
         try? await history.append(
-            HistoryEntry(inputText: recognized, result: .photoTranslate(ru: result.ru))
+            HistoryEntry(inputText: recognized.fullText, result: .photoTranslate(ru: result.ru))
         )
-        return PhotoTranslation(recognizedText: recognized, ru: result.ru)
+        return PhotoTranslation(recognizedText: recognized.fullText, blocks: recognized.blocks, ru: result.ru)
     }
 }
 

@@ -12,11 +12,11 @@ public struct RecognizableImage: Sendable, Equatable {
     public init(data: Data) { self.data = data }
 }
 
-/// Recognizes English text in an image (OCR).
+/// Recognizes English text in an image (OCR), WITH bounding boxes for the overlay.
 ///
 /// Backend note: Apple `Vision` (on-device) today, a cloud OCR tomorrow — both accept encoded
-/// image bytes and return plain text, so the signature fits either.
+/// image bytes and return `RecognizedText` (text + normalized boxes), so the signature fits either.
 public protocol TextRecognizing: Sendable {
     /// Recognize text in `image`. Throws `TextRecognitionError`.
-    func recognizeText(in image: RecognizableImage) async throws -> String
+    func recognizeText(in image: RecognizableImage) async throws -> RecognizedText
 }

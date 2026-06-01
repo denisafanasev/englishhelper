@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import SwiftData
 import Domain
 import Adapters
 import Presentation
@@ -62,7 +63,25 @@ public final class AppContainer: Sendable {
         self.exportDeck = ExportDeckInteractor(repository: expressions, exporter: exporter)
     }
 
-    /// Step 1 / previews / tests: the whole graph on mocks. No network, no permissions.
+    /// v1: the whole graph on LIVE adapters. Swapping any engine is exactly ONE line below
+    /// (see README "Swapping an engine"). The Domain/Presentation never learn which one is wired.
+    public static func bootLive(config: AppConfig = .load()) throws -> AppContainer {
+        let modelContainer = try ModelContainer(for: ExpressionModel.self, HistoryModel.self)
+        return AppContainer(
+            config: config,
+            llm: ClaudeLLMClient(apiKey: config.claudeAPIKey ?? "",
+                                 model: config.claudeModel,
+                                 baseURL: config.claudeBaseURL),
+            speechRecognizer: NativeSpeechRecognizer(),     // ← swap ASR engine here
+            speechSynthesizer: NativeSpeechSynthesizer(),   // ← swap TTS engine here
+            textRecognizer: VisionTextRecognizer(),         // ← swap OCR engine here
+            expressions: SwiftDataExpressionRepository(modelContainer: modelContainer),
+            history: SwiftDataHistoryRepository(modelContainer: modelContainer),
+            exporter: AlgoAppXMLExporter()
+        )
+    }
+
+    /// Previews / tests / offline fallback: the whole graph on mocks. No network, no permissions.
     public static func bootMock(config: AppConfig = .load()) -> AppContainer {
         AppContainer(
             config: config,
