@@ -26,7 +26,8 @@ struct EnglishHelperApp: App {
             RootView(
                 voice: container.makeVoiceViewModel(),
                 translate: container.makeTranslateViewModel(),
-                photo: container.makePhotoTranslateViewModel()
+                photo: container.makePhotoTranslateViewModel(),
+                library: container.makeStudyListViewModel()
             )
         }
     }

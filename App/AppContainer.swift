@@ -139,4 +139,14 @@ public final class AppContainer: Sendable {
             isConfigured: config.isClaudeConfigured
         )
     }
+
+    @MainActor
+    public func makeStudyListViewModel() -> StudyListViewModel {
+        StudyListViewModel(
+            studyList: studyList,
+            saveExpression: saveExpression,
+            exportDeck: exportDeck,
+            isConfigured: config.isClaudeConfigured
+        )
+    }
 }

@@ -12,11 +12,18 @@ public struct RootView: View {
     @State private var voice: VoiceViewModel
     @State private var translate: TranslateViewModel
     @State private var photo: PhotoTranslateViewModel
+    @State private var library: StudyListViewModel
 
-    public init(voice: VoiceViewModel, translate: TranslateViewModel, photo: PhotoTranslateViewModel) {
+    public init(
+        voice: VoiceViewModel,
+        translate: TranslateViewModel,
+        photo: PhotoTranslateViewModel,
+        library: StudyListViewModel
+    ) {
         _voice = State(initialValue: voice)
         _translate = State(initialValue: translate)
         _photo = State(initialValue: photo)
+        _library = State(initialValue: library)
     }
 
     public var body: some View {
@@ -29,6 +36,9 @@ public struct RootView: View {
             }
             Tab("Камера", systemImage: "camera") {
                 PhotoTranslateView(model: photo)
+            }
+            Tab("Изучаю", systemImage: "rectangle.stack") {
+                StudyListView(model: library)
             }
         }
     }

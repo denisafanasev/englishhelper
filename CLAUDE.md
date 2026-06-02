@@ -114,7 +114,11 @@ extractable** — acceptable for this personal/dev app; a production build would
   → OCR (+ boxes) → RU translation. Boxes drawn over the photo; translation panel sits on a
   **SOLID scrim** (white text, AA contrast — never glass under text). Play source / save.
   Camera permission priming before the system dialog. New tab **Камера**. 35/35 tests green.
-- ⏳ 5. "Список" + export · 6. "История" · 7. "Настройки".
+- ✅ **5. "Список" + AlgoApp export** (tab **Изучаю**). Flat study list of `Expression`s: manual
+  add (enrich-then-store), swipe-delete, leading swipe toggle-learned, glass rows. Export via
+  `ExportDeck` → `AlgoAppXMLExporter` → temp .xml file → system share sheet (`UIActivityViewController`).
+  States loading/empty/loaded/failed. 42/42 tests green.
+- ⏳ 6. "История" · 7. "Настройки".
 
 **Notes / trade-offs so far:**
 - **Liquid Glass vs readability:** all glass goes through `glassPanel`, which swaps to a SOLID
