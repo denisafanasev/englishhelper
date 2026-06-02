@@ -10,9 +10,11 @@
 import Foundation
 import Speech
 import AVFoundation
+import OSLog
 import Domain
 
 public final class NativeSpeechRecognizer: SpeechRecognizing, @unchecked Sendable {
+    private static let logger = Logger(subsystem: "com.englishhelper.app", category: "speech")
     private let locale: Locale
     public init(locale: Locale = Locale(identifier: "ru-RU")) { self.locale = locale }
 
@@ -25,6 +27,7 @@ public final class NativeSpeechRecognizer: SpeechRecognizing, @unchecked Sendabl
                 } catch is CancellationError {
                     continuation.finish()
                 } catch {
+                    Self.logger.error("recognition failed: \(String(describing: error), privacy: .public)")
                     continuation.finish(throwing: error)
                 }
             }
