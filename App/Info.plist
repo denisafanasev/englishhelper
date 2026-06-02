@@ -20,8 +20,22 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>CLAUDE_API_KEY</key>
+	<string>$(CLAUDE_API_KEY)</string>
+	<key>CLAUDE_MODEL</key>
+	<string>$(CLAUDE_MODEL)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>The camera lets you point at English text to translate it instantly.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>EnglishHelper listens through the microphone to hear what you want to say in Russian.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Pick a photo containing English text to translate it.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Speech recognition turns your spoken Russian into text to translate.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -33,21 +47,5 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
-
-	<!-- Permission usage strings — the app crashes at runtime when touching these APIs without them. -->
-	<key>NSMicrophoneUsageDescription</key>
-	<string>EnglishHelper listens through the microphone to hear what you want to say in Russian.</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Speech recognition turns your spoken Russian into text to translate.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>The camera lets you point at English text to translate it instantly.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Pick a photo containing English text to translate it.</string>
-
-	<!-- Claude configuration, injected from Secrets.xcconfig at build time (read by AppConfig). -->
-	<key>CLAUDE_API_KEY</key>
-	<string>$(CLAUDE_API_KEY)</string>
-	<key>CLAUDE_MODEL</key>
-	<string>$(CLAUDE_MODEL)</string>
 </dict>
 </plist>
