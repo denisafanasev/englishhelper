@@ -143,26 +143,16 @@ private struct HistoryDetailView: View {
         case .howToSay(let variants):
             VStack(spacing: Tokens.Space.s12) {
                 ForEach(variants) { variant in
-                    VStack(alignment: .leading, spacing: Tokens.Space.s8) {
-                        HStack(alignment: .top) {
-                            RegisterTagView(registerLevel(variant.register))
-                            Spacer(minLength: Tokens.Space.s8)
-                            bookmark(isSaved: model.isSaved(HistoryDetailViewModel.variantKey(variant))) {
-                                model.toggleSaveVariant(variant)
-                            }
-                        }
-                        Text(variant.en)
-                            .textStyle(Tokens.Text.title3)
-                            .foregroundStyle(Tokens.Content.primary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text(variant.contextRU)
-                            .textStyle(Tokens.Text.subhead)
-                            .foregroundStyle(Tokens.Content.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(Tokens.Space.s16)
-                    .glassPanel(cornerRadius: Tokens.Radius.card)
+                    // Same card as the Voice screen: tap = play, bookmark = save.
+                    PhraseVariantCard(
+                        english: variant.en,
+                        register: registerLevel(variant.register),
+                        contextRU: variant.contextRU,
+                        isSaved: model.isSaved(HistoryDetailViewModel.variantKey(variant)),
+                        isPlaying: model.isPlaying(HistoryDetailViewModel.variantKey(variant)),
+                        onPlay: { model.playVariant(variant) },
+                        onToggleSave: { model.toggleSaveVariant(variant) }
+                    )
                 }
             }
         case .translate(let ru), .photoTranslate(let ru):
@@ -177,9 +167,17 @@ private struct HistoryDetailView: View {
                 Text(ru)
                     .textStyle(Tokens.Text.title3)
                     .foregroundStyle(Tokens.Content.primary)
-                Text("Закладка сохранит английский оригинал в изучаемое")
-                    .textStyle(Tokens.Text.footnote)
-                    .foregroundStyle(Tokens.Content.tertiary)
+
+                Button(action: model.playTranslationSource) {
+                    Label(
+                        model.isPlaying(HistoryDetailViewModel.translationKey) ? "Озвучивается…" : "Озвучить оригинал",
+                        systemImage: model.isPlaying(HistoryDetailViewModel.translationKey) ? "speaker.wave.2.fill" : "speaker.wave.2"
+                    )
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Tokens.Content.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Озвучить английский оригинал")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(Tokens.Space.s16)

@@ -20,7 +20,8 @@ import Presentation
             saveExpression: SaveExpressionInteractor(
                 enrich: EnrichExpressionInteractor(llm: MockLLMClient()), repository: exprRepo
             ),
-            studyList: StudyListInteractor(repository: exprRepo)
+            studyList: StudyListInteractor(repository: exprRepo),
+            pronounce: PlayPronunciationInteractor(synthesizer: MockSpeechSynthesizing())
         )
     }
 
@@ -60,7 +61,8 @@ import Presentation
             saveExpression: SaveExpressionInteractor(
                 enrich: EnrichExpressionInteractor(llm: MockLLMClient()), repository: repo
             ),
-            studyList: StudyListInteractor(repository: repo)
+            studyList: StudyListInteractor(repository: repo),
+            pronounce: PlayPronunciationInteractor(synthesizer: MockSpeechSynthesizing())
         )
         return (vm, repo)
     }

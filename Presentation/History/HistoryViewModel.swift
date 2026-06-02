@@ -20,21 +20,26 @@ public final class HistoryViewModel {
     private let history: any RequestHistoryUseCase
     private let saveExpression: any SaveExpressionUseCase
     private let studyList: any StudyListUseCase
+    private let pronounce: any PlayPronunciationUseCase
     private let limit = 200
 
     public init(
         history: any RequestHistoryUseCase,
         saveExpression: any SaveExpressionUseCase,
-        studyList: any StudyListUseCase
+        studyList: any StudyListUseCase,
+        pronounce: any PlayPronunciationUseCase
     ) {
         self.history = history
         self.saveExpression = saveExpression
         self.studyList = studyList
+        self.pronounce = pronounce
     }
 
-    /// VM for the read-only detail, which can also save phrases into the study list.
+    /// VM for the read-only detail, which can also save phrases into the study list and play them.
     public func makeDetailViewModel(for entry: HistoryEntry) -> HistoryDetailViewModel {
-        HistoryDetailViewModel(entry: entry, saveExpression: saveExpression, studyList: studyList)
+        HistoryDetailViewModel(
+            entry: entry, saveExpression: saveExpression, studyList: studyList, pronounce: pronounce
+        )
     }
 
     public func load() async {

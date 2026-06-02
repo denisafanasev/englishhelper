@@ -15,18 +15,24 @@ public final class HistoryDetailViewModel {
     public let entry: HistoryEntry
     public private(set) var errorMessage: String?
 
+    public private(set) var playingKey: String?
+
     private var savedIDs: [String: UUID] = [:]   // item key → stored Expression.id
     private let saveExpression: any SaveExpressionUseCase
     private let studyList: any StudyListUseCase
+    private let pronounce: any PlayPronunciationUseCase
+    private var playTask: Task<Void, Never>?
 
     public init(
         entry: HistoryEntry,
         saveExpression: any SaveExpressionUseCase,
-        studyList: any StudyListUseCase
+        studyList: any StudyListUseCase,
+        pronounce: any PlayPronunciationUseCase
     ) {
         self.entry = entry
         self.saveExpression = saveExpression
         self.studyList = studyList
+        self.pronounce = pronounce
     }
 
     /// For `.translate` / `.photoTranslate` the saveable English source is the request text.
@@ -49,6 +55,34 @@ public final class HistoryDetailViewModel {
     public func toggleSaveTranslation() {
         guard let ru = translationRU else { return }
         toggle(key: Self.translationKey, en: entry.inputText, knownRU: ru, context: "")
+    }
+
+    // MARK: Play (TTS of the English text)
+
+    public func isPlaying(_ key: String) -> Bool { playingKey == key }
+
+    public func playVariant(_ variant: PhraseVariant) {
+        play(key: Self.variantKey(variant), english: variant.en)
+    }
+
+    /// For translate / photo entries the English text to speak is the request source.
+    public func playTranslationSource() {
+        play(key: Self.translationKey, english: entry.inputText)
+    }
+
+    private func play(key: String, english: String) {
+        guard !english.isEmpty else { return }
+        playTask?.cancel()
+        playingKey = key
+        playTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                for try await state in self.pronounce(english) where state == .finished { break }
+            } catch {
+                // playback failure is non-fatal
+            }
+            if self.playingKey == key { self.playingKey = nil }
+        }
     }
 
     private func toggle(key: String, en: String, knownRU: String?, context: String) {

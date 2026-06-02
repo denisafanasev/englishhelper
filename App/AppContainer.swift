@@ -143,7 +143,10 @@ public final class AppContainer: Sendable {
 
     @MainActor
     public func makeHistoryViewModel() -> HistoryViewModel {
-        HistoryViewModel(history: requestHistory, saveExpression: saveExpression, studyList: studyList)
+        HistoryViewModel(
+            history: requestHistory, saveExpression: saveExpression,
+            studyList: studyList, pronounce: pronounce
+        )
     }
 
     @MainActor
