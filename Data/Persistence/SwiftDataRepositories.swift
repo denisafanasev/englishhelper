@@ -56,10 +56,29 @@ public actor SwiftDataExpressionRepository: ExpressionRepository {
 
 @ModelActor
 public actor SwiftDataHistoryRepository: HistoryRepository {
+    /// Keep only the newest N requests so history doesn't grow without bound.
+    public static let maxEntries = 100
+
     public func append(_ entry: HistoryEntry) async throws {
         modelContext.insert(try HistoryModel(entry))
-        do { try modelContext.save() }
-        catch { throw RepositoryError.persistenceFailed(error.localizedDescription) }
+        do {
+            try modelContext.save()
+            try pruneBeyondLimit()
+        } catch {
+            throw RepositoryError.persistenceFailed(error.localizedDescription)
+        }
+    }
+
+    /// Delete everything older than the newest `maxEntries` entries.
+    private func pruneBeyondLimit() throws {
+        var descriptor = FetchDescriptor<HistoryModel>(
+            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
+        )
+        descriptor.fetchOffset = Self.maxEntries
+        let stale = try modelContext.fetch(descriptor)
+        guard !stale.isEmpty else { return }
+        for model in stale { modelContext.delete(model) }
+        try modelContext.save()
     }
 
     public func recent(limit: Int) async throws -> [HistoryEntry] {
