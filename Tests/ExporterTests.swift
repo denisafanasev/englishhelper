@@ -50,4 +50,21 @@ import Adapters
             _ = try await AlgoAppXMLExporter().export([])
         }
     }
+
+    // MARK: Anki
+
+    @Test func ankiExportIsTabSeparatedWithEnglishFront() async throws {
+        let deck = try await AnkiExporter().export(sample())
+        let text = String(data: deck.data, encoding: .utf8)!
+        #expect(deck.filename.hasSuffix(".txt"))
+        #expect(text.contains("#separator:tab"))
+        #expect(text.contains("#html:true"))
+        #expect(text.contains("I appreciate it\t"))   // Front = English, tab-separated
+    }
+
+    @Test func ankiEmptyListThrows() async {
+        await #expect(throws: ExportError.self) {
+            _ = try await AnkiExporter().export([])
+        }
+    }
 }

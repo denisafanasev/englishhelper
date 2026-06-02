@@ -20,7 +20,9 @@ import Presentation
             saveExpression: SaveExpressionInteractor(
                 enrich: EnrichExpressionInteractor(llm: MockLLMClient()), repository: repo
             ),
-            exportDeck: ExportDeckInteractor(repository: repo, exporter: AlgoAppXMLExporter()),
+            exportAlgoApp: ExportDeckInteractor(repository: repo, exporter: AlgoAppXMLExporter()),
+            exportAnki: ExportDeckInteractor(repository: repo, exporter: AnkiExporter()),
+            pronounce: PlayPronunciationInteractor(synthesizer: MockSpeechSynthesizing()),
             isConfigured: true
         )
     }
@@ -79,15 +81,23 @@ import Presentation
     @Test func exportProducesXMLDeck() async throws {
         let vm = makeVM(seed: MockExpressionRepository.defaultSeed)
         await vm.load()
-        vm.export()
+        vm.export(.algoApp)
         try await waitUntil { vm.exportedDeck != nil }
         #expect(vm.exportedDeck?.filename.hasSuffix(".xml") == true)
+    }
+
+    @Test func exportAnkiProducesTxtDeck() async throws {
+        let vm = makeVM(seed: MockExpressionRepository.defaultSeed)
+        await vm.load()
+        vm.export(.anki)
+        try await waitUntil { vm.exportedDeck != nil }
+        #expect(vm.exportedDeck?.filename.hasSuffix(".txt") == true)
     }
 
     @Test func exportEmptyListSetsError() async throws {
         let vm = makeVM(seed: [])
         await vm.load()
-        vm.export()
+        vm.export(.algoApp)
         try await waitUntil { vm.exportError != nil }
         #expect(vm.exportError != nil)
     }

@@ -27,9 +27,15 @@ public struct StudyListView: View {
             .settingsTrigger()
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { model.export() } label: { Image(systemName: "square.and.arrow.up") }
-                        .disabled(model.expressions.isEmpty)
-                        .accessibilityLabel("Экспортировать в AlgoApp")
+                    Menu {
+                        ForEach(StudyListViewModel.ExportFormat.allCases, id: \.self) { format in
+                            Button(format.title) { model.export(format) }
+                        }
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .disabled(model.expressions.isEmpty)
+                    .accessibilityLabel("Экспортировать список")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { model.showAddSheet = true } label: { Image(systemName: "plus") }
@@ -75,7 +81,9 @@ public struct StudyListView: View {
     private var list: some View {
         List {
             ForEach(model.expressions) { expression in
-                StudyRow(expression: expression)
+                StudyRow(expression: expression,
+                         isPlaying: model.isPlaying(expression),
+                         onPlay: { model.play(expression) })
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                     .listRowInsets(EdgeInsets(top: Tokens.Space.s4, leading: Tokens.Space.s16,
@@ -166,6 +174,8 @@ public struct StudyListView: View {
 
 private struct StudyRow: View {
     let expression: Domain.Expression
+    let isPlaying: Bool
+    let onPlay: () -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: Tokens.Space.s12) {
@@ -186,9 +196,19 @@ private struct StudyRow: View {
                 }
             }
             Spacer(minLength: Tokens.Space.s8)
-            if expression.learned {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(Tokens.Signal.success)
+            VStack(alignment: .trailing, spacing: Tokens.Space.s8) {
+                Button(action: onPlay) {
+                    Image(systemName: isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2")
+                        .symbolEffect(.variableColor.iterative, isActive: isPlaying)
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(Tokens.Content.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Озвучить")
+                if expression.learned {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(Tokens.Signal.success)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -196,5 +216,6 @@ private struct StudyRow: View {
         .glassPanel(cornerRadius: Tokens.Radius.card)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(expression.en). \(expression.ru). \(expression.learned ? "Выучено" : "Не выучено")")
+        .accessibilityAction(named: "Озвучить") { onPlay() }
     }
 }

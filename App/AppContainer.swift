@@ -32,7 +32,8 @@ public final class AppContainer: Sendable {
     public let enrich: any EnrichExpressionUseCase
     public let studyList: any StudyListUseCase
     public let requestHistory: any RequestHistoryUseCase
-    public let exportDeck: any ExportDeckUseCase
+    public let exportDeck: any ExportDeckUseCase        // AlgoApp .xml
+    public let exportAnkiDeck: any ExportDeckUseCase    // Anki .txt
     public let regenerateHowToSay: any RegenerateHowToSayUseCase
     public let saveExpression: any SaveExpressionUseCase
     public let voiceCapture: any VoiceCaptureUseCase
@@ -66,6 +67,8 @@ public final class AppContainer: Sendable {
         self.studyList = StudyListInteractor(repository: expressions)
         self.requestHistory = RequestHistoryInteractor(history: history)
         self.exportDeck = ExportDeckInteractor(repository: expressions, exporter: exporter)
+        // Anki exporter is pure (no deps), built here at the composition root.
+        self.exportAnkiDeck = ExportDeckInteractor(repository: expressions, exporter: AnkiExporter())
         self.regenerateHowToSay = RegenerateHowToSayInteractor(llm: llm, history: history)
         self.saveExpression = SaveExpressionInteractor(
             enrich: EnrichExpressionInteractor(llm: llm), repository: expressions
@@ -136,7 +139,9 @@ public final class AppContainer: Sendable {
         StudyListViewModel(
             studyList: studyList,
             saveExpression: saveExpression,
-            exportDeck: exportDeck,
+            exportAlgoApp: exportDeck,
+            exportAnki: exportAnkiDeck,
+            pronounce: pronounce,
             isConfigured: config.isClaudeConfigured
         )
     }

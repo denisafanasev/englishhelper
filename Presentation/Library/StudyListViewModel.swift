@@ -29,20 +29,39 @@ public final class StudyListViewModel {
     public private(set) var exportedDeck: ExportedDeck?
     public private(set) var exportError: String?
 
+    public enum ExportFormat: CaseIterable, Sendable {
+        case algoApp, anki
+        public var title: String {
+            switch self {
+            case .algoApp: "AlgoApp (.xml)"
+            case .anki: "Anki (.txt)"
+            }
+        }
+    }
+
+    public private(set) var playingID: UUID?
+
     private let studyList: any StudyListUseCase
     private let saveExpression: any SaveExpressionUseCase
-    private let exportDeck: any ExportDeckUseCase
+    private let exportAlgoApp: any ExportDeckUseCase
+    private let exportAnki: any ExportDeckUseCase
+    private let pronounce: any PlayPronunciationUseCase
     private let isConfigured: Bool
+    private var playTask: Task<Void, Never>?
 
     public init(
         studyList: any StudyListUseCase,
         saveExpression: any SaveExpressionUseCase,
-        exportDeck: any ExportDeckUseCase,
+        exportAlgoApp: any ExportDeckUseCase,
+        exportAnki: any ExportDeckUseCase,
+        pronounce: any PlayPronunciationUseCase,
         isConfigured: Bool
     ) {
         self.studyList = studyList
         self.saveExpression = saveExpression
-        self.exportDeck = exportDeck
+        self.exportAlgoApp = exportAlgoApp
+        self.exportAnki = exportAnki
+        self.pronounce = pronounce
         self.isConfigured = isConfigured
     }
 
@@ -103,17 +122,36 @@ public final class StudyListViewModel {
         }
     }
 
-    public func export() {
+    public func export(_ format: ExportFormat) {
         exportError = nil
+        let useCase = format == .anki ? exportAnki : exportAlgoApp
         Task { [weak self] in
             guard let self else { return }
             do {
-                self.exportedDeck = try await self.exportDeck()
+                self.exportedDeck = try await useCase()
             } catch ExportError.nothingToExport {
                 self.exportError = "Список пуст — нечего экспортировать."
             } catch {
                 self.exportError = "Не удалось создать файл для экспорта."
             }
+        }
+    }
+
+    // MARK: Playback
+
+    public func isPlaying(_ expression: Domain.Expression) -> Bool { playingID == expression.id }
+
+    public func play(_ expression: Domain.Expression) {
+        playTask?.cancel()
+        playingID = expression.id
+        playTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                for try await state in self.pronounce(expression.en) where state == .finished { break }
+            } catch {
+                // playback failure is non-fatal
+            }
+            if self.playingID == expression.id { self.playingID = nil }
         }
     }
 
