@@ -48,8 +48,8 @@ public final class PhotoTranslateViewModel {
         self.isConfigured = isConfigured
     }
 
+    public private(set) var isSaved = false   // optimistic (instant UI)
     public var needsAPIKey: Bool { !isConfigured }
-    public var isSaved: Bool { savedExpressionID != nil }
     public var blocks: [RecognizedTextBlock] { result?.blocks ?? [] }
 
     // MARK: Camera priming
@@ -88,6 +88,7 @@ public final class PhotoTranslateViewModel {
         imageData = data
         result = nil
         savedExpressionID = nil
+        isSaved = false
         errorMessage = nil
         isOffline = false
         phase = .processing
@@ -143,18 +144,25 @@ public final class PhotoTranslateViewModel {
 
     public func toggleSave() {
         guard let result, phase == .result else { return }
-        if let storedID = savedExpressionID {
+        if isSaved {
+            isSaved = false                              // instant UI
+            let storedID = savedExpressionID
             savedExpressionID = nil
-            Task { [weak self] in try? await self?.studyList.delete(id: storedID) }
+            if let storedID {
+                Task { [weak self] in try? await self?.studyList.delete(id: storedID) }
+            }
         } else {
+            isSaved = true                               // instant UI; enrich+store in background
             Task { [weak self] in
                 guard let self else { return }
                 do {
                     let stored = try await self.saveExpression(
                         en: result.recognizedText, knownRU: result.ru, context: ""
                     )
-                    self.savedExpressionID = stored.id
+                    if self.isSaved { self.savedExpressionID = stored.id }
+                    else { try? await self.studyList.delete(id: stored.id) }
                 } catch {
+                    self.isSaved = false                 // revert
                     self.errorMessage = "Не удалось сохранить в изучаемое."
                 }
             }
@@ -170,5 +178,6 @@ public final class PhotoTranslateViewModel {
         isOffline = false
         isPlaying = false
         savedExpressionID = nil
+        isSaved = false
     }
 }

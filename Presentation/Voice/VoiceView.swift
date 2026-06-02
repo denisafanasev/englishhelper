@@ -47,7 +47,7 @@ public struct VoiceView: View {
         VStack(spacing: Tokens.Space.s16) {
             GlassField("Что хотите сказать по-русски?", text: $model.intent) {
                 fieldFocused = false
-                model.submit()
+                model.pick()
             }
             .focused($fieldFocused)
 
@@ -67,13 +67,18 @@ public struct VoiceView: View {
                 }
             }
 
-            if model.canSubmit && !model.isListening {
-                EHButton("Подобрать варианты", icon: "sparkles", kind: .primary, fillWidth: true) {
-                    fieldFocused = false
-                    model.submit()
-                }
+            EHButton("Подобрать варианты", icon: "sparkles", kind: .primary, fillWidth: true) {
+                fieldFocused = false
+                model.pick()
             }
+            .disabled(!canPick)
+            .opacity(canPick ? 1 : 0.5)
         }
+    }
+
+    /// Enabled only with non-empty input and not mid-request/listening.
+    private var canPick: Bool {
+        model.canSubmit && model.phase != .processing && !model.isListening
     }
 
     private var micCaption: String {
@@ -135,11 +140,6 @@ public struct VoiceView: View {
                     onToggleSave: { model.toggleSave(variant) }
                 )
             }
-
-            EHButton("Другие варианты", icon: "arrow.2.circlepath", kind: .glass, fillWidth: true) {
-                model.regenerate()
-            }
-            .padding(.top, Tokens.Space.s4)
         }
     }
 

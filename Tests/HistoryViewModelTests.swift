@@ -34,6 +34,17 @@ import Presentation
         }
     }
 
+    /// Save is optimistic (instant flag); wait for the background enrich+store to land in the repo.
+    private func waitUntilStored(_ repo: MockExpressionRepository, en: String,
+                                 timeout: Duration = .seconds(2)) async throws {
+        let clock = ContinuousClock()
+        let start = clock.now
+        while !(((try? await repo.all()) ?? []).contains { $0.en == en }) {
+            if clock.now - start > timeout { return }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
     @Test func loadSeededShowsLoaded() async {
         let repo = MockHistoryRepository(seed: [
             HistoryEntry(inputText: "I appreciate it", result: .translate(ru: "Я ценю это")),
@@ -73,8 +84,8 @@ import Presentation
         let (vm, repo) = makeDetailVM(entry: entry)
 
         vm.toggleSaveVariant(variant)
-        try await waitUntil { vm.isSaved(HistoryDetailViewModel.variantKey(variant)) }
-        #expect(vm.isSaved(HistoryDetailViewModel.variantKey(variant)))
+        #expect(vm.isSaved(HistoryDetailViewModel.variantKey(variant)))   // optimistic, immediate
+        try await waitUntilStored(repo, en: "Could you give me a hand?")
         let all = try await repo.all()
         #expect(all.contains { $0.en == "Could you give me a hand?" })
     }
@@ -84,9 +95,26 @@ import Presentation
         let (vm, repo) = makeDetailVM(entry: entry)
 
         vm.toggleSaveTranslation()
-        try await waitUntil { vm.isSaved(HistoryDetailViewModel.translationKey) }
-        #expect(vm.isSaved(HistoryDetailViewModel.translationKey))
+        #expect(vm.isSaved(HistoryDetailViewModel.translationKey))   // optimistic, immediate
+        try await waitUntilStored(repo, en: "I appreciate it")
         let all = try await repo.all()
         #expect(all.contains { $0.en == "I appreciate it" })
+    }
+
+    @Test func loadSavedStateReflectsExistingSave() async throws {
+        let variant = PhraseVariant(en: "I appreciate it", register: .casual, contextRU: "тепло")
+        let entry = HistoryEntry(inputText: "спасибо", result: .howToSay([variant]))
+        let repo = MockExpressionRepository(seed: [Domain.Expression(en: "I appreciate it", ru: "Я ценю это")])
+        let vm = HistoryDetailViewModel(
+            entry: entry,
+            saveExpression: SaveExpressionInteractor(
+                enrich: EnrichExpressionInteractor(llm: MockLLMClient()), repository: repo
+            ),
+            studyList: StudyListInteractor(repository: repo),
+            pronounce: PlayPronunciationInteractor(synthesizer: MockSpeechSynthesizing())
+        )
+
+        await vm.loadSavedState()
+        #expect(vm.isSaved(HistoryDetailViewModel.variantKey(variant)))
     }
 }

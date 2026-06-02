@@ -131,6 +131,7 @@ private struct HistoryDetailView: View {
         .background(ScreenBackground())
         .navigationTitle(kindTitle(entry.kind))
         .navigationBarTitleDisplayMode(.inline)
+        .task { await model.loadSavedState() }
         .alert("Изучаемое", isPresented: errorBinding) {
             Button("OK", role: .cancel) {}
         } message: {

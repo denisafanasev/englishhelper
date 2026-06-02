@@ -47,22 +47,36 @@ or decorative symbols inside any field.
 
 // MARK: - howToSay
 
-/// RU intent → exactly 3 register-tagged English variants.
+/// RU intent → exactly 3 English variants in the chosen tone/register.
 public struct HowToSayTemplate: PromptTemplate {
     public typealias Input = String
     public typealias Output = HowToSayResult
 
     public let id = "howToSay"
-    public init() {}
+    public let tone: Register
+    public init(tone: Register = .casual) { self.tone = tone }
 
     public var systemPrompt: String {
         """
         You help a Russian speaker say something naturally in English.
-        Given a Russian intent, return EXACTLY THREE English variants spanning different registers.
-        Each variant has: "en" (the English phrasing), "register" (one of formal, neutral, casual, slang),
-        and "context_ru" (one short Russian note on when to use it).
-        Cover a range of registers; do not output more or fewer than three. \(plainTextRule)
+        Given a Russian intent, return EXACTLY THREE English variants, all in a \(toneHint) tone,
+        each a DIFFERENT natural phrasing.
+        Each variant has: "en" (the English phrasing), "register" (use "\(toneRegister)"),
+        and "context_ru" (one short Russian note on when/why to use it).
+        Do not output more or fewer than three. \(plainTextRule)
         """
+    }
+
+    private var toneHint: String {
+        switch tone {
+        case .formal: "formal and polite (work, strangers, writing)"
+        case .neutral, .casual: "everyday conversational (friends, colleagues)"
+        case .slang: "informal, slangy (close friends)"
+        }
+    }
+
+    private var toneRegister: String {
+        tone == .neutral ? "casual" : tone.rawValue   // the design styles 3 tiers
     }
 
     public var outputJSONSchema: String {

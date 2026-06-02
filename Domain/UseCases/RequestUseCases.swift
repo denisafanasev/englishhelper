@@ -11,8 +11,14 @@ import Foundation
 // MARK: - howToSay
 
 public protocol HowToSayUseCase: Sendable {
-    /// RU intent → exactly 3 register-tagged variants (also appended to history).
-    func callAsFunction(_ russianIntent: String) async throws -> [PhraseVariant]
+    /// RU intent → exactly 3 variants in `tone` (also appended to history).
+    func callAsFunction(_ russianIntent: String, tone: Register) async throws -> [PhraseVariant]
+}
+
+public extension HowToSayUseCase {
+    func callAsFunction(_ russianIntent: String) async throws -> [PhraseVariant] {
+        try await callAsFunction(russianIntent, tone: .casual)
+    }
 }
 
 public struct HowToSayInteractor: HowToSayUseCase {
@@ -24,8 +30,8 @@ public struct HowToSayInteractor: HowToSayUseCase {
         self.history = history
     }
 
-    public func callAsFunction(_ russianIntent: String) async throws -> [PhraseVariant] {
-        let result = try await llm.run(HowToSayTemplate(), input: russianIntent)
+    public func callAsFunction(_ russianIntent: String, tone: Register) async throws -> [PhraseVariant] {
+        let result = try await llm.run(HowToSayTemplate(tone: tone), input: russianIntent)
         try? await history.append(
             HistoryEntry(inputText: russianIntent, result: .howToSay(result.variants))
         )
@@ -36,8 +42,14 @@ public struct HowToSayInteractor: HowToSayUseCase {
 // MARK: - regenerateHowToSay
 
 public protocol RegenerateHowToSayUseCase: Sendable {
-    /// A FRESH set of 3 variants for the same intent (also appended to history; prior set stays).
-    func callAsFunction(_ russianIntent: String) async throws -> [PhraseVariant]
+    /// A FRESH set of 3 variants in `tone` (also appended to history; prior set stays).
+    func callAsFunction(_ russianIntent: String, tone: Register) async throws -> [PhraseVariant]
+}
+
+public extension RegenerateHowToSayUseCase {
+    func callAsFunction(_ russianIntent: String) async throws -> [PhraseVariant] {
+        try await callAsFunction(russianIntent, tone: .casual)
+    }
 }
 
 public struct RegenerateHowToSayInteractor: RegenerateHowToSayUseCase {
@@ -49,10 +61,10 @@ public struct RegenerateHowToSayInteractor: RegenerateHowToSayUseCase {
         self.history = history
     }
 
-    public func callAsFunction(_ russianIntent: String) async throws -> [PhraseVariant] {
+    public func callAsFunction(_ russianIntent: String, tone: Register) async throws -> [PhraseVariant] {
         // Nudge the model toward different phrasings; history records the original intent only.
         let nudged = russianIntent + "\n\n(Предложи другие формулировки, отличные от прежних.)"
-        let result = try await llm.run(HowToSayTemplate(), input: nudged)
+        let result = try await llm.run(HowToSayTemplate(tone: tone), input: nudged)
         try? await history.append(
             HistoryEntry(inputText: russianIntent, result: .howToSay(result.variants))
         )

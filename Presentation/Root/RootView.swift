@@ -18,6 +18,7 @@ public struct RootView: View {
     @State private var settings: SettingsViewModel
 
     @State private var theme = ThemeStore()
+    @State private var tone = ToneStore()
     @State private var ui = AppUIState()
     @State private var selection = "voice"
 
@@ -59,7 +60,7 @@ public struct RootView: View {
         .environment(ui)
         .preferredColorScheme(theme.colorScheme)
         .sheet(isPresented: $ui.showSettings) {
-            SettingsView(model: settings, theme: theme) { ui.showSettings = false }
+            SettingsView(model: settings, theme: theme, tone: tone) { ui.showSettings = false }
         }
     }
 }

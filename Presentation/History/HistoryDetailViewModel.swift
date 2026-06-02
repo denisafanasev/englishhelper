@@ -17,7 +17,8 @@ public final class HistoryDetailViewModel {
 
     public private(set) var playingKey: String?
 
-    private var savedIDs: [String: UUID] = [:]   // item key → stored Expression.id
+    private var savedKeys: Set<String> = []       // optimistic "saved" flag (instant UI)
+    private var savedIDs: [String: UUID] = [:]    // item key → stored Expression.id
     private let saveExpression: any SaveExpressionUseCase
     private let studyList: any StudyListUseCase
     private let pronounce: any PlayPronunciationUseCase
@@ -43,8 +44,33 @@ public final class HistoryDetailViewModel {
         }
     }
 
-    public func isSaved(_ key: String) -> Bool { savedIDs[key] != nil }
+    public func isSaved(_ key: String) -> Bool { savedKeys.contains(key) }
     public func clearError() { errorMessage = nil }
+
+    /// Reflect phrases already in the study list (match by English text), so the bookmarks show
+    /// as saved when you open an old request.
+    public func loadSavedState() async {
+        let existing = (try? await studyList.list()) ?? []
+        func storedID(for english: String) -> UUID? {
+            let target = english.trimmingCharacters(in: .whitespacesAndNewlines)
+            return existing.first { $0.en.caseInsensitiveCompare(target) == .orderedSame }?.id
+        }
+        switch entry.result {
+        case .howToSay(let variants):
+            for variant in variants {
+                if let id = storedID(for: variant.en) {
+                    let key = Self.variantKey(variant)
+                    savedKeys.insert(key)
+                    savedIDs[key] = id
+                }
+            }
+        case .translate, .photoTranslate:
+            if let id = storedID(for: entry.inputText) {
+                savedKeys.insert(Self.translationKey)
+                savedIDs[Self.translationKey] = id
+            }
+        }
+    }
     public static func variantKey(_ variant: PhraseVariant) -> String { variant.id.uuidString }
     public static let translationKey = "translation"
 
@@ -86,16 +112,23 @@ public final class HistoryDetailViewModel {
     }
 
     private func toggle(key: String, en: String, knownRU: String?, context: String) {
-        if let storedID = savedIDs[key] {
+        if savedKeys.contains(key) {
+            savedKeys.remove(key)                        // instant UI
+            let storedID = savedIDs[key]
             savedIDs[key] = nil
-            Task { [weak self] in try? await self?.studyList.delete(id: storedID) }
+            if let storedID {
+                Task { [weak self] in try? await self?.studyList.delete(id: storedID) }
+            }
         } else {
+            savedKeys.insert(key)                        // instant UI; enrich+store in background
             Task { [weak self] in
                 guard let self else { return }
                 do {
                     let stored = try await self.saveExpression(en: en, knownRU: knownRU, context: context)
-                    self.savedIDs[key] = stored.id
+                    if self.savedKeys.contains(key) { self.savedIDs[key] = stored.id }
+                    else { try? await self.studyList.delete(id: stored.id) }
                 } catch {
+                    self.savedKeys.remove(key)           // revert
                     self.errorMessage = "Не удалось сохранить в изучаемое."
                 }
             }

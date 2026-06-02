@@ -23,6 +23,7 @@ public final class VoiceViewModel {
     public private(set) var playingVariantID: UUID?
     public var showMicPriming = false
 
+    private var savedVariantIDs: Set<UUID> = []           // optimistic "saved" flag (instant UI)
     private var savedExpressionIDs: [UUID: UUID] = [:]    // variant.id → stored Expression.id
 
     // Dependencies (use cases)
@@ -63,7 +64,7 @@ public final class VoiceViewModel {
     public var isListening: Bool { phase == .listening }
     public var canSubmit: Bool { !intent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     public var needsAPIKey: Bool { !isConfigured }
-    public func isSaved(_ variant: PhraseVariant) -> Bool { savedExpressionIDs[variant.id] != nil }
+    public func isSaved(_ variant: PhraseVariant) -> Bool { savedVariantIDs.contains(variant.id) }
     public func isPlaying(_ variant: PhraseVariant) -> Bool { playingVariantID == variant.id }
 
     public var micStatus: MicStatus {
@@ -153,13 +154,20 @@ public final class VoiceViewModel {
     public func submit() {
         let text = intent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        run { try await self.howToSay(text) }
+        let tone = ToneOfVoice.current.register
+        run { try await self.howToSay(text, tone: tone) }
     }
 
     public func regenerate() {
         let text = intent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        run { try await self.regenerateHowToSay(text) }
+        let tone = ToneOfVoice.current.register
+        run { try await self.regenerateHowToSay(text, tone: tone) }
+    }
+
+    /// One button drives both: regenerate when results are shown, otherwise generate a fresh set.
+    public func pick() {
+        if phase == .results { regenerate() } else { submit() }
     }
 
     private func run(_ operation: @escaping () async throws -> [PhraseVariant]) {
@@ -172,6 +180,7 @@ public final class VoiceViewModel {
             do {
                 let result = try await operation()
                 self.variants = result
+                self.savedVariantIDs = []
                 self.savedExpressionIDs = [:]
                 self.phase = .results
             } catch is CancellationError {
@@ -229,18 +238,29 @@ public final class VoiceViewModel {
     // MARK: Save / unsave (enrich-then-store)
 
     public func toggleSave(_ variant: PhraseVariant) {
-        if let storedID = savedExpressionIDs[variant.id] {
-            savedExpressionIDs[variant.id] = nil
-            Task { [weak self] in try? await self?.studyList.delete(id: storedID) }
+        let id = variant.id
+        if savedVariantIDs.contains(id) {
+            savedVariantIDs.remove(id)                          // instant UI
+            let storedID = savedExpressionIDs[id]
+            savedExpressionIDs[id] = nil
+            if let storedID {
+                Task { [weak self] in try? await self?.studyList.delete(id: storedID) }
+            }
         } else {
+            savedVariantIDs.insert(id)                          // instant UI; enrich+store in background
             Task { [weak self] in
                 guard let self else { return }
                 do {
                     let stored = try await self.saveExpression(
                         en: variant.en, knownRU: nil, context: variant.contextRU
                     )
-                    self.savedExpressionIDs[variant.id] = stored.id
+                    if self.savedVariantIDs.contains(id) {
+                        self.savedExpressionIDs[id] = stored.id
+                    } else {
+                        try? await self.studyList.delete(id: stored.id)   // unsaved while saving
+                    }
                 } catch {
+                    self.savedVariantIDs.remove(id)             // revert on failure
                     self.errorMessage = "Не удалось сохранить в изучаемое."
                 }
             }

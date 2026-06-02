@@ -11,22 +11,26 @@ import DesignSystem
 public struct SettingsView: View {
     @State private var model: SettingsViewModel
     private let theme: ThemeStore
+    private let tone: ToneStore
     private let onClose: () -> Void
 
-    public init(model: SettingsViewModel, theme: ThemeStore, onClose: @escaping () -> Void) {
+    public init(model: SettingsViewModel, theme: ThemeStore, tone: ToneStore, onClose: @escaping () -> Void) {
         _model = State(initialValue: model)
         self.theme = theme
+        self.tone = tone
         self.onClose = onClose
     }
 
     public var body: some View {
         @Bindable var theme = theme
+        @Bindable var tone = tone
         NavigationStack {
             ZStack {
                 ScreenBackground()
                 ScrollView {
                     VStack(spacing: Tokens.Space.s20) {
                         connectionCard
+                        toneCard(tone: $tone.tone)
                         themeCard(theme: $theme.preference)
                         infoCard
                     }
@@ -94,6 +98,42 @@ public struct SettingsView: View {
         case .ok: "Подключено"
         case .failed: "Не удалось подключиться"
         }
+    }
+
+    // MARK: Tone of voice
+
+    private func toneCard(tone: Binding<ToneOfVoice>) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.s12) {
+            sectionTitle("Тон фраз")
+            VStack(spacing: 0) {
+                ForEach(Array(ToneOfVoice.allCases.enumerated()), id: \.element) { index, option in
+                    Button { tone.wrappedValue = option } label: {
+                        HStack {
+                            Text(option.title)
+                                .textStyle(Tokens.Text.body)
+                                .foregroundStyle(Tokens.Content.primary)
+                            Spacer()
+                            if tone.wrappedValue == option {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(Tokens.Content.primary)
+                            }
+                        }
+                        .padding(.vertical, Tokens.Space.s12)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(tone.wrappedValue == option ? [.isButton, .isSelected] : .isButton)
+
+                    if index < ToneOfVoice.allCases.count - 1 {
+                        Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Tokens.Space.s16)
+        .glassPanel(cornerRadius: Tokens.Radius.card)
     }
 
     // MARK: Theme
