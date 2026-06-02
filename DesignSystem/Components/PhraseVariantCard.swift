@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 public struct PhraseVariantCard: View {
     private let english: String
@@ -16,6 +17,8 @@ public struct PhraseVariantCard: View {
     private let isPlaying: Bool
     private let onPlay: () -> Void
     private let onToggleSave: () -> Void
+
+    @State private var copied = false
 
     public init(english: String, register: RegisterLevel, contextRU: String,
                 isSaved: Bool, isPlaying: Bool,
@@ -34,13 +37,24 @@ public struct PhraseVariantCard: View {
             HStack(alignment: .top) {
                 RegisterTagView(register)
                 Spacer(minLength: Tokens.Space.s8)
-                Button(action: onToggleSave) {
-                    Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(isSaved ? Tokens.Content.primary : Tokens.Content.tertiary)
+                HStack(spacing: Tokens.Space.s16) {
+                    Button(action: copyToClipboard) {
+                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(copied ? Tokens.Signal.success : Tokens.Content.tertiary)
+                            .contentTransition(.symbolEffect(.replace))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Скопировать английский")
+
+                    Button(action: onToggleSave) {
+                        Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundStyle(isSaved ? Tokens.Content.primary : Tokens.Content.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(isSaved ? "Убрать из изучаемого" : "Сохранить в изучаемое")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(isSaved ? "Убрать из изучаемого" : "Сохранить в изучаемое")
             }
 
             Text(english)
@@ -70,5 +84,17 @@ public struct PhraseVariantCard: View {
         .accessibilityLabel("\(english). \(register.rawValue). \(contextRU)")
         .accessibilityHint("Дважды коснитесь, чтобы озвучить")
         .accessibilityAddTraits(.isButton)
+        .accessibilityAction(named: "Скопировать") { copyToClipboard() }
+        .accessibilityAction(named: isSaved ? "Убрать из изучаемого" : "Сохранить") { onToggleSave() }
+    }
+
+    private func copyToClipboard() {
+        UIPasteboard.general.string = english
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        withAnimation { copied = true }
+        Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            withAnimation { copied = false }
+        }
     }
 }
