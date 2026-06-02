@@ -51,6 +51,14 @@ import Presentation
         #expect(vm.translation == "Это тестовый перевод.")
     }
 
+    @Test func translateTemplateOffersTranslateAndCompose() {
+        let prompt = TranslateToTargetTemplate(targetLanguage: "Russian", tone: .formal).systemPrompt
+        #expect(prompt.contains("Russian"))          // target language is injected
+        #expect(prompt.contains("Translate"))         // mode 1: faithful translation
+        #expect(prompt.contains("Compose"))           // mode 2: compose from an instruction
+        #expect(prompt.contains("formal"))            // tone of voice is applied to composing
+    }
+
     @Test func secondTapStopsPlayback() async throws {
         UserDefaults.standard.set("russian", forKey: "targetLanguage")
         let vm = makeVM()

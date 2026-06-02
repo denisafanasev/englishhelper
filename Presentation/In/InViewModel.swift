@@ -162,6 +162,7 @@ public final class InViewModel {
         let text = source.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         let target = TargetLanguage.current
+        let tone = ToneOfVoice.current.register   // styles the composed phrase, if the model composes
         requestTask?.cancel()
         phase = .processing
         errorMessage = nil
@@ -169,7 +170,7 @@ public final class InViewModel {
         requestTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let result = try await self.translate(text, targetLanguage: target.promptName)
+                let result = try await self.translate(text, targetLanguage: target.promptName, tone: tone)
                 self.submittedSource = text
                 self.translation = result
                 self.isSaved = false

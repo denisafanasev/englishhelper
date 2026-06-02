@@ -97,11 +97,18 @@ public struct TranslateTextInteractor: TranslateTextUseCase {
     }
 }
 
-// MARK: - translateToTarget ("In": any language → target language)
+// MARK: - translateToTarget ("Понять"/In: understand OR compose, into target language)
 
 public protocol TranslateToTargetUseCase: Sendable {
-    /// Translate text into `targetLanguage` (e.g. "Russian"), source auto-detected. Appends history.
-    func callAsFunction(_ text: String, targetLanguage: String) async throws -> String
+    /// Translate text into `targetLanguage` OR compose a phrase from an instruction — the model
+    /// decides which. `tone` styles the composed phrase. Source auto-detected. Appends history.
+    func callAsFunction(_ text: String, targetLanguage: String, tone: Register) async throws -> String
+}
+
+public extension TranslateToTargetUseCase {
+    func callAsFunction(_ text: String, targetLanguage: String) async throws -> String {
+        try await callAsFunction(text, targetLanguage: targetLanguage, tone: .casual)
+    }
 }
 
 public struct TranslateToTargetInteractor: TranslateToTargetUseCase {
@@ -113,8 +120,10 @@ public struct TranslateToTargetInteractor: TranslateToTargetUseCase {
         self.history = history
     }
 
-    public func callAsFunction(_ text: String, targetLanguage: String) async throws -> String {
-        let result = try await llm.run(TranslateToTargetTemplate(targetLanguage: targetLanguage), input: text)
+    public func callAsFunction(_ text: String, targetLanguage: String, tone: Register) async throws -> String {
+        let result = try await llm.run(
+            TranslateToTargetTemplate(targetLanguage: targetLanguage, tone: tone), input: text
+        )
         try? await history.append(HistoryEntry(inputText: text, result: .translate(ru: result.translation)))
         return result.translation
     }

@@ -133,22 +133,50 @@ public struct TranslateTextTemplate: PromptTemplate {
     }
 }
 
-// MARK: - translateToTarget ("In": any language → target language)
+// MARK: - translateToTarget ("Понять"/In: understand OR compose, into target language)
 
-/// Input text in any language → translation into `targetLanguage`, source auto-detected.
+/// The model decides between TWO jobs and returns ONE result in `targetLanguage`:
+///  • a faithful, meaning-accurate translation of text the user wants to understand, OR
+///  • a phrase composed from an instruction ("скажи, что я занят"), styled by `tone`.
+/// Source language auto-detected.
 public struct TranslateToTargetTemplate: PromptTemplate {
     public typealias Input = String
     public typealias Output = TargetTranslation
 
     public let id = "translateToTarget"
     public let targetLanguage: String   // e.g. "Russian", "English"
-    public init(targetLanguage: String) { self.targetLanguage = targetLanguage }
+    public let tone: Register
+    public init(targetLanguage: String, tone: Register = .casual) {
+        self.targetLanguage = targetLanguage
+        self.tone = tone
+    }
 
     public var systemPrompt: String {
         """
-        Translate the user's text into \(targetLanguage). Detect the source language automatically.
-        Return ONLY the translation in "translation" — no commentary, transliteration, or notes. \(plainTextRule)
+        You produce ONE result in \(targetLanguage) for someone learning a language.
+        Detect the source language automatically and decide what the user's input is:
+
+        1. A word, phrase, sentence, or passage to UNDERSTAND (something they read or heard).
+           Translate it into \(targetLanguage), preserving the exact meaning. Do not embellish or
+           change the register.
+
+        2. An INSTRUCTION describing what they want to say, e.g. "say that I have no time",
+           "tell him I'll be late", "вежливо откажись от встречи". Compose ONE natural
+           \(targetLanguage) phrase that expresses it in a \(toneHint) register, worded as if the
+           user is saying it themselves — not a description of the request.
+
+        If the input could be read either way, prefer a faithful translation.
+        Return ONLY the result in "translation" — no commentary, labels, quotes, transliteration,
+        or alternatives. \(plainTextRule)
         """
+    }
+
+    private var toneHint: String {
+        switch tone {
+        case .formal: "formal and polite"
+        case .neutral, .casual: "everyday conversational"
+        case .slang: "informal and slangy"
+        }
     }
 
     public var outputJSONSchema: String {

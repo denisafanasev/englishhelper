@@ -97,8 +97,8 @@ public struct InView: View {
                     systemImage: "character.bubble",
                     title: Loc.t("Что это значит?", "What does it mean?"),
                     message: Loc.t(
-                        "Скажите по-английски или введите текст на любом языке — переведу одним вариантом.",
-                        "Speak English or type text in any language — I'll give a single translation.")
+                        "Введите или надиктуйте фразу — переведу её по смыслу. Или попросите «скажи, что…» — сформулирую ответ в выбранном тоне.",
+                        "Type or dictate a phrase — I'll translate its meaning. Or ask “say that…” and I'll word it in the chosen tone.")
                 )
                 .padding(.top, Tokens.Space.s24)
             }
