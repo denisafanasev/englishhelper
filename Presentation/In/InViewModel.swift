@@ -26,7 +26,6 @@ public final class InViewModel {
     public var showMicPriming = false
 
     private var submittedSource = ""                     // source text that produced `translation`
-    private var resultTargetIsRussian = true             // which side is English (for play/save)
     private var savedExpressionID: UUID?
 
     // Dependencies (use cases)
@@ -65,10 +64,9 @@ public final class InViewModel {
     public var canSubmit: Bool { !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     public var needsAPIKey: Bool { !isConfigured }
 
-    /// The English side of the pair — what the speaker plays and what we file as the study card's `en`.
-    public var englishText: String {
-        resultTargetIsRussian ? submittedSource : (translation ?? "")
-    }
+    /// The phrase being translated (the source) — the study card's `en` and what we play back.
+    /// We always study the source, never the translation into the user's own language.
+    public var sourceText: String { submittedSource }
 
     public enum MicStatus { case idle, listening, processing }
     public var micStatus: MicStatus {
@@ -174,7 +172,6 @@ public final class InViewModel {
                 let result = try await self.translate(text, targetLanguage: target.promptName)
                 self.submittedSource = text
                 self.translation = result
-                self.resultTargetIsRussian = (target == .russian)
                 self.isSaved = false
                 self.savedExpressionID = nil
                 self.phase = .result
@@ -219,7 +216,7 @@ public final class InViewModel {
     // MARK: Play (the English side)
 
     public func play() {
-        let text = englishText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         playTask?.cancel()
         isPlaying = true
@@ -247,9 +244,10 @@ public final class InViewModel {
             }
         } else {
             isSaved = true                                   // instant UI; enrich+store in background
-            // English side is the study card's `en`; the Russian side (if any) pre-fills the known meaning.
-            let en = resultTargetIsRussian ? submittedSource : translation
-            let knownRU = resultTargetIsRussian ? translation : submittedSource
+            // We always study the SOURCE (what was translated), with the translation as its meaning —
+            // never the variant in the user's own language.
+            let en = submittedSource
+            let knownRU = translation
             Task { [weak self] in
                 guard let self else { return }
                 do {

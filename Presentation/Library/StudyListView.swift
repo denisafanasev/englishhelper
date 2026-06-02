@@ -71,8 +71,8 @@ public struct StudyListView: View {
                        actionTitle: Loc.t("Повторить", "Retry"), action: { Task { await model.load() } })
         case .empty:
             StatusView(systemImage: "rectangle.stack", title: Loc.t("Пока пусто", "Nothing yet"),
-                       message: Loc.t("Сохраняйте фразы из «In», «Out» или «Камеры» — или добавьте вручную.",
-                                      "Save phrases from “In”, “Out”, or “Camera” — or add them manually."),
+                       message: Loc.t("Сохраняйте фразы из «Скажи», «Пойми» или «Смотри» — или добавьте вручную.",
+                                      "Save phrases from “Say”, “Understand”, or “Look” — or add them manually."),
                        actionTitle: Loc.t("Добавить", "Add"), action: { model.showAddSheet = true })
         case .loaded:
             list

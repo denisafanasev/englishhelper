@@ -3,9 +3,10 @@
 //  EnglishHelper — Presentation
 //
 //  App shell: tab bar (Liquid Glass) + global theme + the Settings sheet.
-//  Order: Изучаю · In · Out (center, default) · Камера · История.
-//  "Out" (RU intent → 3 English variants, voice or text) and "In" (any language / English voice →
-//  one translation into the target language) are the two translation directions.
+//  Order: Изучаю · Пойми · Скажи (center, default) · Смотри · История.
+//  "Скажи"/Out (RU intent → 3 English variants, voice or text) and "Пойми"/In (any language /
+//  English voice → one translation into the target language) are the two translation directions;
+//  "Смотри"/Camera is the photo translator.
 //
 
 import SwiftUI
@@ -47,13 +48,13 @@ public struct RootView: View {
             Tab(Loc.t("Изучаю", "Study"), systemImage: "rectangle.stack", value: "library") {
                 StudyListView(model: library)
             }
-            Tab("In", systemImage: "character.bubble", value: "in") {
+            Tab(Loc.t("Пойми", "Understand"), systemImage: "character.bubble", value: "in") {
                 InView(model: inbound)
             }
-            Tab("Out", systemImage: "mic.fill", value: "out") {
+            Tab(Loc.t("Скажи", "Say"), systemImage: "mic.fill", value: "out") {
                 VoiceView(model: out)
             }
-            Tab(Loc.t("Камера", "Camera"), systemImage: "camera", value: "camera") {
+            Tab(Loc.t("Смотри", "Look"), systemImage: "camera", value: "camera") {
                 PhotoTranslateView(model: photo)
             }
             Tab(Loc.t("История", "History"), systemImage: "clock.arrow.circlepath", value: "history") {

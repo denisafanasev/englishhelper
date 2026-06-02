@@ -32,7 +32,7 @@ public struct InView: View {
                 }
                 .scrollDismissesKeyboard(.interactively)
             }
-            .navigationTitle("In")
+            .navigationTitle(Loc.t("Пойми", "Understand"))
             .settingsTrigger()
             .sheet(isPresented: $model.showMicPriming) { primingSheet }
         }
@@ -137,13 +137,22 @@ public struct InView: View {
         }
     }
 
-    /// The translation (target language) on top, source below, with play (English side) + save.
+    /// The translation (your language) on top — what you read to understand. The SOURCE phrase below
+    /// is the study item: bookmark + play attach to it, so saving files what was translated, never
+    /// the variant in your own language.
     private func translationCard(_ translation: String) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s12) {
+            Text(translation)
+                .textStyle(Tokens.Text.title3)
+                .foregroundStyle(Tokens.Content.primary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)
+
             HStack(alignment: .top) {
-                Text(translation)
-                    .textStyle(Tokens.Text.title3)
-                    .foregroundStyle(Tokens.Content.primary)
+                Text(model.sourceText)
+                    .textStyle(Tokens.Text.body)
+                    .foregroundStyle(Tokens.Content.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: Tokens.Space.s8)
                 Button { model.toggleSave() } label: {
@@ -157,24 +166,17 @@ public struct InView: View {
                     : Loc.t("Сохранить в изучаемое", "Save to study list"))
             }
 
-            Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)
-
-            Text(model.source)
-                .textStyle(Tokens.Text.body)
-                .foregroundStyle(Tokens.Content.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if !model.englishText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if !model.sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Button { model.play() } label: {
                     Label(
-                        model.isPlaying ? Loc.t("Озвучивается…", "Playing…") : Loc.t("Озвучить", "Play"),
+                        model.isPlaying ? Loc.t("Озвучивается…", "Playing…") : Loc.t("Озвучить оригинал", "Play original"),
                         systemImage: model.isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2"
                     )
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Tokens.Content.secondary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(Loc.t("Озвучить английский", "Play English"))
+                .accessibilityLabel(Loc.t("Озвучить оригинал", "Play original"))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

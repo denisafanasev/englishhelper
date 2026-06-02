@@ -83,4 +83,29 @@ import Presentation
         }
         #expect(stored.contains { $0.en == "Could you give me a hand?" })
     }
+
+    /// The study card is ALWAYS the source (what was translated), never the user's-language result —
+    /// even when the target language is English.
+    @Test func saveFilesSourceRegardlessOfTarget() async throws {
+        UserDefaults.standard.set("english", forKey: "targetLanguage")
+        defer { UserDefaults.standard.set("russian", forKey: "targetLanguage") }
+        let repo = MockExpressionRepository(seed: [])
+        let vm = makeVM(repo: repo)
+        vm.source = "Bonjour le monde"          // a non-English source; translation would be English
+        vm.submit()
+        try await waitUntil { vm.phase == .result }
+
+        vm.toggleSave()
+        let list = StudyListInteractor(repository: repo)
+        var stored: [Domain.Expression] = []
+        let clock = ContinuousClock(); let start = clock.now
+        while !stored.contains(where: { $0.en == "Bonjour le monde" }) {
+            if clock.now - start > .seconds(2) { break }
+            try await Task.sleep(for: .milliseconds(10))
+            stored = (try? await list.list()) ?? []
+        }
+        // The source is filed as `en` — NOT the translation "Это тестовый перевод.".
+        #expect(stored.contains { $0.en == "Bonjour le monde" })
+        #expect(!stored.contains { $0.en == "Это тестовый перевод." })
+    }
 }
