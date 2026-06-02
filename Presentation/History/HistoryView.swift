@@ -1,0 +1,202 @@
+//
+//  HistoryView.swift
+//  EnglishHelper — Presentation
+//
+//  "История" — read-only log. Tap a row to review the full result.
+//
+
+import SwiftUI
+import Foundation
+import Domain
+import DesignSystem
+
+public struct HistoryView: View {
+    @State private var model: HistoryViewModel
+
+    public init(model: HistoryViewModel) {
+        _model = State(initialValue: model)
+    }
+
+    public var body: some View {
+        NavigationStack {
+            ZStack {
+                ScreenBackground()
+                contentSection
+            }
+            .navigationTitle("История")
+            .navigationDestination(for: HistoryEntry.self) { HistoryDetailView(entry: $0) }
+            .task { await model.load() }
+        }
+    }
+
+    @ViewBuilder private var contentSection: some View {
+        switch model.phase {
+        case .loading:
+            LoadingView("Загружаю…")
+        case .failed:
+            StatusView(systemImage: "exclamationmark.triangle", title: "Не удалось загрузить",
+                       message: model.errorMessage,
+                       actionTitle: "Повторить", action: { Task { await model.load() } })
+        case .empty:
+            StatusView(systemImage: "clock.arrow.circlepath", title: "История пуста",
+                       message: "Здесь появятся ваши запросы: «Как сказать», переводы и фото-переводы.")
+        case .loaded:
+            List {
+                ForEach(model.entries) { entry in
+                    NavigationLink(value: entry) { HistoryRow(entry: entry) }
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: Tokens.Space.s4, leading: Tokens.Space.s16,
+                                                  bottom: Tokens.Space.s4, trailing: Tokens.Space.s16))
+                }
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+        }
+    }
+}
+
+// MARK: - Row
+
+private struct HistoryRow: View {
+    let entry: HistoryEntry
+
+    var body: some View {
+        HStack(spacing: Tokens.Space.s12) {
+            Image(systemName: kindIcon(entry.kind))
+                .font(.system(size: 18, weight: .regular))
+                .foregroundStyle(Tokens.Content.secondary)
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: Tokens.Space.s4) {
+                Text(kindTitle(entry.kind))
+                    .textStyle(Tokens.Text.caption2)
+                    .foregroundStyle(Tokens.Content.tertiary)
+                Text(entry.inputText)
+                    .textStyle(Tokens.Text.headline)
+                    .foregroundStyle(Tokens.Content.primary)
+                    .lineLimit(1)
+                Text(resultSnippet(entry.result))
+                    .textStyle(Tokens.Text.subhead)
+                    .foregroundStyle(Tokens.Content.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: Tokens.Space.s8)
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Tokens.Content.quaternary)
+        }
+        .padding(Tokens.Space.s16)
+        .glassPanel(cornerRadius: Tokens.Radius.card)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(kindTitle(entry.kind)). \(entry.inputText)")
+        .accessibilityHint("Открыть результат")
+    }
+}
+
+// MARK: - Detail (read-only)
+
+private struct HistoryDetailView: View {
+    let entry: HistoryEntry
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Tokens.Space.s16) {
+                Text(entry.createdAt.formatted(date: .abbreviated, time: .shortened))
+                    .textStyle(Tokens.Text.footnote)
+                    .foregroundStyle(Tokens.Content.tertiary)
+
+                labeledCard(title: "Запрос") {
+                    Text(entry.inputText)
+                        .textStyle(Tokens.Text.body)
+                        .foregroundStyle(Tokens.Content.primary)
+                }
+
+                resultSection
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(Tokens.Space.s20)
+        }
+        .background(ScreenBackground())
+        .navigationTitle(kindTitle(entry.kind))
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    @ViewBuilder private var resultSection: some View {
+        switch entry.result {
+        case .howToSay(let variants):
+            VStack(spacing: Tokens.Space.s12) {
+                ForEach(variants) { variant in
+                    VStack(alignment: .leading, spacing: Tokens.Space.s8) {
+                        RegisterTagView(registerLevel(variant.register))
+                        Text(variant.en)
+                            .textStyle(Tokens.Text.title3)
+                            .foregroundStyle(Tokens.Content.primary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(variant.contextRU)
+                            .textStyle(Tokens.Text.subhead)
+                            .foregroundStyle(Tokens.Content.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(Tokens.Space.s16)
+                    .glassPanel(cornerRadius: Tokens.Radius.card)
+                }
+            }
+        case .translate(let ru), .photoTranslate(let ru):
+            labeledCard(title: "Перевод") {
+                Text(ru)
+                    .textStyle(Tokens.Text.title3)
+                    .foregroundStyle(Tokens.Content.primary)
+            }
+        }
+    }
+
+    private func labeledCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.s8) {
+            Text(title)
+                .textStyle(Tokens.Text.caption2)
+                .foregroundStyle(Tokens.Content.tertiary)
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Tokens.Space.s16)
+        .glassPanel(cornerRadius: Tokens.Radius.card)
+    }
+}
+
+// MARK: - Shared helpers
+
+private func kindIcon(_ kind: RequestKind) -> String {
+    switch kind {
+    case .howToSay: "quote.bubble"
+    case .translate: "character.bubble"
+    case .photoTranslate: "camera"
+    }
+}
+
+private func kindTitle(_ kind: RequestKind) -> String {
+    switch kind {
+    case .howToSay: "Как сказать"
+    case .translate: "Перевод"
+    case .photoTranslate: "Фото-перевод"
+    }
+}
+
+private func resultSnippet(_ result: RequestResult) -> String {
+    switch result {
+    case .howToSay(let variants): variants.first?.en ?? "—"
+    case .translate(let ru): ru
+    case .photoTranslate(let ru): ru
+    }
+}
+
+private func registerLevel(_ register: Register) -> RegisterLevel {
+    switch register {
+    case .formal: .formal
+    case .casual, .neutral: .casual
+    case .slang: .slang
+    }
+}

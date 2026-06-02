@@ -149,4 +149,9 @@ public final class AppContainer: Sendable {
             isConfigured: config.isClaudeConfigured
         )
     }
+
+    @MainActor
+    public func makeHistoryViewModel() -> HistoryViewModel {
+        HistoryViewModel(history: requestHistory)
+    }
 }

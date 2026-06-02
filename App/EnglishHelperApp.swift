@@ -27,7 +27,8 @@ struct EnglishHelperApp: App {
                 voice: container.makeVoiceViewModel(),
                 translate: container.makeTranslateViewModel(),
                 photo: container.makePhotoTranslateViewModel(),
-                library: container.makeStudyListViewModel()
+                library: container.makeStudyListViewModel(),
+                history: container.makeHistoryViewModel()
             )
         }
     }

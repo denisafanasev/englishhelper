@@ -118,7 +118,10 @@ extractable** — acceptable for this personal/dev app; a production build would
   add (enrich-then-store), swipe-delete, leading swipe toggle-learned, glass rows. Export via
   `ExportDeck` → `AlgoAppXMLExporter` → temp .xml file → system share sheet (`UIActivityViewController`).
   States loading/empty/loaded/failed. 42/42 tests green.
-- ⏳ 6. "История" · 7. "Настройки".
+- ✅ **6. "История"** (tab **История**). Read-only chronological log of every request; rows show
+  kind/input/result snippet/timestamp; tap → detail rendering the full result by kind (howToSay
+  variants / translate+photo RU). States loading/empty/loaded/failed. 44/44 tests green.
+- ⏳ 7. "Настройки" (planned as a toolbar gear / sheet, not a tab, to keep ≤5 tabs).
 
 **Notes / trade-offs so far:**
 - **Liquid Glass vs readability:** all glass goes through `glassPanel`, which swaps to a SOLID
