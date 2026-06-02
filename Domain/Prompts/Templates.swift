@@ -128,7 +128,56 @@ public struct TranslateTextTemplate: PromptTemplate {
     }
 }
 
-// MARK: - photoTranslate
+// MARK: - photoBlocks (multimodal: image → blocks of en + ru)
+
+/// `{ "blocks": [ { en, ru } ] }` — the model decides how many blocks.
+public struct PhotoBlocksResult: Codable, Sendable, Equatable {
+    public let blocks: [TranslatedBlock]
+}
+
+/// Image → blocks of connected English text, each with a Russian translation. The LLM does the
+/// recognition AND translation (replaces local OCR).
+public struct PhotoBlocksTemplate: PromptTemplate {
+    public typealias Input = RecognizableImage
+    public typealias Output = PhotoBlocksResult
+
+    public let id = "photoBlocks"
+    public init() {}
+
+    public var systemPrompt: String {
+        """
+        You read English text from a photo. Group the text into BLOCKS of connected meaning — decide
+        how many blocks yourself (e.g. a sign, a paragraph, one menu item). For each block return the
+        English text in "en" and a natural Russian translation in "ru". Ignore decorative noise and
+        anything that isn't English text; if there is no English text, return an empty "blocks" array.
+        \(plainTextRule)
+        """
+    }
+
+    public var outputJSONSchema: String {
+        """
+        {"type":"object","properties":{"blocks":{"type":"array","items":{"type":"object",
+        "properties":{"en":{"type":"string"},"ru":{"type":"string"}},"required":["en","ru"]}}},
+        "required":["blocks"]}
+        """
+    }
+
+    public func userMessage(for input: RecognizableImage) -> String {
+        "Извлеки блоки английского текста с изображения и переведи каждый блок на русский."
+    }
+
+    public func image(for input: RecognizableImage) -> Data? { input.data }
+
+    public func decode(_ rawJSON: String) throws -> PhotoBlocksResult {
+        let raw = try decodeJSON(PhotoBlocksResult.self, from: rawJSON)
+        let cleaned = raw.blocks
+            .map { TranslatedBlock(en: PlainText.clean($0.en), ru: PlainText.clean($0.ru)) }
+            .filter { !$0.en.isEmpty }
+        return PhotoBlocksResult(blocks: cleaned)
+    }
+}
+
+// MARK: - photoTranslate (legacy text-translate; kept for the port/history shape)
 
 /// OCR'd EN text → pure Russian translation (same schema as translateText).
 public struct PhotoTranslateTemplate: PromptTemplate {

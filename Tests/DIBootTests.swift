@@ -35,15 +35,11 @@ import Adapters
         #expect(recent.first?.kind == .translate)
     }
 
-    @Test func photoTranslateChainsOCRThenLLM() async throws {
-        let useCase = PhotoTranslateInteractor(
-            ocr: MockTextRecognizing(),
-            llm: MockLLMClient(),
-            history: MockHistoryRepository()
-        )
-        let result = try await useCase(RecognizableImage(data: Data()))
-        #expect(!result.recognizedText.isEmpty)
-        #expect(!result.ru.isEmpty)
+    @Test func photoTranslateReturnsBlocksOnMocks() async throws {
+        let useCase = PhotoTranslateInteractor(llm: MockLLMClient(), history: MockHistoryRepository())
+        let blocks = try await useCase(RecognizableImage(data: Data()))
+        #expect(!blocks.isEmpty)
+        #expect(blocks.allSatisfy { !$0.en.isEmpty && !$0.ru.isEmpty })
     }
 
     @Test func exportProducesNonEmptyDeck() async throws {

@@ -2,7 +2,7 @@
 //  PhotoTranslateViewModelTests.swift
 //  EnglishHelperTests
 //
-//  "Фото-перевод" view-model: happy path (OCR+boxes→RU), no-text error mapping, save toggle.
+//  "Фото-перевод" (LLM vision): blocks of en+ru, no-text mapping, optimistic per-block save.
 //
 
 import Testing
@@ -13,13 +13,10 @@ import Presentation
 
 @Suite @MainActor struct PhotoTranslateViewModelTests {
 
-    private func makeVM(
-        ocr: any TextRecognizing = MockTextRecognizing(),
-        llm: any LLMClient = MockLLMClient()
-    ) -> PhotoTranslateViewModel {
+    private func makeVM(llm: any LLMClient = MockLLMClient()) -> PhotoTranslateViewModel {
         let repo = MockExpressionRepository(seed: [])
         return PhotoTranslateViewModel(
-            photoTranslate: PhotoTranslateInteractor(ocr: ocr, llm: llm, history: MockHistoryRepository()),
+            photoTranslate: PhotoTranslateInteractor(llm: llm, history: MockHistoryRepository()),
             pronounce: PlayPronunciationInteractor(synthesizer: MockSpeechSynthesizing()),
             saveExpression: SaveExpressionInteractor(
                 enrich: EnrichExpressionInteractor(llm: llm), repository: repo
@@ -38,18 +35,17 @@ import Presentation
         }
     }
 
-    @Test func producesTranslationWithBoxes() async throws {
+    @Test func producesBlocks() async throws {
         let vm = makeVM()
         vm.didPickFromLibrary(Data())
         try await waitUntil { vm.phase == .result }
-        let result = try #require(vm.result)
         #expect(vm.phase == .result)
-        #expect(result.ru.isEmpty == false)
         #expect(vm.blocks.isEmpty == false)
+        #expect(vm.blocks.allSatisfy { !$0.en.isEmpty && !$0.ru.isEmpty })
     }
 
     @Test func noTextFoundMapsToFriendlyError() async throws {
-        let vm = makeVM(ocr: StubTextRecognizing(behavior: .failure(.noTextFound), latency: .milliseconds(1)))
+        let vm = makeVM(llm: EmptyBlocksLLM())
         vm.didPickFromLibrary(Data())
         try await waitUntil { vm.phase == .failed }
         #expect(vm.phase == .failed)
@@ -57,12 +53,19 @@ import Presentation
         #expect(vm.errorMessage?.isEmpty == false)
     }
 
-    @Test func toggleSaveMarksSaved() async throws {
+    @Test func toggleSaveMarksBlockSaved() async throws {
         let vm = makeVM()
         vm.didPickFromLibrary(Data())
         try await waitUntil { vm.phase == .result }
-        vm.toggleSave()
-        try await waitUntil { vm.isSaved }
-        #expect(vm.isSaved)
+        let block = try #require(vm.blocks.first)
+        vm.toggleSave(block)
+        #expect(vm.isSaved(block))   // optimistic, immediate
+    }
+}
+
+/// Returns an empty-blocks result regardless of input — used to exercise the no-text path.
+private struct EmptyBlocksLLM: LLMClient {
+    func run<Template: PromptTemplate>(_ template: Template, input: Template.Input) async throws -> Template.Output {
+        try template.decode(#"{"blocks":[]}"#)
     }
 }

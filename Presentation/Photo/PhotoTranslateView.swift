@@ -36,14 +36,16 @@ public struct PhotoTranslateView: View {
             .settingsTrigger()
             .sheet(isPresented: $model.showCameraPriming) { primingSheet }
             .fullScreenCover(isPresented: $model.presentCamera) {
-                CameraPicker(onImage: { model.didCapture($0) }, onCancel: { model.cameraCancelled() })
+                CameraPicker(onImage: { model.didCapture(prepareImageData($0) ?? $0) },
+                             onCancel: { model.cameraCancelled() })
                     .ignoresSafeArea()
             }
             .onChange(of: libraryItem) { _, item in
                 guard let item else { return }
                 Task {
-                    if let data = try? await item.loadTransferable(type: Data.self) {
-                        model.didPickFromLibrary(data)
+                    if let data = try? await item.loadTransferable(type: Data.self),
+                       let prepared = prepareImageData(data) {
+                        model.didPickFromLibrary(prepared)
                     }
                     libraryItem = nil
                 }
@@ -126,9 +128,10 @@ public struct PhotoTranslateView: View {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(image.size.width / image.size.height, contentMode: .fit)
-                    .overlay { boxesOverlay }
-                    .overlay(alignment: .bottom) { scrimPanel }
                     .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.card, style: .continuous))
+            }
+            ForEach(model.blocks) { block in
+                blockCard(block)
             }
             EHButton("Другое фото", icon: "arrow.triangle.2.circlepath", kind: .glass, fillWidth: true) {
                 model.reset()
@@ -136,60 +139,45 @@ public struct PhotoTranslateView: View {
         }
     }
 
-    private var boxesOverlay: some View {
-        GeometryReader { geo in
-            ForEach(model.blocks) { block in
-                let box = block.boundingBox
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .stroke(.white.opacity(0.9), lineWidth: 1.5)
-                    .frame(width: box.width * geo.size.width, height: box.height * geo.size.height)
-                    .position(
-                        x: (box.x + box.width / 2) * geo.size.width,
-                        y: (box.y + box.height / 2) * geo.size.height
-                    )
+    /// One recognized block: English + Russian translation, with play + save.
+    private func blockCard(_ block: TranslatedBlock) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.s12) {
+            HStack(alignment: .top) {
+                Text(block.en)
+                    .textStyle(Tokens.Text.title3)
+                    .foregroundStyle(Tokens.Content.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: Tokens.Space.s8)
+                Button { model.toggleSave(block) } label: {
+                    Image(systemName: model.isSaved(block) ? "bookmark.fill" : "bookmark")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(model.isSaved(block) ? Tokens.Content.primary : Tokens.Content.tertiary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(model.isSaved(block) ? "Убрать из изучаемого" : "Сохранить в изучаемое")
             }
-        }
-        .accessibilityHidden(true)
-    }
 
-    /// Translation on a SOLID scrim — white text, never glass, so it stays legible over the photo.
-    private var scrimPanel: some View {
-        VStack(alignment: .leading, spacing: Tokens.Space.s8) {
-            if let source = model.result?.recognizedText {
-                Text(source)
-                    .textStyle(Tokens.Text.footnote)
-                    .foregroundStyle(.white.opacity(0.6))
-                    .lineLimit(2)
-            }
-            Text(model.result?.ru ?? "")
-                .textStyle(Tokens.Text.headline)
-                .foregroundStyle(.white)
+            Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)
+
+            Text(block.ru)
+                .textStyle(Tokens.Text.body)
+                .foregroundStyle(Tokens.Content.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            HStack(spacing: Tokens.Space.s16) {
-                Button(action: model.playSource) {
-                    Label("Оригинал", systemImage: model.isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.85))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Озвучить английский оригинал")
-
-                Spacer()
-
-                Button(action: model.toggleSave) {
-                    Image(systemName: model.isSaved ? "bookmark.fill" : "bookmark")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(.white)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(model.isSaved ? "Убрать из изучаемого" : "Сохранить в изучаемое")
+            Button { model.play(block) } label: {
+                Label(
+                    model.isPlaying(block) ? "Озвучивается…" : "Озвучить",
+                    systemImage: model.isPlaying(block) ? "speaker.wave.2.fill" : "speaker.wave.2"
+                )
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Tokens.Content.secondary)
             }
-            .padding(.top, Tokens.Space.s4)
+            .buttonStyle(.plain)
+            .accessibilityLabel("Озвучить английский")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Tokens.Space.s16)
-        .background(Tokens.Scrim.solid)
+        .glassPanel(cornerRadius: Tokens.Radius.card)
     }
 
     private var apiKeyBanner: some View {
@@ -233,6 +221,21 @@ public struct PhotoTranslateView: View {
 
     private var uiImage: UIImage? {
         model.imageData.flatMap(UIImage.init(data:))
+    }
+
+    /// Downscale (max 1536px) and re-encode to JPEG: keeps the upload small and a format Claude accepts.
+    private func prepareImageData(_ data: Data) -> Data? {
+        guard let image = UIImage(data: data) else { return nil }
+        let maxDimension: CGFloat = 1536
+        let longest = max(image.size.width, image.size.height)
+        let scale = longest > maxDimension ? maxDimension / longest : 1
+        let target = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let rendered: UIImage = scale < 1
+            ? UIGraphicsImageRenderer(size: target).image { _ in
+                image.draw(in: CGRect(origin: .zero, size: target))
+              }
+            : image
+        return rendered.jpegData(compressionQuality: 0.8)
     }
 }
 

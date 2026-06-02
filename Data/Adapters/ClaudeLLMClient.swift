@@ -16,7 +16,7 @@ public final class ClaudeLLMClient: LLMClient {
     private let endpoint: URL
     private let session: URLSession
     private let anthropicVersion = "2023-06-01"
-    private let maxTokens = 1024
+    private let maxTokens = 2048
     /// Retries on transient 429/529/5xx with exponential backoff (Anthropic's recommendation).
     private let maxRetries: Int
     private let baseRetryDelay: Double   // seconds
@@ -50,11 +50,18 @@ public final class ClaudeLLMClient: LLMClient {
         no markdown code fences:
         \(template.outputJSONSchema)
         """
+        var content: [ContentBlock] = []
+        if let imageData = template.image(for: input) {
+            content.append(.image(mediaType: Self.mediaType(for: imageData),
+                                   base64: imageData.base64EncodedString()))
+        }
+        content.append(.text(template.userMessage(for: input)))
+
         let body = RequestBody(
             model: model,
             max_tokens: maxTokens,
             system: system,
-            messages: [.init(role: "user", content: template.userMessage(for: input))]
+            messages: [.init(role: "user", content: content)]
         )
 
         var request = URLRequest(url: endpoint)
@@ -145,14 +152,43 @@ public final class ClaudeLLMClient: LLMClient {
         return t
     }
 
+    private static func mediaType(for data: Data) -> String {
+        data.starts(with: [0x89, 0x50, 0x4E, 0x47]) ? "image/png" : "image/jpeg"   // PNG magic else JPEG
+    }
+
     // MARK: Wire types
     private struct RequestBody: Encodable {
         let model: String
         let max_tokens: Int
         let system: String
         let messages: [Message]
-        struct Message: Encodable { let role: String; let content: String }
+        struct Message: Encodable { let role: String; let content: [ContentBlock] }
     }
+
+    private enum ContentBlock: Encodable {
+        case text(String)
+        case image(mediaType: String, base64: String)
+
+        private enum CodingKeys: String, CodingKey { case type, text, source }
+        private struct ImageSource: Encodable {
+            let type = "base64"
+            let media_type: String
+            let data: String
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            switch self {
+            case .text(let text):
+                try c.encode("text", forKey: .type)
+                try c.encode(text, forKey: .text)
+            case .image(let mediaType, let base64):
+                try c.encode("image", forKey: .type)
+                try c.encode(ImageSource(media_type: mediaType, data: base64), forKey: .source)
+            }
+        }
+    }
+
     private struct MessagesResponse: Decodable {
         let content: [Block]
         struct Block: Decodable { let type: String; let text: String? }

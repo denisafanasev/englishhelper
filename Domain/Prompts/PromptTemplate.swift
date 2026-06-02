@@ -26,9 +26,16 @@ public protocol PromptTemplate<Input, Output>: Sendable {
     /// Render the user-turn message from typed input.
     func userMessage(for input: Input) -> String
 
+    /// Optional image to attach to the user turn (for multimodal templates). Default: none.
+    func image(for input: Input) -> Data?
+
     /// Decode the model's raw JSON response text into the typed `Output`.
     /// Throws `LLMError.invalidOutput` if the response violates the schema.
     func decode(_ rawJSON: String) throws -> Output
+}
+
+public extension PromptTemplate {
+    func image(for input: Input) -> Data? { nil }
 }
 
 public extension PromptTemplate {

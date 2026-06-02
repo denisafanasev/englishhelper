@@ -2,7 +2,8 @@
 //  PhotoTranslateViewModel.swift
 //  EnglishHelper — Presentation
 //
-//  "Фото-перевод" (EN→RU). Camera or library image → OCR (+ boxes) → Russian translation → save.
+//  "Фото-перевод". The LLM recognizes English text in the photo and translates it into blocks
+//  (it decides how many). Each block is shown as its own card with play + save.
 //
 
 import Foundation
@@ -15,14 +16,16 @@ public final class PhotoTranslateViewModel {
 
     public private(set) var phase: Phase = .idle
     public private(set) var imageData: Data?
-    public private(set) var result: PhotoTranslation?
+    public private(set) var blocks: [TranslatedBlock] = []
     public private(set) var errorMessage: String?
     public private(set) var isOffline = false
-    public private(set) var isPlaying = false
-    private var savedExpressionID: UUID?
 
     public var showCameraPriming = false
     public var presentCamera = false
+
+    private var savedBlockIDs: Set<UUID> = []          // optimistic "saved" flag (instant UI)
+    private var savedExpressionIDs: [UUID: UUID] = [:]  // block.id → stored Expression.id
+    private var playingBlockID: UUID?
 
     private let photoTranslate: any PhotoTranslateUseCase
     private let pronounce: any PlayPronunciationUseCase
@@ -48,9 +51,9 @@ public final class PhotoTranslateViewModel {
         self.isConfigured = isConfigured
     }
 
-    public private(set) var isSaved = false   // optimistic (instant UI)
     public var needsAPIKey: Bool { !isConfigured }
-    public var blocks: [RecognizedTextBlock] { result?.blocks ?? [] }
+    public func isSaved(_ block: TranslatedBlock) -> Bool { savedBlockIDs.contains(block.id) }
+    public func isPlaying(_ block: TranslatedBlock) -> Bool { playingBlockID == block.id }
 
     // MARK: Camera priming
 
@@ -69,7 +72,6 @@ public final class PhotoTranslateViewModel {
     }
 
     public func cancelCameraPriming() { showCameraPriming = false }
-
     public func cameraCancelled() { presentCamera = false }
 
     public func didCapture(_ data: Data) {
@@ -86,17 +88,17 @@ public final class PhotoTranslateViewModel {
     private func process(_ data: Data) {
         requestTask?.cancel()
         imageData = data
-        result = nil
-        savedExpressionID = nil
-        isSaved = false
+        blocks = []
+        savedBlockIDs = []
+        savedExpressionIDs = [:]
         errorMessage = nil
         isOffline = false
         phase = .processing
         requestTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let translation = try await self.photoTranslate(RecognizableImage(data: data))
-                self.result = translation
+                let result = try await self.photoTranslate(RecognizableImage(data: data))
+                self.blocks = result
                 self.phase = .result
             } catch is CancellationError {
                 // superseded
@@ -111,7 +113,7 @@ public final class PhotoTranslateViewModel {
         if let ocr = error as? TextRecognitionError {
             switch ocr {
             case .noTextFound:
-                errorMessage = "Не нашёл текст на фото. Попробуйте другое изображение."
+                errorMessage = "Не нашёл английский текст на фото. Попробуйте другое изображение."
             case .unsupportedImage:
                 errorMessage = "Не удалось обработать изображение."
             case .cancelled:
@@ -127,42 +129,39 @@ public final class PhotoTranslateViewModel {
         }
     }
 
-    // MARK: Actions
+    // MARK: Per-block actions
 
-    public func playSource() {
-        guard let text = result?.recognizedText, !text.isEmpty else { return }
+    public func play(_ block: TranslatedBlock) {
         playTask?.cancel()
-        isPlaying = true
+        playingBlockID = block.id
         playTask = Task { [weak self] in
             guard let self else { return }
             do {
-                for try await state in self.pronounce(text) where state == .finished { break }
+                for try await state in self.pronounce(block.en) where state == .finished { break }
             } catch {}
-            self.isPlaying = false
+            if self.playingBlockID == block.id { self.playingBlockID = nil }
         }
     }
 
-    public func toggleSave() {
-        guard let result, phase == .result else { return }
-        if isSaved {
-            isSaved = false                              // instant UI
-            let storedID = savedExpressionID
-            savedExpressionID = nil
+    public func toggleSave(_ block: TranslatedBlock) {
+        let id = block.id
+        if savedBlockIDs.contains(id) {
+            savedBlockIDs.remove(id)                       // instant UI
+            let storedID = savedExpressionIDs[id]
+            savedExpressionIDs[id] = nil
             if let storedID {
                 Task { [weak self] in try? await self?.studyList.delete(id: storedID) }
             }
         } else {
-            isSaved = true                               // instant UI; enrich+store in background
+            savedBlockIDs.insert(id)                        // instant UI; enrich+store in background
             Task { [weak self] in
                 guard let self else { return }
                 do {
-                    let stored = try await self.saveExpression(
-                        en: result.recognizedText, knownRU: result.ru, context: ""
-                    )
-                    if self.isSaved { self.savedExpressionID = stored.id }
+                    let stored = try await self.saveExpression(en: block.en, knownRU: block.ru, context: "")
+                    if self.savedBlockIDs.contains(id) { self.savedExpressionIDs[id] = stored.id }
                     else { try? await self.studyList.delete(id: stored.id) }
                 } catch {
-                    self.isSaved = false                 // revert
+                    self.savedBlockIDs.remove(id)           // revert
                     self.errorMessage = "Не удалось сохранить в изучаемое."
                 }
             }
@@ -173,11 +172,11 @@ public final class PhotoTranslateViewModel {
         requestTask?.cancel(); playTask?.cancel()
         phase = .idle
         imageData = nil
-        result = nil
+        blocks = []
+        savedBlockIDs = []
+        savedExpressionIDs = [:]
+        playingBlockID = nil
         errorMessage = nil
         isOffline = false
-        isPlaying = false
-        savedExpressionID = nil
-        isSaved = false
     }
 }
