@@ -16,6 +16,9 @@ options:
     iOS: "26.0"
   developmentLanguage: en
   generateEmptyDirectories: true
+  # Bump LastUpgradeCheck to the current Xcode so the IDE doesn't nag "Update to recommended
+  # settings" (xcodegen hardcodes 1430). Runs after the project is written.
+  postGenCommand: sed -i '' -E 's/LastUpgradeCheck = [0-9]+;/LastUpgradeCheck = 2640;/' EnglishHelper.xcodeproj/project.pbxproj
 
 # Common build settings for every target.
 settings:

@@ -62,7 +62,7 @@ public final class NativeSpeechRecognizer: SpeechRecognizing, @unchecked Sendabl
         let engine = AVAudioEngine()
         let inputNode = engine.inputNode
         let inputFormat = inputNode.outputFormat(forBus: 0)
-        nonisolated(unsafe) let converter = AVAudioConverter(from: inputFormat, to: analyzerFormat)
+        let converter = AVAudioConverter(from: inputFormat, to: analyzerFormat)
 
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.record, mode: .measurement, options: [.duckOthers])
@@ -110,14 +110,9 @@ public final class NativeSpeechRecognizer: SpeechRecognizing, @unchecked Sendabl
         let ratio = outFormat.sampleRate / buffer.format.sampleRate
         let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 1024
         guard let out = AVAudioPCMBuffer(pcmFormat: outFormat, frameCapacity: capacity) else { return nil }
-        var fed = false
+        let feeder = BufferFeeder(buffer)
         var error: NSError?
-        converter.convert(to: out, error: &error) { _, status in
-            if fed { status.pointee = .noDataNow; return nil }
-            fed = true
-            status.pointee = .haveData
-            return buffer
-        }
+        converter.convert(to: out, error: &error, withInputFrom: feeder.next)
         return error == nil ? out : nil
     }
 
@@ -133,5 +128,24 @@ public final class NativeSpeechRecognizer: SpeechRecognizing, @unchecked Sendabl
                 continuation.resume(returning: status == .authorized)
             }
         }
+    }
+}
+
+/// Feeds a single captured buffer to `AVAudioConverter` exactly once. A reference type marked
+/// `@unchecked Sendable` so the converter's `@Sendable` input block doesn't capture a mutable `var`
+/// or a non-Sendable buffer directly (avoids Swift 6 concurrency warnings).
+private final class BufferFeeder: @unchecked Sendable {
+    private var buffer: AVAudioPCMBuffer?
+    init(_ buffer: AVAudioPCMBuffer) { self.buffer = buffer }
+
+    func next(_ packetCount: AVAudioPacketCount,
+              _ outStatus: UnsafeMutablePointer<AVAudioConverterInputStatus>) -> AVAudioPCMBuffer? {
+        if let buffer {
+            self.buffer = nil
+            outStatus.pointee = .haveData
+            return buffer
+        }
+        outStatus.pointee = .noDataNow
+        return nil
     }
 }

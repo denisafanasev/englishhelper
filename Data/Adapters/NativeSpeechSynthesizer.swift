@@ -17,8 +17,8 @@ public final class NativeSpeechSynthesizer: SpeechSynthesizing, @unchecked Senda
     public func speak(_ text: String) -> AsyncThrowingStream<SpeechPlaybackState, Error> {
         let language = voiceLanguage
         return AsyncThrowingStream { continuation in
-            nonisolated(unsafe) let synthesizer = AVSpeechSynthesizer()
-            nonisolated(unsafe) let delegate = SynthesisDelegate(
+            nonisolated(unsafe) let synthesizer = AVSpeechSynthesizer()   // AVSpeechSynthesizer isn't Sendable
+            let delegate = SynthesisDelegate(
                 continuation: continuation, totalLength: text.utf16.count
             )
             synthesizer.delegate = delegate   // delegate is weak; retained via onTermination below
