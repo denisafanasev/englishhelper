@@ -104,7 +104,12 @@ extractable** — acceptable for this personal/dev app; a production build would
     `PlayPronunciation`. New DS components: `MicButton`, `PhraseVariantCard`, `EHButton`,
     `GlassField`, `StatusView`/`LoadingView`, `glassPanel` (Reduce-Transparency→solid).
   - 29/29 tests green; builds + launches.
-- ⏳ 3. "Перевод" · 4. "Фото-перевод" · 5. "Список" + export · 6. "История" · 7. "Настройки".
+- ✅ **3. "Перевод"** (EN→RU). Typed English → single Russian translation; play EN source; save
+  (enrich-then-store, toggle). States idle/processing/result/error/offline + API-key banner.
+  Introduced the app shell: native `TabView` (Liquid-Glass tab bar) with **Голос** + **Перевод**
+  tabs (grows each step). `AppContainer.makeTranslateViewModel`; shared `presentableError` mapper.
+  32/32 tests green; builds + launches.
+- ⏳ 4. "Фото-перевод" · 5. "Список" + export · 6. "История" · 7. "Настройки".
 
 **Notes / trade-offs so far:**
 - **Liquid Glass vs readability:** all glass goes through `glassPanel`, which swaps to a SOLID

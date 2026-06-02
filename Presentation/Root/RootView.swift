@@ -2,20 +2,29 @@
 //  RootView.swift
 //  EnglishHelper — Presentation
 //
-//  App root. v1 is being built screen by screen — currently hosts "Как сказать". A tab bar
-//  (Voice / Study / Camera) replaces this once more screens land.
+//  App shell. v1 is built screen by screen; tabs accumulate each step (the native TabView renders
+//  the Liquid-Glass tab bar). Final structure is reconciled once all screens exist.
 //
 
 import SwiftUI
 
 public struct RootView: View {
-    private let voiceModel: VoiceViewModel
+    @State private var voice: VoiceViewModel
+    @State private var translate: TranslateViewModel
 
-    public init(voice: VoiceViewModel) {
-        self.voiceModel = voice
+    public init(voice: VoiceViewModel, translate: TranslateViewModel) {
+        _voice = State(initialValue: voice)
+        _translate = State(initialValue: translate)
     }
 
     public var body: some View {
-        VoiceView(model: voiceModel)
+        TabView {
+            Tab("Голос", systemImage: "mic.fill") {
+                VoiceView(model: voice)
+            }
+            Tab("Перевод", systemImage: "character.bubble") {
+                TranslateView(model: translate)
+            }
+        }
     }
 }
