@@ -23,7 +23,7 @@ struct EnglishHelperApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView(model: container.makeRootViewModel())
+            RootView(voice: container.makeVoiceViewModel())
         }
     }
 }

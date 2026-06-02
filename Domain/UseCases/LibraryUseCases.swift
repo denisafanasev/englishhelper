@@ -30,6 +30,37 @@ public struct StudyListInteractor: StudyListUseCase {
     }
 }
 
+// MARK: - Save (create with enrichment)
+
+public protocol SaveExpressionUseCase: Sendable {
+    /// Expression CREATE from ANY flow: enrich (ru/example/synonyms) FIRST, then store.
+    /// Returns the stored, enriched expression.
+    func callAsFunction(en: String, knownRU: String?, context: String) async throws -> Expression
+}
+
+public struct SaveExpressionInteractor: SaveExpressionUseCase {
+    private let enrich: EnrichExpressionUseCase
+    private let repository: ExpressionRepository
+
+    public init(enrich: EnrichExpressionUseCase, repository: ExpressionRepository) {
+        self.enrich = enrich
+        self.repository = repository
+    }
+
+    public func callAsFunction(en: String, knownRU: String? = nil, context: String = "") async throws -> Expression {
+        let enrichment = try await enrich(EnrichInput(en: en, ru: knownRU))
+        let expression = Expression(
+            en: en,
+            ru: enrichment.ru.isEmpty ? (knownRU ?? "") : enrichment.ru,
+            example: enrichment.example,
+            synonyms: enrichment.synonyms,
+            context: context
+        )
+        try await repository.add(expression)
+        return expression
+    }
+}
+
 // MARK: - History (read)
 
 public protocol RequestHistoryUseCase: Sendable {

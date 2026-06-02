@@ -2,20 +2,20 @@
 //  RootView.swift
 //  EnglishHelper — Presentation
 //
+//  App root. v1 is being built screen by screen — currently hosts "Как сказать". A tab bar
+//  (Voice / Study / Camera) replaces this once more screens land.
+//
 
 import SwiftUI
-import Domain
 
-/// The app's root. v1 screens (Voice / Study / Camera) replace the placeholder in Step 2.
 public struct RootView: View {
-    @State private var model: RootViewModel
+    private let voiceModel: VoiceViewModel
 
-    public init(model: RootViewModel) {
-        _model = State(initialValue: model)
+    public init(voice: VoiceViewModel) {
+        self.voiceModel = voice
     }
 
     public var body: some View {
-        PlaceholderView(status: model.status, expressionCount: model.expressionCount)
-            .task { await model.load() }
+        VoiceView(model: voiceModel)
     }
 }

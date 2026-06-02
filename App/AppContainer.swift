@@ -33,6 +33,10 @@ public final class AppContainer: Sendable {
     public let studyList: any StudyListUseCase
     public let requestHistory: any RequestHistoryUseCase
     public let exportDeck: any ExportDeckUseCase
+    public let regenerateHowToSay: any RegenerateHowToSayUseCase
+    public let saveExpression: any SaveExpressionUseCase
+    public let voiceCapture: any VoiceCaptureUseCase
+    public let pronounce: any PlayPronunciationUseCase
 
     public init(
         config: AppConfig,
@@ -61,6 +65,12 @@ public final class AppContainer: Sendable {
         self.studyList = StudyListInteractor(repository: expressions)
         self.requestHistory = RequestHistoryInteractor(history: history)
         self.exportDeck = ExportDeckInteractor(repository: expressions, exporter: exporter)
+        self.regenerateHowToSay = RegenerateHowToSayInteractor(llm: llm, history: history)
+        self.saveExpression = SaveExpressionInteractor(
+            enrich: EnrichExpressionInteractor(llm: llm), repository: expressions
+        )
+        self.voiceCapture = VoiceCaptureInteractor(recognizer: speechRecognizer)
+        self.pronounce = PlayPronunciationInteractor(synthesizer: speechSynthesizer)
     }
 
     /// v1: the whole graph on LIVE adapters. Swapping any engine is exactly ONE line below
@@ -96,7 +106,15 @@ public final class AppContainer: Sendable {
     }
 
     @MainActor
-    public func makeRootViewModel() -> RootViewModel {
-        RootViewModel(studyList: studyList)
+    public func makeVoiceViewModel() -> VoiceViewModel {
+        VoiceViewModel(
+            howToSay: howToSay,
+            regenerateHowToSay: regenerateHowToSay,
+            voiceCapture: voiceCapture,
+            pronounce: pronounce,
+            saveExpression: saveExpression,
+            studyList: studyList,
+            isConfigured: config.isClaudeConfigured
+        )
     }
 }

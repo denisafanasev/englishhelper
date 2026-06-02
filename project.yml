@@ -89,6 +89,7 @@ targets:
     dependencies:
       - target: Domain
       - target: Adapters
+      - target: Presentation
 
 schemes:
   EnglishHelper:

@@ -95,13 +95,26 @@ extractable** — acceptable for this personal/dev app; a production build would
   - OCR port evolved: `TextRecognizing` now returns `RecognizedText` (text + boxes).
   - `Stub*` (latency + failure) for LLM/ASR/TTS/OCR alongside `Mock*`.
   - Engine swap = ONE line in `AppContainer.bootLive` (see README).
-- ⏳ **2. "Как сказать"** (Voice: mic→STT→Claude→TTS→save→enrich) — NOT STARTED (next).
+- ✅ **2. "Как сказать"** (Voice: mic→STT→Claude→TTS→save→enrich). Root screen = `VoiceView`.
+  - Voice OR typed RU → editable transcript → 3 register-tagged variants (tap = play TTS,
+    bookmark = save). "Другие варианты" = regenerate (prior set stays in history).
+  - States: idle / listening / processing / results / error / offline + API-key banner.
+  - Mic permission PRIMING sheet before the system dialog (`didPrimeMic` in UserDefaults).
+  - New use cases: `RegenerateHowToSay`, `SaveExpression` (enrich-then-store), `VoiceCapture`,
+    `PlayPronunciation`. New DS components: `MicButton`, `PhraseVariantCard`, `EHButton`,
+    `GlassField`, `StatusView`/`LoadingView`, `glassPanel` (Reduce-Transparency→solid).
+  - 29/29 tests green; builds + launches.
 - ⏳ 3. "Перевод" · 4. "Фото-перевод" · 5. "Список" + export · 6. "История" · 7. "Настройки".
 
 **Notes / trade-offs so far:**
+- **Liquid Glass vs readability:** all glass goes through `glassPanel`, which swaps to a SOLID
+  surface under Reduce Transparency; `MicButton` rings/`symbolEffect` disable under Reduce Motion.
+- **Iconography:** using SF Symbols (the design's icon names were SF-Symbol-style) for native
+  Dynamic Type + VoiceOver + variable-color effects, rather than porting the custom thin-line set.
+- **Save = sticky toggle in Voice:** bookmark saves (enrich→store) / unsaves (delete); no per-card
+  spinner during the enrich call yet.
 - `NativeSpeechRecognizer` compiles against the real iOS 26 API but its live mic→STT path needs
-  on-device verification (no mic in CI); the architecture/stream contract is covered by `Stub*`.
+  on-device verification (no mic in CI); the stream contract is covered by `Stub*`.
 - `XMLDocument` is macOS-only → the exporter uses a dedicated escaping `XMLWriter` + `XMLParser` validation.
 - SDK name collisions handled by qualification: `Domain.Expression` vs `Foundation.Expression`,
   `Domain.RecognizedText`/`NormalizedRect` vs Vision's; Data layer module is `Adapters` (not `Data`).
-- Liquid-Glass-vs-readability trade-offs arrive with the screens (step 2+); none yet.

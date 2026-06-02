@@ -5,7 +5,7 @@
 
 import SwiftUI
 
-/// A Liquid-Glass card: system material + hairline glass border + card radius + elevation.
+/// A Liquid-Glass card: glass surface (solid under Reduce Transparency) + card radius + elevation.
 public struct GlassCard<Content: View>: View {
     @Environment(\.colorScheme) private var scheme
     private let content: Content
@@ -17,11 +17,7 @@ public struct GlassCard<Content: View>: View {
     public var body: some View {
         content
             .padding(Tokens.Space.s16)
-            .background(Tokens.Material.glass, in: .rect(cornerRadius: Tokens.Radius.card))
-            .overlay(
-                RoundedRectangle(cornerRadius: Tokens.Radius.card)
-                    .strokeBorder(Tokens.Glass.border, lineWidth: Tokens.Hairline.width)
-            )
+            .glassPanel(cornerRadius: Tokens.Radius.card)
             .shadow(Tokens.Shadow.cardLight, Tokens.Shadow.cardDark, scheme: scheme)
     }
 }

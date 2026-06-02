@@ -33,6 +33,33 @@ public struct HowToSayInteractor: HowToSayUseCase {
     }
 }
 
+// MARK: - regenerateHowToSay
+
+public protocol RegenerateHowToSayUseCase: Sendable {
+    /// A FRESH set of 3 variants for the same intent (also appended to history; prior set stays).
+    func callAsFunction(_ russianIntent: String) async throws -> [PhraseVariant]
+}
+
+public struct RegenerateHowToSayInteractor: RegenerateHowToSayUseCase {
+    private let llm: LLMClient
+    private let history: HistoryRepository
+
+    public init(llm: LLMClient, history: HistoryRepository) {
+        self.llm = llm
+        self.history = history
+    }
+
+    public func callAsFunction(_ russianIntent: String) async throws -> [PhraseVariant] {
+        // Nudge the model toward different phrasings; history records the original intent only.
+        let nudged = russianIntent + "\n\n(Предложи другие формулировки, отличные от прежних.)"
+        let result = try await llm.run(HowToSayTemplate(), input: nudged)
+        try? await history.append(
+            HistoryEntry(inputText: russianIntent, result: .howToSay(result.variants))
+        )
+        return result.variants
+    }
+}
+
 // MARK: - translateText
 
 public protocol TranslateTextUseCase: Sendable {
