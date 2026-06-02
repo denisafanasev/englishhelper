@@ -87,7 +87,10 @@ extractable** — acceptable for this personal/dev app; a production build would
 - ✅ **1. Adapters + forbidden-import guardrail.** Live adapters wired; app boots LIVE with a mock
   fallback, builds + launches on iOS 26, 24/24 tests green.
   - `ClaudeLLMClient` (Messages API; fence-strip + typed decode + timeout/malformed/offline paths).
-  - `NativeSpeechRecognizer` (iOS 26 `SpeechAnalyzer`/`SpeechTranscriber`, ru-RU on-device, (text,isFinal) stream, cancel).
+  - `NativeSpeechRecognizer` (`SFSpeechRecognizer`, ru-RU, (text,isFinal) stream, cancel). NB: the
+    iOS 26 `SpeechAnalyzer`/`SpeechTranscriber` has NO on-device Russian model on current devices
+    (`AssetInventory.status` = `.unsupported`), so we use `SFSpeechRecognizer` — Russian works
+    server-backed (needs network). Engine swap was one file (the port is unchanged).
   - `NativeSpeechSynthesizer` (`AVSpeechSynthesizer`, EN, state + stop).
   - `VisionTextRecognizer` (`RecognizeTextRequest` → text + normalized top-left boxes).
   - `SwiftDataExpressionRepository` / `SwiftDataHistoryRepository` (`@ModelActor`) + `@Model` types.
