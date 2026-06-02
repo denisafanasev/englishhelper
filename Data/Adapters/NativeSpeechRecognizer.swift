@@ -87,8 +87,10 @@ private final class RecognitionSession: @unchecked Sendable {
             throw SpeechRecognitionError.underlying("микрофон недоступен (формат \(format.sampleRate) Гц)")
         }
 
-        nonisolated(unsafe) let pendingRequest = request   // appended from the realtime audio thread
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
+        // @Sendable so the closure is NOT MainActor-isolated — AVAudioEngine calls it on the
+        // realtime audio thread, and an inherited isolation check would crash (dispatch_assert_queue).
+        nonisolated(unsafe) let pendingRequest = request
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { @Sendable buffer, _ in
             pendingRequest.append(buffer)
         }
 
@@ -101,7 +103,7 @@ private final class RecognitionSession: @unchecked Sendable {
             throw SpeechRecognitionError.underlying("аудиодвижок: \(error.localizedDescription)")
         }
 
-        task = recognizer.recognitionTask(with: request) { result, error in
+        task = recognizer.recognitionTask(with: request) { @Sendable result, error in
             if let result {
                 continuation.yield(SpeechTranscript(
                     text: result.bestTranscription.formattedString,
