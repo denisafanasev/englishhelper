@@ -142,6 +142,7 @@ public final class StudyListViewModel {
     public func isPlaying(_ expression: Domain.Expression) -> Bool { playingID == expression.id }
 
     public func play(_ expression: Domain.Expression) {
+        if playingID == expression.id { stopPlayback(); return }   // tap again = stop
         playTask?.cancel()
         playingID = expression.id
         playTask = Task { [weak self] in
@@ -151,8 +152,14 @@ public final class StudyListViewModel {
             } catch {
                 // playback failure is non-fatal
             }
-            if self.playingID == expression.id { self.playingID = nil }
+            if !Task.isCancelled, self.playingID == expression.id { self.playingID = nil }
         }
+    }
+
+    private func stopPlayback() {
+        playTask?.cancel()
+        playTask = nil
+        playingID = nil
     }
 
     public func clearExport() { exportedDeck = nil }

@@ -216,6 +216,7 @@ public final class InViewModel {
     // MARK: Play (the English side)
 
     public func play() {
+        if isPlaying { stopPlayback(); return }   // tap again while speaking = stop
         let text = sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         playTask?.cancel()
@@ -227,8 +228,14 @@ public final class InViewModel {
             } catch {
                 // playback failure is non-fatal
             }
-            self.isPlaying = false
+            if !Task.isCancelled { self.isPlaying = false }
         }
+    }
+
+    private func stopPlayback() {
+        playTask?.cancel()
+        playTask = nil
+        isPlaying = false
     }
 
     // MARK: Save / unsave (enrich-then-store)

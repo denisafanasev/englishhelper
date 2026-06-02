@@ -229,6 +229,7 @@ public final class VoiceViewModel {
     // MARK: Play
 
     public func play(_ variant: PhraseVariant) {
+        if playingVariantID == variant.id { stopPlayback(); return }   // tap again = stop
         playTask?.cancel()
         playingVariantID = variant.id
         playTask = Task { [weak self] in
@@ -240,8 +241,14 @@ public final class VoiceViewModel {
             } catch {
                 // playback failure is non-fatal
             }
-            if self.playingVariantID == variant.id { self.playingVariantID = nil }
+            if !Task.isCancelled, self.playingVariantID == variant.id { self.playingVariantID = nil }
         }
+    }
+
+    private func stopPlayback() {
+        playTask?.cancel()
+        playTask = nil
+        playingVariantID = nil
     }
 
     // MARK: Save / unsave (enrich-then-store)

@@ -133,6 +133,7 @@ public final class PhotoTranslateViewModel {
     // MARK: Per-block actions
 
     public func play(_ block: TranslatedBlock) {
+        if playingBlockID == block.id { stopPlayback(); return }   // tap again = stop
         playTask?.cancel()
         playingBlockID = block.id
         playTask = Task { [weak self] in
@@ -140,8 +141,14 @@ public final class PhotoTranslateViewModel {
             do {
                 for try await state in self.pronounce(block.en) where state == .finished { break }
             } catch {}
-            if self.playingBlockID == block.id { self.playingBlockID = nil }
+            if !Task.isCancelled, self.playingBlockID == block.id { self.playingBlockID = nil }
         }
+    }
+
+    private func stopPlayback() {
+        playTask?.cancel()
+        playTask = nil
+        playingBlockID = nil
     }
 
     public func toggleSave(_ block: TranslatedBlock) {

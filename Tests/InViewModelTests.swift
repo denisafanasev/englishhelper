@@ -51,6 +51,19 @@ import Presentation
         #expect(vm.translation == "Это тестовый перевод.")
     }
 
+    @Test func secondTapStopsPlayback() async throws {
+        UserDefaults.standard.set("russian", forKey: "targetLanguage")
+        let vm = makeVM()
+        vm.source = "Could you give me a hand?"
+        vm.submit()
+        try await waitUntil { vm.phase == .result }
+
+        vm.play()                    // first tap starts playback (synchronous flag)
+        #expect(vm.isPlaying)
+        vm.play()                    // second tap on the same phrase stops it
+        #expect(!vm.isPlaying)
+    }
+
     @Test func failureMapsToOfflineWhenNotConfigured() async throws {
         let vm = makeVM(llm: StubLLMClient(behavior: .failure(.notConfigured), latency: .milliseconds(1)))
         vm.source = "hello"

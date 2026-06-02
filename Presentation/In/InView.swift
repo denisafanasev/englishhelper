@@ -32,7 +32,7 @@ public struct InView: View {
                 }
                 .scrollDismissesKeyboard(.interactively)
             }
-            .navigationTitle(Loc.t("Пойми", "Understand"))
+            .navigationTitle(Loc.t("Понять", "Understand"))
             .settingsTrigger()
             .sheet(isPresented: $model.showMicPriming) { primingSheet }
         }

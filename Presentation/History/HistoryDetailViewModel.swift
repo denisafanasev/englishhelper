@@ -97,6 +97,7 @@ public final class HistoryDetailViewModel {
     }
 
     private func play(key: String, english: String) {
+        if playingKey == key { stopPlayback(); return }   // tap again = stop
         guard !english.isEmpty else { return }
         playTask?.cancel()
         playingKey = key
@@ -107,8 +108,14 @@ public final class HistoryDetailViewModel {
             } catch {
                 // playback failure is non-fatal
             }
-            if self.playingKey == key { self.playingKey = nil }
+            if !Task.isCancelled, self.playingKey == key { self.playingKey = nil }
         }
+    }
+
+    private func stopPlayback() {
+        playTask?.cancel()
+        playTask = nil
+        playingKey = nil
     }
 
     private func toggle(key: String, en: String, knownRU: String?, context: String) {
