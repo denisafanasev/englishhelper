@@ -121,7 +121,18 @@ extractable** — acceptable for this personal/dev app; a production build would
 - ✅ **6. "История"** (tab **История**). Read-only chronological log of every request; rows show
   kind/input/result snippet/timestamp; tap → detail rendering the full result by kind (howToSay
   variants / translate+photo RU). States loading/empty/loaded/failed. 44/44 tests green.
-- ⏳ 7. "Настройки" (planned as a toolbar gear / sheet, not a tab, to keep ≤5 tabs).
+- ✅ **7. "Настройки"** (gear on every screen → sheet; not a tab). LIVE API health check
+  (checking/ok/failed via a cheap `HealthCheckTemplate` round-trip through `ClaudeLLMClient`),
+  theme toggle (system/light/dark, persisted in `ThemeStore` → `preferredColorScheme`), and
+  app/voice info (version, model, voice). 47/47 tests green.
+
+**v1 COMPLETE.** All 7 build-order steps done; 47 tests green; builds + launches on iOS 26.
+Tabs: Голос · Перевод · Камера · Изучаю · История (+ Settings gear). Final notes:
+- Navigation: kept Перевод + История as tabs (added incrementally) rather than folding them into
+  the design's 3-tab bar; Settings is a gear/sheet to stay at 5 tabs. A future pass could reconcile
+  to the exact design tab bar.
+- The Settings health check makes a real (tiny) Claude call each time it runs — intended.
+- Still device-only: live mic→STT and the camera capture path (Simulator hides the camera button).
 
 **Notes / trade-offs so far:**
 - **Liquid Glass vs readability:** all glass goes through `glassPanel`, which swaps to a SOLID

@@ -33,6 +33,7 @@ public struct VoiceView: View {
                 .scrollDismissesKeyboard(.interactively)
             }
             .navigationTitle("Как сказать")
+            .settingsTrigger()
             .sheet(isPresented: $model.showMicPriming) { primingSheet }
         }
     }

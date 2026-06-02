@@ -33,6 +33,7 @@ public struct PhotoTranslateView: View {
                 }
             }
             .navigationTitle("Фото-перевод")
+            .settingsTrigger()
             .sheet(isPresented: $model.showCameraPriming) { primingSheet }
             .fullScreenCover(isPresented: $model.presentCamera) {
                 CameraPicker(onImage: { model.didCapture($0) }, onCancel: { model.cameraCancelled() })

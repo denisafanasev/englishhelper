@@ -44,6 +44,7 @@ public struct TranslateView: View {
                 .scrollDismissesKeyboard(.interactively)
             }
             .navigationTitle("Перевод")
+            .settingsTrigger()
         }
     }
 

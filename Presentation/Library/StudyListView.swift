@@ -24,6 +24,7 @@ public struct StudyListView: View {
                 contentSection
             }
             .navigationTitle("Изучаю")
+            .settingsTrigger()
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { model.export() } label: { Image(systemName: "square.and.arrow.up") }

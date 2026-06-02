@@ -37,6 +37,7 @@ public final class AppContainer: Sendable {
     public let saveExpression: any SaveExpressionUseCase
     public let voiceCapture: any VoiceCaptureUseCase
     public let pronounce: any PlayPronunciationUseCase
+    public let connectionHealth: any ConnectionHealthUseCase
 
     public init(
         config: AppConfig,
@@ -71,6 +72,7 @@ public final class AppContainer: Sendable {
         )
         self.voiceCapture = VoiceCaptureInteractor(recognizer: speechRecognizer)
         self.pronounce = PlayPronunciationInteractor(synthesizer: speechSynthesizer)
+        self.connectionHealth = ConnectionHealthInteractor(llm: llm)
     }
 
     /// v1: the whole graph on LIVE adapters. Swapping any engine is exactly ONE line below
@@ -153,5 +155,15 @@ public final class AppContainer: Sendable {
     @MainActor
     public func makeHistoryViewModel() -> HistoryViewModel {
         HistoryViewModel(history: requestHistory)
+    }
+
+    @MainActor
+    public func makeSettingsViewModel() -> SettingsViewModel {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+        return SettingsViewModel(
+            connectionHealth: connectionHealth,
+            appVersion: version,
+            modelName: config.claudeModel
+        )
     }
 }

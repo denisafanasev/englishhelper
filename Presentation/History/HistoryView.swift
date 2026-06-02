@@ -24,6 +24,7 @@ public struct HistoryView: View {
                 contentSection
             }
             .navigationTitle("История")
+            .settingsTrigger()
             .navigationDestination(for: HistoryEntry.self) { HistoryDetailView(entry: $0) }
             .task { await model.load() }
         }

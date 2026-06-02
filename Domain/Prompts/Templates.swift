@@ -192,3 +192,25 @@ public struct EnrichCardTemplate: PromptTemplate {
         )
     }
 }
+
+// MARK: - healthCheck (connection probe)
+
+/// Minimal probe used by the Settings live health check — the cheapest possible round-trip.
+public struct HealthCheckTemplate: PromptTemplate {
+    public typealias Input = Void
+    public typealias Output = Bool
+
+    public let id = "healthCheck"
+    public init() {}
+
+    public var systemPrompt: String { "Reply ONLY with the JSON object {\"ok\": true}." }
+    public var outputJSONSchema: String {
+        #"{"type":"object","properties":{"ok":{"type":"boolean"}},"required":["ok"]}"#
+    }
+    public func userMessage(for input: Void) -> String { "ping" }
+    public func decode(_ rawJSON: String) throws -> Bool {
+        try decodeJSON(Ping.self, from: rawJSON).ok
+    }
+
+    private struct Ping: Decodable { let ok: Bool }
+}
