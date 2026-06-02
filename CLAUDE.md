@@ -127,10 +127,12 @@ extractable** — acceptable for this personal/dev app; a production build would
   app/voice info (version, model, voice). 47/47 tests green.
 
 **v1 COMPLETE.** All 7 build-order steps done; 47 tests green; builds + launches on iOS 26.
-Tabs: Голос · Перевод · Камера · Изучаю · История (+ Settings gear). Final notes:
-- Navigation: kept Перевод + История as tabs (added incrementally) rather than folding them into
-  the design's 3-tab bar; Settings is a gear/sheet to stay at 5 tabs. A future pass could reconcile
-  to the exact design tab bar.
+Tabs: Изучаю · Текст · Голос (center, default) · Камера · История (+ Settings gear). Final notes:
+- **«Текст» = «Голос» без микрофона**: the former EN→RU "Перевод" screen was repurposed — it now
+  runs the SAME flow as Voice (RU → 3 register-tagged English variants, play/save/regenerate) but
+  text-input only. Both tabs use `VoiceView` (`showsMic:` flag) + a `VoiceViewModel`. The old
+  `translateText` use case/template remain in Domain but are no longer surfaced by a screen.
+- Navigation: Голос is centered and the default tab; История as a tab, Settings as a gear/sheet.
 - The Settings health check makes a real (tiny) Claude call each time it runs — intended.
 - Still device-only: live mic→STT and the camera capture path (Simulator hides the camera button).
 

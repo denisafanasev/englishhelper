@@ -13,9 +13,12 @@ import DesignSystem
 public struct VoiceView: View {
     @State private var model: VoiceViewModel
     @FocusState private var fieldFocused: Bool
+    /// `false` for the text-only "Текст" tab (no microphone — same flow, typed input).
+    private let showsMic: Bool
 
-    public init(model: VoiceViewModel) {
+    public init(model: VoiceViewModel, showsMic: Bool = true) {
         _model = State(initialValue: model)
+        self.showsMic = showsMic
     }
 
     public var body: some View {
@@ -48,18 +51,20 @@ public struct VoiceView: View {
             }
             .focused($fieldFocused)
 
-            VStack(spacing: Tokens.Space.s8) {
-                MicButton(status: micStatus) {
-                    fieldFocused = false
-                    model.micTapped()
-                }
-                .accessibilityLabel("Микрофон")
-                .accessibilityValue(model.isListening ? "Слушаю" : "Готов")
-                .accessibilityHint(model.isListening ? "Коснитесь, чтобы остановить" : "Коснитесь, чтобы говорить по-русски")
+            if showsMic {
+                VStack(spacing: Tokens.Space.s8) {
+                    MicButton(status: micStatus) {
+                        fieldFocused = false
+                        model.micTapped()
+                    }
+                    .accessibilityLabel("Микрофон")
+                    .accessibilityValue(model.isListening ? "Слушаю" : "Готов")
+                    .accessibilityHint(model.isListening ? "Коснитесь, чтобы остановить" : "Коснитесь, чтобы говорить по-русски")
 
-                Text(micCaption)
-                    .textStyle(Tokens.Text.footnote)
-                    .foregroundStyle(Tokens.Content.tertiary)
+                    Text(micCaption)
+                        .textStyle(Tokens.Text.footnote)
+                        .foregroundStyle(Tokens.Content.tertiary)
+                }
             }
 
             if model.canSubmit && !model.isListening {
@@ -88,7 +93,9 @@ public struct VoiceView: View {
                 StatusView(
                     systemImage: "text.bubble",
                     title: "Как сказать это по-английски?",
-                    message: "Спросите голосом или введите фразу по-русски — подберу три варианта с разной вежливостью."
+                    message: showsMic
+                        ? "Спросите голосом или введите фразу по-русски — подберу три варианта с разной вежливостью."
+                        : "Введите фразу по-русски — подберу три варианта с разной вежливостью."
                 )
                 .padding(.top, Tokens.Space.s24)
             }

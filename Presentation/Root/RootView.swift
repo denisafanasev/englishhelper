@@ -2,15 +2,16 @@
 //  RootView.swift
 //  EnglishHelper — Presentation
 //
-//  App shell: tab bar (Liquid Glass) + global theme + the Settings sheet (opened by the gear on
-//  each screen via shared AppUIState).
+//  App shell: tab bar (Liquid Glass) + global theme + the Settings sheet.
+//  Order: Изучаю · Текст · Голос (center, default) · Камера · История.
+//  "Голос" and "Текст" are the same flow (RU → 3 English variants); "Текст" is text-input only.
 //
 
 import SwiftUI
 
 public struct RootView: View {
     @State private var voice: VoiceViewModel
-    @State private var translate: TranslateViewModel
+    @State private var text: VoiceViewModel
     @State private var photo: PhotoTranslateViewModel
     @State private var library: StudyListViewModel
     @State private var history: HistoryViewModel
@@ -18,17 +19,18 @@ public struct RootView: View {
 
     @State private var theme = ThemeStore()
     @State private var ui = AppUIState()
+    @State private var selection = "voice"
 
     public init(
         voice: VoiceViewModel,
-        translate: TranslateViewModel,
+        text: VoiceViewModel,
         photo: PhotoTranslateViewModel,
         library: StudyListViewModel,
         history: HistoryViewModel,
         settings: SettingsViewModel
     ) {
         _voice = State(initialValue: voice)
-        _translate = State(initialValue: translate)
+        _text = State(initialValue: text)
         _photo = State(initialValue: photo)
         _library = State(initialValue: library)
         _history = State(initialValue: history)
@@ -37,12 +39,22 @@ public struct RootView: View {
 
     public var body: some View {
         @Bindable var ui = ui
-        TabView {
-            Tab("Голос", systemImage: "mic.fill") { VoiceView(model: voice) }
-            Tab("Перевод", systemImage: "character.bubble") { TranslateView(model: translate) }
-            Tab("Камера", systemImage: "camera") { PhotoTranslateView(model: photo) }
-            Tab("Изучаю", systemImage: "rectangle.stack") { StudyListView(model: library) }
-            Tab("История", systemImage: "clock.arrow.circlepath") { HistoryView(model: history) }
+        TabView(selection: $selection) {
+            Tab("Изучаю", systemImage: "rectangle.stack", value: "library") {
+                StudyListView(model: library)
+            }
+            Tab("Текст", systemImage: "keyboard", value: "text") {
+                VoiceView(model: text, showsMic: false)
+            }
+            Tab("Голос", systemImage: "mic.fill", value: "voice") {
+                VoiceView(model: voice)
+            }
+            Tab("Камера", systemImage: "camera", value: "camera") {
+                PhotoTranslateView(model: photo)
+            }
+            Tab("История", systemImage: "clock.arrow.circlepath", value: "history") {
+                HistoryView(model: history)
+            }
         }
         .environment(ui)
         .preferredColorScheme(theme.colorScheme)

@@ -25,7 +25,7 @@ struct EnglishHelperApp: App {
         WindowGroup {
             RootView(
                 voice: container.makeVoiceViewModel(),
-                translate: container.makeTranslateViewModel(),
+                text: container.makeVoiceViewModel(),       // "Текст" tab — same flow, text-only
                 photo: container.makePhotoTranslateViewModel(),
                 library: container.makeStudyListViewModel(),
                 history: container.makeHistoryViewModel(),

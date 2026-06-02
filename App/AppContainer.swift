@@ -121,17 +121,6 @@ public final class AppContainer: Sendable {
     }
 
     @MainActor
-    public func makeTranslateViewModel() -> TranslateViewModel {
-        TranslateViewModel(
-            translate: translateText,
-            pronounce: pronounce,
-            saveExpression: saveExpression,
-            studyList: studyList,
-            isConfigured: config.isClaudeConfigured
-        )
-    }
-
-    @MainActor
     public func makePhotoTranslateViewModel() -> PhotoTranslateViewModel {
         PhotoTranslateViewModel(
             photoTranslate: photoTranslate,
