@@ -136,11 +136,13 @@ public final class VoiceViewModel {
         phase = .failed
         switch error {
         case SpeechRecognitionError.permissionDenied:
-            errorMessage = "Нет доступа к микрофону. Включите его в Настройках, либо введите текст вручную."
+            errorMessage = "Нет доступа к микрофону или распознаванию речи. Включите в Настройках, либо введите текст вручную."
         case SpeechRecognitionError.unavailable:
             errorMessage = "Распознавание речи недоступно. Введите текст вручную."
         case SpeechRecognitionError.noSpeechDetected:
             errorMessage = "Не расслышал. Попробуйте ещё раз."
+        case SpeechRecognitionError.underlying(let detail):
+            errorMessage = "Не удалось распознать речь: \(detail). Можно ввести текст вручную."
         default:
             errorMessage = "Не удалось распознать речь. Введите текст вручную."
         }

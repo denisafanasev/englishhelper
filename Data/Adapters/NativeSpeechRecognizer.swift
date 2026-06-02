@@ -40,20 +40,46 @@ public final class NativeSpeechRecognizer: SpeechRecognizing, @unchecked Sendabl
             throw SpeechRecognitionError.permissionDenied
         }
 
-        let transcriber = SpeechTranscriber(
-            locale: locale,
-            transcriptionOptions: [],
-            reportingOptions: [.volatileResults],
-            attributeOptions: []
-        )
-
-        // Ensure the on-device model for this locale is installed.
-        if let installation = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
-            try await installation.downloadAndInstall()
+        // A locale the on-device transcriber actually supports.
+        guard let modelLocale = await SpeechTranscriber.supportedLocale(equivalentTo: locale) else {
+            throw SpeechRecognitionError.underlying(
+                "локаль \(locale.identifier) не поддерживается распознаванием на этом устройстве"
+            )
         }
 
+        let transcriber = SpeechTranscriber(locale: modelLocale, preset: .progressiveTranscription)
+
+        // Ensure the on-device model is installed (downloads on first use).
+        switch await AssetInventory.status(forModules: [transcriber]) {
+        case .unsupported:
+            throw SpeechRecognitionError.underlying("модель распознавания для \(modelLocale.identifier) недоступна")
+        case .installed:
+            break
+        default:
+            do {
+                if let installation = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
+                    try await installation.downloadAndInstall()
+                }
+            } catch {
+                throw SpeechRecognitionError.underlying("не удалось загрузить модель: \(error.localizedDescription)")
+            }
+        }
+
+        // Reserve the locale so the analyzer can use the model (best-effort).
+        _ = try? await AssetInventory.reserve(locale: modelLocale)
+
         guard let analyzerFormat = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber]) else {
-            throw SpeechRecognitionError.unavailable
+            throw SpeechRecognitionError.underlying("нет совместимого аудиоформата для распознавания")
+        }
+
+        // Configure + ACTIVATE the audio session BEFORE reading the input format — on a real device
+        // the input node reports an invalid (0 Hz) format until the session is active.
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.record, mode: .measurement, options: [.duckOthers])
+            try session.setActive(true, options: .notifyOthersOnDeactivation)
+        } catch {
+            throw SpeechRecognitionError.underlying("аудиосессия: \(error.localizedDescription)")
         }
 
         let (inputStream, inputContinuation) = AsyncStream.makeStream(of: AnalyzerInput.self)
@@ -62,11 +88,11 @@ public final class NativeSpeechRecognizer: SpeechRecognizing, @unchecked Sendabl
         let engine = AVAudioEngine()
         let inputNode = engine.inputNode
         let inputFormat = inputNode.outputFormat(forBus: 0)
+        guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
+            try? session.setActive(false)
+            throw SpeechRecognitionError.underlying("микрофон недоступен (формат \(inputFormat.sampleRate) Гц)")
+        }
         let converter = AVAudioConverter(from: inputFormat, to: analyzerFormat)
-
-        let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.record, mode: .measurement, options: [.duckOthers])
-        try session.setActive(true, options: .notifyOthersOnDeactivation)
 
         inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { buffer, _ in
             guard let converted = Self.convert(buffer, using: converter) else { return }
@@ -78,7 +104,8 @@ public final class NativeSpeechRecognizer: SpeechRecognizing, @unchecked Sendabl
             try engine.start()
         } catch {
             inputNode.removeTap(onBus: 0)
-            throw SpeechRecognitionError.underlying("audio engine: \(error.localizedDescription)")
+            try? session.setActive(false)
+            throw SpeechRecognitionError.underlying("аудиодвижок: \(error.localizedDescription)")
         }
 
         defer {
@@ -88,18 +115,21 @@ public final class NativeSpeechRecognizer: SpeechRecognizing, @unchecked Sendabl
             try? session.setActive(false, options: .notifyOthersOnDeactivation)
         }
 
-        try await analyzer.start(inputSequence: inputStream)
+        do {
+            try await analyzer.start(inputSequence: inputStream)
+        } catch {
+            throw SpeechRecognitionError.underlying("запуск анализатора: \(error.localizedDescription)")
+        }
 
         do {
             for try await result in transcriber.results {
-                let text = String(result.text.characters)
-                output.yield(SpeechTranscript(text: text, isFinal: result.isFinal))
+                output.yield(SpeechTranscript(text: String(result.text.characters), isFinal: result.isFinal))
             }
             output.finish()
         } catch is CancellationError {
             output.finish()
         } catch {
-            throw SpeechRecognitionError.underlying(error.localizedDescription)
+            throw SpeechRecognitionError.underlying("распознавание: \(error.localizedDescription)")
         }
     }
 
