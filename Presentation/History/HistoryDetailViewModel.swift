@@ -129,7 +129,8 @@ public final class HistoryDetailViewModel {
                     else { try? await self.studyList.delete(id: stored.id) }
                 } catch {
                     self.savedKeys.remove(key)           // revert
-                    self.errorMessage = "Не удалось сохранить в изучаемое."
+                    self.errorMessage = Loc.t("Не удалось сохранить в изучаемое.",
+                                              "Couldn't save to your study list.")
                 }
             }
         }

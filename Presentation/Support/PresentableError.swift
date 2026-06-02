@@ -15,22 +15,29 @@ struct PresentableError {
 
 func presentableError(_ error: Error) -> PresentableError {
     guard let llm = error as? LLMError else {
-        return PresentableError(message: "Что-то пошло не так. Попробуйте ещё раз.", isOffline: false)
+        return PresentableError(message: Loc.t("Что-то пошло не так. Попробуйте ещё раз.",
+                                               "Something went wrong. Try again."), isOffline: false)
     }
     switch llm {
     case .notConfigured:
-        return PresentableError(message: "Нет ключа Claude API. Добавьте его, чтобы продолжить.", isOffline: true)
+        return PresentableError(message: Loc.t("Нет ключа Claude API. Добавьте его, чтобы продолжить.",
+                                               "No Claude API key. Add one to continue."), isOffline: true)
     case .overloaded:
-        return PresentableError(message: "Сервис перегружен, попробуйте позже.", isOffline: false)
+        return PresentableError(message: Loc.t("Сервис перегружен, попробуйте позже.",
+                                               "Service is overloaded — try later."), isOffline: false)
     case .requestFailed(let info) where info.contains("offline"):
-        return PresentableError(message: "Нет соединения. Проверьте интернет и попробуйте снова.", isOffline: true)
+        return PresentableError(message: Loc.t("Нет соединения. Проверьте интернет и попробуйте снова.",
+                                               "No connection. Check the internet and try again."), isOffline: true)
     case .requestFailed(let info) where info.contains("timed out"):
-        return PresentableError(message: "Сервис не ответил вовремя. Попробуйте ещё раз.", isOffline: false)
+        return PresentableError(message: Loc.t("Сервис не ответил вовремя. Попробуйте ещё раз.",
+                                               "The service didn't respond in time. Try again."), isOffline: false)
     case .invalidOutput:
-        return PresentableError(message: "Не удалось разобрать ответ. Попробуйте ещё раз.", isOffline: false)
+        return PresentableError(message: Loc.t("Не удалось разобрать ответ. Попробуйте ещё раз.",
+                                               "Couldn't parse the response. Try again."), isOffline: false)
     case .cancelled:
-        return PresentableError(message: "Запрос отменён.", isOffline: false)
+        return PresentableError(message: Loc.t("Запрос отменён.", "Request cancelled."), isOffline: false)
     case .requestFailed:
-        return PresentableError(message: "Сервис недоступен. Попробуйте позже.", isOffline: false)
+        return PresentableError(message: Loc.t("Сервис недоступен. Попробуйте позже.",
+                                               "Service unavailable. Try later."), isOffline: false)
     }
 }

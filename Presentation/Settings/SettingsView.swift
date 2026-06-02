@@ -2,7 +2,7 @@
 //  SettingsView.swift
 //  EnglishHelper — Presentation
 //
-//  Settings sheet: live API connection status, theme toggle (persisted), app/voice info.
+//  Settings sheet: live API status, interface + target language, tone, theme, app info.
 //
 
 import SwiftUI
@@ -12,24 +12,39 @@ public struct SettingsView: View {
     @State private var model: SettingsViewModel
     private let theme: ThemeStore
     private let tone: ToneStore
+    private let language: LanguageStore
+    private let target: TargetLanguageStore
     private let onClose: () -> Void
 
-    public init(model: SettingsViewModel, theme: ThemeStore, tone: ToneStore, onClose: @escaping () -> Void) {
+    public init(
+        model: SettingsViewModel,
+        theme: ThemeStore,
+        tone: ToneStore,
+        language: LanguageStore,
+        target: TargetLanguageStore,
+        onClose: @escaping () -> Void
+    ) {
         _model = State(initialValue: model)
         self.theme = theme
         self.tone = tone
+        self.language = language
+        self.target = target
         self.onClose = onClose
     }
 
     public var body: some View {
         @Bindable var theme = theme
         @Bindable var tone = tone
+        @Bindable var language = language
+        @Bindable var target = target
         NavigationStack {
             ZStack {
                 ScreenBackground()
                 ScrollView {
                     VStack(spacing: Tokens.Space.s20) {
                         connectionCard
+                        languageCard(language: $language.language)
+                        targetCard(target: $target.language)
                         toneCard(tone: $tone.tone)
                         themeCard(theme: $theme.preference)
                         infoCard
@@ -37,11 +52,11 @@ public struct SettingsView: View {
                     .padding(Tokens.Space.s20)
                 }
             }
-            .navigationTitle("Настройки")
+            .navigationTitle(Loc.t("Настройки", "Settings"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Готово") { onClose() }
+                    Button(Loc.t("Готово", "Done")) { onClose() }
                 }
             }
             .task { await model.check() }
@@ -52,7 +67,7 @@ public struct SettingsView: View {
 
     private var connectionCard: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s12) {
-            sectionTitle("Подключение к Claude")
+            sectionTitle(Loc.t("Подключение к Claude", "Claude connection"))
             HStack(spacing: Tokens.Space.s12) {
                 statusIndicator
                 VStack(alignment: .leading, spacing: 2) {
@@ -72,7 +87,7 @@ public struct SettingsView: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(Tokens.Content.secondary)
-                    .accessibilityLabel("Проверить снова")
+                    .accessibilityLabel(Loc.t("Проверить снова", "Check again"))
                 }
             }
         }
@@ -94,17 +109,51 @@ public struct SettingsView: View {
 
     private var statusTitle: String {
         switch model.health {
-        case .checking: "Проверяю…"
-        case .ok: "Подключено"
-        case .failed: "Не удалось подключиться"
+        case .checking: Loc.t("Проверяю…", "Checking…")
+        case .ok: Loc.t("Подключено", "Connected")
+        case .failed: Loc.t("Не удалось подключиться", "Couldn't connect")
         }
+    }
+
+    // MARK: Interface language
+
+    private func languageCard(language: Binding<AppLanguage>) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.s12) {
+            sectionTitle(Loc.t("Язык интерфейса", "Interface language"))
+            Picker(Loc.t("Язык интерфейса", "Interface language"), selection: language) {
+                ForEach(AppLanguage.allCases, id: \.self) { option in
+                    Text(option.title).tag(option)
+                }
+            }
+            .pickerStyle(.segmented)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Tokens.Space.s16)
+        .glassPanel(cornerRadius: Tokens.Radius.card)
+    }
+
+    // MARK: Target language ("In" translates to this)
+
+    private func targetCard(target: Binding<TargetLanguage>) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.s12) {
+            sectionTitle(Loc.t("Язык перевода (In)", "Translate to (In)"))
+            Picker(Loc.t("Язык перевода", "Translate to"), selection: target) {
+                ForEach(TargetLanguage.allCases, id: \.self) { option in
+                    Text(option.title).tag(option)
+                }
+            }
+            .pickerStyle(.segmented)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Tokens.Space.s16)
+        .glassPanel(cornerRadius: Tokens.Radius.card)
     }
 
     // MARK: Tone of voice
 
     private func toneCard(tone: Binding<ToneOfVoice>) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s12) {
-            sectionTitle("Тон фраз")
+            sectionTitle(Loc.t("Тон фраз", "Phrase tone"))
             VStack(spacing: 0) {
                 ForEach(Array(ToneOfVoice.allCases.enumerated()), id: \.element) { index, option in
                     Button { tone.wrappedValue = option } label: {
@@ -140,8 +189,8 @@ public struct SettingsView: View {
 
     private func themeCard(theme: Binding<ThemePreference>) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s12) {
-            sectionTitle("Оформление")
-            Picker("Тема", selection: theme) {
+            sectionTitle(Loc.t("Оформление", "Appearance"))
+            Picker(Loc.t("Тема", "Theme"), selection: theme) {
                 ForEach(ThemePreference.allCases, id: \.self) { preference in
                     Text(preference.title).tag(preference)
                 }
@@ -157,12 +206,12 @@ public struct SettingsView: View {
 
     private var infoCard: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s12) {
-            sectionTitle("О приложении")
-            infoRow("Версия", model.appVersion)
+            sectionTitle(Loc.t("О приложении", "About"))
+            infoRow(Loc.t("Версия", "Version"), model.appVersion)
             Divider().overlay(Tokens.Hairline.default)
-            infoRow("Модель", model.modelName)
+            infoRow(Loc.t("Модель", "Model"), model.modelName)
             Divider().overlay(Tokens.Hairline.default)
-            infoRow("Голос озвучки", model.voiceLanguage)
+            infoRow(Loc.t("Голос озвучки", "Speech voice"), model.voiceLanguage)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Tokens.Space.s16)

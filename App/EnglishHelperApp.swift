@@ -24,8 +24,8 @@ struct EnglishHelperApp: App {
     var body: some Scene {
         WindowGroup {
             RootView(
-                voice: container.makeVoiceViewModel(),
-                text: container.makeVoiceViewModel(),       // "Текст" tab — same flow, text-only
+                out: container.makeVoiceViewModel(),        // "Out": RU → 3 English variants
+                inbound: container.makeInViewModel(),        // "In": any/English → 1 translation
                 photo: container.makePhotoTranslateViewModel(),
                 library: container.makeStudyListViewModel(),
                 history: container.makeHistoryViewModel(),

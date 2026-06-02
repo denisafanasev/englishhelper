@@ -113,13 +113,14 @@ public final class PhotoTranslateViewModel {
         if let ocr = error as? TextRecognitionError {
             switch ocr {
             case .noTextFound:
-                errorMessage = "Не нашёл английский текст на фото. Попробуйте другое изображение."
+                errorMessage = Loc.t("Не нашёл английский текст на фото. Попробуйте другое изображение.",
+                                     "No English text found in the photo. Try another image.")
             case .unsupportedImage:
-                errorMessage = "Не удалось обработать изображение."
+                errorMessage = Loc.t("Не удалось обработать изображение.", "Couldn't process the image.")
             case .cancelled:
-                errorMessage = "Отменено."
+                errorMessage = Loc.t("Отменено.", "Cancelled.")
             case .underlying:
-                errorMessage = "Ошибка распознавания текста."
+                errorMessage = Loc.t("Ошибка распознавания текста.", "Text recognition error.")
             }
             isOffline = false
         } else {
@@ -162,7 +163,8 @@ public final class PhotoTranslateViewModel {
                     else { try? await self.studyList.delete(id: stored.id) }
                 } catch {
                     self.savedBlockIDs.remove(id)           // revert
-                    self.errorMessage = "Не удалось сохранить в изучаемое."
+                    self.errorMessage = Loc.t("Не удалось сохранить в изучаемое.",
+                                              "Couldn't save to your study list.")
                 }
             }
         }

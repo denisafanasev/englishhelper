@@ -75,7 +75,7 @@ public final class StudyListViewModel {
             expressions = items
             phase = items.isEmpty ? .empty : .loaded
         } catch {
-            errorMessage = "Не удалось загрузить список."
+            errorMessage = Loc.t("Не удалось загрузить список.", "Couldn't load the list.")
             phase = .failed
         }
     }
@@ -130,9 +130,9 @@ public final class StudyListViewModel {
             do {
                 self.exportedDeck = try await useCase()
             } catch ExportError.nothingToExport {
-                self.exportError = "Список пуст — нечего экспортировать."
+                self.exportError = Loc.t("Список пуст — нечего экспортировать.", "The list is empty — nothing to export.")
             } catch {
-                self.exportError = "Не удалось создать файл для экспорта."
+                self.exportError = Loc.t("Не удалось создать файл для экспорта.", "Couldn't create the export file.")
             }
         }
     }

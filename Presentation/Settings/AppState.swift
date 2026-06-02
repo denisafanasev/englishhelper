@@ -13,9 +13,9 @@ public enum ToneOfVoice: String, CaseIterable, Sendable {
     case formal, casual, slang
     public var title: String {
         switch self {
-        case .formal: "Формальный и вежливый"
-        case .casual: "Разговорно-бытовой"
-        case .slang: "Неформальный, сленговый"
+        case .formal: Loc.t("Формальный и вежливый", "Formal and polite")
+        case .casual: Loc.t("Разговорно-бытовой", "Everyday conversational")
+        case .slang: Loc.t("Неформальный, сленговый", "Casual, slangy")
         }
     }
     public var register: Register {
@@ -45,9 +45,9 @@ public enum ThemePreference: String, CaseIterable, Sendable {
     case system, light, dark
     public var title: String {
         switch self {
-        case .system: "Система"
-        case .light: "Светлая"
-        case .dark: "Тёмная"
+        case .system: Loc.t("Система", "System")
+        case .light: Loc.t("Светлая", "Light")
+        case .dark: Loc.t("Тёмная", "Dark")
         }
     }
 }
@@ -80,4 +80,79 @@ public final class ThemeStore {
 public final class AppUIState {
     public var showSettings = false
     public init() {}
+}
+
+// MARK: - Interface language (RU / EN, default: system)
+
+public enum AppLanguage: String, CaseIterable, Sendable {
+    case system, ru, en
+    public var title: String {
+        switch self {
+        case .system: Loc.t("Системный", "System")
+        case .ru: "Русский"
+        case .en: "English"
+        }
+    }
+    static let storageKey = "interfaceLanguage"
+
+    public static var preference: AppLanguage {
+        AppLanguage(rawValue: UserDefaults.standard.string(forKey: storageKey) ?? "") ?? .system
+    }
+    /// The language actually used (system → ru if the device prefers Russian, else en).
+    public static var effective: AppLanguage {
+        switch preference {
+        case .system: (Locale.preferredLanguages.first ?? "en").lowercased().hasPrefix("ru") ? .ru : .en
+        case .ru: .ru
+        case .en: .en
+        }
+    }
+}
+
+@MainActor
+@Observable
+public final class LanguageStore {
+    public var language: AppLanguage {
+        didSet { UserDefaults.standard.set(language.rawValue, forKey: AppLanguage.storageKey) }
+    }
+    public init() { language = AppLanguage.preference }
+    public var locale: Locale { AppLanguage.effective == .ru ? Locale(identifier: "ru") : Locale(identifier: "en") }
+}
+
+/// Tiny runtime localizer — picks Russian or English by the selected interface language.
+public enum Loc {
+    public static func t(_ ru: String, _ en: String) -> String {
+        AppLanguage.effective == .en ? en : ru
+    }
+}
+
+// MARK: - Target language for "In" translation (RU / EN, default: RU)
+
+public enum TargetLanguage: String, CaseIterable, Sendable {
+    case russian, english
+    public var title: String {
+        switch self {
+        case .russian: Loc.t("Русский", "Russian")
+        case .english: Loc.t("Английский", "English")
+        }
+    }
+    /// Name used in the LLM prompt.
+    public var promptName: String {
+        switch self {
+        case .russian: "Russian"
+        case .english: "English"
+        }
+    }
+    static let storageKey = "targetLanguage"
+    public static var current: TargetLanguage {
+        TargetLanguage(rawValue: UserDefaults.standard.string(forKey: storageKey) ?? "") ?? .russian
+    }
+}
+
+@MainActor
+@Observable
+public final class TargetLanguageStore {
+    public var language: TargetLanguage {
+        didSet { UserDefaults.standard.set(language.rawValue, forKey: TargetLanguage.storageKey) }
+    }
+    public init() { language = TargetLanguage.current }
 }

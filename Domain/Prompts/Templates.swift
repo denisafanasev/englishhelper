@@ -16,6 +16,11 @@ public struct Translation: Codable, Sendable, Equatable {
     public let ru: String
 }
 
+/// `{ "translation": "..." }` — translation into a configurable target language.
+public struct TargetTranslation: Codable, Sendable, Equatable {
+    public let translation: String
+}
+
 /// `{ "variants": [ { en, register, context_ru } ] }`
 public struct HowToSayResult: Codable, Sendable, Equatable {
     public let variants: [PhraseVariant]
@@ -125,6 +130,35 @@ public struct TranslateTextTemplate: PromptTemplate {
 
     public func decode(_ rawJSON: String) throws -> Translation {
         try decodeJSON(Translation.self, from: rawJSON)
+    }
+}
+
+// MARK: - translateToTarget ("In": any language → target language)
+
+/// Input text in any language → translation into `targetLanguage`, source auto-detected.
+public struct TranslateToTargetTemplate: PromptTemplate {
+    public typealias Input = String
+    public typealias Output = TargetTranslation
+
+    public let id = "translateToTarget"
+    public let targetLanguage: String   // e.g. "Russian", "English"
+    public init(targetLanguage: String) { self.targetLanguage = targetLanguage }
+
+    public var systemPrompt: String {
+        """
+        Translate the user's text into \(targetLanguage). Detect the source language automatically.
+        Return ONLY the translation in "translation" — no commentary, transliteration, or notes. \(plainTextRule)
+        """
+    }
+
+    public var outputJSONSchema: String {
+        #"{"type":"object","properties":{"translation":{"type":"string"}},"required":["translation"]}"#
+    }
+
+    public func userMessage(for input: String) -> String { input }
+
+    public func decode(_ rawJSON: String) throws -> TargetTranslation {
+        try decodeJSON(TargetTranslation.self, from: rawJSON)
     }
 }
 

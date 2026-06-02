@@ -18,7 +18,8 @@ public final class AppContainer: Sendable {
 
     // Ports (adapters)
     public let llm: any LLMClient
-    public let speechRecognizer: any SpeechRecognizing
+    public let speechRecognizer: any SpeechRecognizing       // ru-RU (Out)
+    public let speechRecognizerEN: any SpeechRecognizing     // en-US (In)
     public let speechSynthesizer: any SpeechSynthesizing
     public let textRecognizer: any TextRecognizing
     public let expressions: any ExpressionRepository
@@ -37,13 +38,16 @@ public final class AppContainer: Sendable {
     public let regenerateHowToSay: any RegenerateHowToSayUseCase
     public let saveExpression: any SaveExpressionUseCase
     public let voiceCapture: any VoiceCaptureUseCase
+    public let voiceCaptureEN: any VoiceCaptureUseCase
     public let pronounce: any PlayPronunciationUseCase
     public let connectionHealth: any ConnectionHealthUseCase
+    public let translateToTarget: any TranslateToTargetUseCase
 
     public init(
         config: AppConfig,
         llm: any LLMClient,
         speechRecognizer: any SpeechRecognizing,
+        speechRecognizerEN: any SpeechRecognizing,
         speechSynthesizer: any SpeechSynthesizing,
         textRecognizer: any TextRecognizing,
         expressions: any ExpressionRepository,
@@ -53,6 +57,7 @@ public final class AppContainer: Sendable {
         self.config = config
         self.llm = llm
         self.speechRecognizer = speechRecognizer
+        self.speechRecognizerEN = speechRecognizerEN
         self.speechSynthesizer = speechSynthesizer
         self.textRecognizer = textRecognizer
         self.expressions = expressions
@@ -74,8 +79,10 @@ public final class AppContainer: Sendable {
             enrich: EnrichExpressionInteractor(llm: llm), repository: expressions
         )
         self.voiceCapture = VoiceCaptureInteractor(recognizer: speechRecognizer)
+        self.voiceCaptureEN = VoiceCaptureInteractor(recognizer: speechRecognizerEN)
         self.pronounce = PlayPronunciationInteractor(synthesizer: speechSynthesizer)
         self.connectionHealth = ConnectionHealthInteractor(llm: llm)
+        self.translateToTarget = TranslateToTargetInteractor(llm: llm, history: history)
     }
 
     /// v1: the whole graph on LIVE adapters. Swapping any engine is exactly ONE line below
@@ -87,7 +94,8 @@ public final class AppContainer: Sendable {
             llm: ClaudeLLMClient(apiKey: config.claudeAPIKey ?? "",
                                  model: config.claudeModel,
                                  baseURL: config.claudeBaseURL),
-            speechRecognizer: NativeSpeechRecognizer(),     // ← swap ASR engine here
+            speechRecognizer: NativeSpeechRecognizer(),     // ← swap ASR engine here (ru, Out)
+            speechRecognizerEN: NativeSpeechRecognizer(locale: Locale(identifier: "en-US")),  // en, In
             speechSynthesizer: NativeSpeechSynthesizer(),   // ← swap TTS engine here
             textRecognizer: VisionTextRecognizer(),         // ← swap OCR engine here
             expressions: SwiftDataExpressionRepository(modelContainer: modelContainer),
@@ -102,6 +110,7 @@ public final class AppContainer: Sendable {
             config: config,
             llm: MockLLMClient(),
             speechRecognizer: MockSpeechRecognizing(),
+            speechRecognizerEN: MockSpeechRecognizing(),
             speechSynthesizer: MockSpeechSynthesizing(),
             textRecognizer: MockTextRecognizing(),
             expressions: MockExpressionRepository(),
@@ -116,6 +125,18 @@ public final class AppContainer: Sendable {
             howToSay: howToSay,
             regenerateHowToSay: regenerateHowToSay,
             voiceCapture: voiceCapture,
+            pronounce: pronounce,
+            saveExpression: saveExpression,
+            studyList: studyList,
+            isConfigured: config.isClaudeConfigured
+        )
+    }
+
+    @MainActor
+    public func makeInViewModel() -> InViewModel {
+        InViewModel(
+            translate: translateToTarget,
+            voiceCapture: voiceCaptureEN,
             pronounce: pronounce,
             saveExpression: saveExpression,
             studyList: studyList,

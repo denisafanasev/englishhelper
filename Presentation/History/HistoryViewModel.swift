@@ -49,7 +49,7 @@ public final class HistoryViewModel {
             entries = items
             phase = items.isEmpty ? .empty : .loaded
         } catch {
-            errorMessage = "Не удалось загрузить историю."
+            errorMessage = Loc.t("Не удалось загрузить историю.", "Couldn't load history.")
             phase = .failed
         }
     }

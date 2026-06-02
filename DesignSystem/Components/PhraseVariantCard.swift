@@ -45,7 +45,7 @@ public struct PhraseVariantCard: View {
                             .contentTransition(.symbolEffect(.replace))
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Скопировать английский")
+                    .accessibilityLabel(DSLoc.t("Скопировать английский", "Copy English"))
 
                     Button(action: onToggleSave) {
                         Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
@@ -53,7 +53,7 @@ public struct PhraseVariantCard: View {
                             .foregroundStyle(isSaved ? Tokens.Content.primary : Tokens.Content.tertiary)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(isSaved ? "Убрать из изучаемого" : "Сохранить в изучаемое")
+                    .accessibilityLabel(isSaved ? DSLoc.t("Убрать из изучаемого", "Remove from study list") : DSLoc.t("Сохранить в изучаемое", "Save to study list"))
                 }
             }
 
@@ -70,7 +70,7 @@ public struct PhraseVariantCard: View {
             HStack(spacing: Tokens.Space.s8) {
                 Image(systemName: isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2")
                     .symbolEffect(.variableColor.iterative, isActive: isPlaying)
-                Text(isPlaying ? "Озвучивается…" : "Озвучить")
+                Text(isPlaying ? DSLoc.t("Озвучивается…", "Playing…") : DSLoc.t("Озвучить", "Play"))
             }
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(Tokens.Content.secondary)
@@ -82,10 +82,10 @@ public struct PhraseVariantCard: View {
         .onTapGesture(perform: onPlay)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(english). \(register.rawValue). \(contextRU)")
-        .accessibilityHint("Дважды коснитесь, чтобы озвучить")
+        .accessibilityHint(DSLoc.t("Дважды коснитесь, чтобы озвучить", "Double-tap to play"))
         .accessibilityAddTraits(.isButton)
-        .accessibilityAction(named: "Скопировать") { copyToClipboard() }
-        .accessibilityAction(named: isSaved ? "Убрать из изучаемого" : "Сохранить") { onToggleSave() }
+        .accessibilityAction(named: DSLoc.t("Скопировать", "Copy")) { copyToClipboard() }
+        .accessibilityAction(named: isSaved ? DSLoc.t("Убрать из изучаемого", "Remove from study list") : DSLoc.t("Сохранить", "Save")) { onToggleSave() }
     }
 
     private func copyToClipboard() {

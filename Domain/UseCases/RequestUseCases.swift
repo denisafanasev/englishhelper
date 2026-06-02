@@ -97,6 +97,29 @@ public struct TranslateTextInteractor: TranslateTextUseCase {
     }
 }
 
+// MARK: - translateToTarget ("In": any language → target language)
+
+public protocol TranslateToTargetUseCase: Sendable {
+    /// Translate text into `targetLanguage` (e.g. "Russian"), source auto-detected. Appends history.
+    func callAsFunction(_ text: String, targetLanguage: String) async throws -> String
+}
+
+public struct TranslateToTargetInteractor: TranslateToTargetUseCase {
+    private let llm: LLMClient
+    private let history: HistoryRepository
+
+    public init(llm: LLMClient, history: HistoryRepository) {
+        self.llm = llm
+        self.history = history
+    }
+
+    public func callAsFunction(_ text: String, targetLanguage: String) async throws -> String {
+        let result = try await llm.run(TranslateToTargetTemplate(targetLanguage: targetLanguage), input: text)
+        try? await history.append(HistoryEntry(inputText: text, result: .translate(ru: result.translation)))
+        return result.translation
+    }
+}
+
 // MARK: - photoTranslate
 
 public protocol PhotoTranslateUseCase: Sendable {

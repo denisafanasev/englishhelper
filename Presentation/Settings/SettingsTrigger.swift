@@ -17,7 +17,7 @@ struct SettingsTrigger: ViewModifier {
                 Button { ui.showSettings = true } label: {
                     Image(systemName: "gearshape")
                 }
-                .accessibilityLabel("Настройки")
+                .accessibilityLabel(Loc.t("Настройки", "Settings"))
             }
         }
     }

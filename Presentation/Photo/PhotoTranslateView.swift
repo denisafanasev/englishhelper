@@ -32,7 +32,7 @@ public struct PhotoTranslateView: View {
                     .padding(Tokens.Space.s20)
                 }
             }
-            .navigationTitle("Фото-перевод")
+            .navigationTitle(Loc.t("Фото-перевод", "Photo translation"))
             .settingsTrigger()
             .sheet(isPresented: $model.showCameraPriming) { primingSheet }
             .fullScreenCover(isPresented: $model.presentCamera) {
@@ -65,7 +65,7 @@ public struct PhotoTranslateView: View {
             VStack(spacing: Tokens.Space.s16) {
                 StatusView(
                     systemImage: model.isOffline ? "wifi.slash" : "exclamationmark.triangle",
-                    title: model.isOffline ? "Нет соединения" : "Не получилось",
+                    title: model.isOffline ? Loc.t("Нет соединения", "No connection") : Loc.t("Не получилось", "Something went wrong"),
                     message: model.errorMessage
                 )
                 sourceButtons
@@ -80,8 +80,9 @@ public struct PhotoTranslateView: View {
         VStack(spacing: Tokens.Space.s20) {
             StatusView(
                 systemImage: "camera.viewfinder",
-                title: "Переведите текст с фото",
-                message: "Снимите вывеску, меню или страницу — распознаю английский и переведу на русский."
+                title: Loc.t("Переведите текст с фото", "Translate text from a photo"),
+                message: Loc.t("Снимите вывеску, меню или страницу — распознаю английский и переведу на русский.",
+                               "Snap a sign, menu, or page — I'll read the English and translate it.")
             )
             sourceButtons
         }
@@ -91,14 +92,14 @@ public struct PhotoTranslateView: View {
     private var sourceButtons: some View {
         VStack(spacing: Tokens.Space.s12) {
             if CameraPicker.isAvailable {
-                EHButton("Снять фото", icon: "camera", kind: .primary, fillWidth: true) {
+                EHButton(Loc.t("Снять фото", "Take a photo"), icon: "camera", kind: .primary, fillWidth: true) {
                     model.cameraTapped()
                 }
             }
             PhotosPicker(selection: $libraryItem, matching: .images) {
                 LibraryButtonLabel()
             }
-            .accessibilityLabel("Выбрать фото из галереи")
+            .accessibilityLabel(Loc.t("Выбрать фото из галереи", "Choose a photo from the library"))
         }
     }
 
@@ -112,12 +113,12 @@ public struct PhotoTranslateView: View {
                     .overlay {
                         ZStack {
                             Tokens.Scrim.solid
-                            LoadingView("Распознаю и перевожу…")
+                            LoadingView(Loc.t("Распознаю и перевожу…", "Reading and translating…"))
                         }
                         .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.card, style: .continuous))
                     }
             } else {
-                LoadingView("Распознаю и перевожу…")
+                LoadingView(Loc.t("Распознаю и перевожу…", "Reading and translating…"))
             }
         }
     }
@@ -133,7 +134,7 @@ public struct PhotoTranslateView: View {
             ForEach(model.blocks) { block in
                 blockCard(block)
             }
-            EHButton("Другое фото", icon: "arrow.triangle.2.circlepath", kind: .glass, fillWidth: true) {
+            EHButton(Loc.t("Другое фото", "Another photo"), icon: "arrow.triangle.2.circlepath", kind: .glass, fillWidth: true) {
                 model.reset()
             }
         }
@@ -154,7 +155,9 @@ public struct PhotoTranslateView: View {
                         .foregroundStyle(model.isSaved(block) ? Tokens.Content.primary : Tokens.Content.tertiary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(model.isSaved(block) ? "Убрать из изучаемого" : "Сохранить в изучаемое")
+                .accessibilityLabel(model.isSaved(block)
+                    ? Loc.t("Убрать из изучаемого", "Remove from study list")
+                    : Loc.t("Сохранить в изучаемое", "Save to study list"))
             }
 
             Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)
@@ -166,14 +169,14 @@ public struct PhotoTranslateView: View {
 
             Button { model.play(block) } label: {
                 Label(
-                    model.isPlaying(block) ? "Озвучивается…" : "Озвучить",
+                    model.isPlaying(block) ? Loc.t("Озвучивается…", "Playing…") : Loc.t("Озвучить", "Play"),
                     systemImage: model.isPlaying(block) ? "speaker.wave.2.fill" : "speaker.wave.2"
                 )
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Tokens.Content.secondary)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Озвучить английский")
+            .accessibilityLabel(Loc.t("Озвучить английский", "Play English"))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Tokens.Space.s16)
@@ -183,7 +186,8 @@ public struct PhotoTranslateView: View {
     private var apiKeyBanner: some View {
         HStack(spacing: Tokens.Space.s12) {
             Image(systemName: "key.slash").foregroundStyle(Tokens.Signal.warning)
-            Text("Нет ключа Claude API — перевод не загрузится. Добавьте ключ в Secrets.xcconfig.")
+            Text(Loc.t("Нет ключа Claude API — перевод не загрузится. Добавьте ключ в Secrets.xcconfig.",
+                       "No Claude API key — translation won't load. Add a key in Secrets.xcconfig."))
                 .textStyle(Tokens.Text.footnote)
                 .foregroundStyle(Tokens.Content.secondary)
         }
@@ -198,18 +202,19 @@ public struct PhotoTranslateView: View {
                 .font(.system(size: 44))
                 .foregroundStyle(Tokens.Content.primary)
                 .padding(.top, Tokens.Space.s32)
-            Text("Доступ к камере")
+            Text(Loc.t("Доступ к камере", "Camera access"))
                 .textStyle(Tokens.Text.title2)
                 .foregroundStyle(Tokens.Content.primary)
-            Text("Чтобы распознать английский текст на вывеске или в меню, приложению нужна камера. Фото никуда не отправляется без вашего действия.")
+            Text(Loc.t("Чтобы распознать английский текст на вывеске или в меню, приложению нужна камера. Фото никуда не отправляется без вашего действия.",
+                       "To read English text on a sign or menu, the app needs the camera. Nothing is sent anywhere without your action."))
                 .textStyle(Tokens.Text.body)
                 .foregroundStyle(Tokens.Content.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, Tokens.Space.s24)
             Spacer()
             VStack(spacing: Tokens.Space.s8) {
-                EHButton("Разрешить", kind: .primary, fillWidth: true) { model.confirmCameraPriming() }
-                EHButton("Не сейчас", kind: .ghost, fillWidth: true) { model.cancelCameraPriming() }
+                EHButton(Loc.t("Разрешить", "Allow"), kind: .primary, fillWidth: true) { model.confirmCameraPriming() }
+                EHButton(Loc.t("Не сейчас", "Not now"), kind: .ghost, fillWidth: true) { model.cancelCameraPriming() }
             }
             .padding(.horizontal, Tokens.Space.s20)
             .padding(.bottom, Tokens.Space.s24)
@@ -245,7 +250,7 @@ private struct LibraryButtonLabel: View {
     var body: some View {
         HStack(spacing: Tokens.Space.s8) {
             Image(systemName: "photo.on.rectangle")
-            Text("Из галереи")
+            Text(Loc.t("Из галереи", "From library"))
         }
         .font(.system(size: 17, weight: .semibold))
         .foregroundStyle(Tokens.Content.primary)

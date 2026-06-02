@@ -1,9 +1,10 @@
 //
-//  VoiceViewModel.swift
+//  InViewModel.swift
 //  EnglishHelper — Presentation
 //
-//  "Как сказать" (RU→EN). Drives: idle / listening / processing / results / failed, plus offline
-//  and mic permission priming. Consumes USE CASES only (no Speech/AVFoundation here).
+//  "In" (reverse): English voice OR typed text in any language → ONE translation into the
+//  configured target language (Russian by default). Mirrors VoiceViewModel's lifecycle but yields
+//  a single translation instead of three variants. Consumes USE CASES only.
 //
 
 import Foundation
@@ -11,25 +12,26 @@ import Domain
 
 @MainActor
 @Observable
-public final class VoiceViewModel {
-    public enum Phase: Equatable { case idle, listening, processing, results, failed }
+public final class InViewModel {
+    public enum Phase: Equatable { case idle, listening, processing, result, failed }
 
     // UI state
     public private(set) var phase: Phase = .idle
-    public var intent: String = ""                       // editable transcript / typed input
-    public private(set) var variants: [PhraseVariant] = []
+    public var source: String = ""                       // editable transcript / typed input
+    public private(set) var translation: String?
     public private(set) var errorMessage: String?
     public private(set) var isOffline = false
-    public private(set) var playingVariantID: UUID?
+    public private(set) var isPlaying = false
+    public private(set) var isSaved = false
     public var showMicPriming = false
 
-    private var savedVariantIDs: Set<UUID> = []           // optimistic "saved" flag (instant UI)
-    private var savedExpressionIDs: [UUID: UUID] = [:]    // variant.id → stored Expression.id
+    private var submittedSource = ""                     // source text that produced `translation`
+    private var resultTargetIsRussian = true             // which side is English (for play/save)
+    private var savedExpressionID: UUID?
 
     // Dependencies (use cases)
-    private let howToSay: any HowToSayUseCase
-    private let regenerateHowToSay: any RegenerateHowToSayUseCase
-    private let voiceCapture: any VoiceCaptureUseCase
+    private let translate: any TranslateToTargetUseCase
+    private let voiceCapture: any VoiceCaptureUseCase    // English ASR
     private let pronounce: any PlayPronunciationUseCase
     private let saveExpression: any SaveExpressionUseCase
     private let studyList: any StudyListUseCase
@@ -39,19 +41,17 @@ public final class VoiceViewModel {
     private var requestTask: Task<Void, Never>?
     private var playTask: Task<Void, Never>?
 
-    private let primingDefaultsKey = "didPrimeMic"
+    private let primingDefaultsKey = "didPrimeMic"        // shared with Out — one mic grant
 
     public init(
-        howToSay: any HowToSayUseCase,
-        regenerateHowToSay: any RegenerateHowToSayUseCase,
+        translate: any TranslateToTargetUseCase,
         voiceCapture: any VoiceCaptureUseCase,
         pronounce: any PlayPronunciationUseCase,
         saveExpression: any SaveExpressionUseCase,
         studyList: any StudyListUseCase,
         isConfigured: Bool
     ) {
-        self.howToSay = howToSay
-        self.regenerateHowToSay = regenerateHowToSay
+        self.translate = translate
         self.voiceCapture = voiceCapture
         self.pronounce = pronounce
         self.saveExpression = saveExpression
@@ -62,11 +62,15 @@ public final class VoiceViewModel {
     // MARK: Derived
 
     public var isListening: Bool { phase == .listening }
-    public var canSubmit: Bool { !intent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    public var canSubmit: Bool { !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     public var needsAPIKey: Bool { !isConfigured }
-    public func isSaved(_ variant: PhraseVariant) -> Bool { savedVariantIDs.contains(variant.id) }
-    public func isPlaying(_ variant: PhraseVariant) -> Bool { playingVariantID == variant.id }
 
+    /// The English side of the pair — what the speaker plays and what we file as the study card's `en`.
+    public var englishText: String {
+        resultTargetIsRussian ? submittedSource : (translation ?? "")
+    }
+
+    public enum MicStatus { case idle, listening, processing }
     public var micStatus: MicStatus {
         switch phase {
         case .listening: .listening
@@ -74,9 +78,8 @@ public final class VoiceViewModel {
         default: .idle
         }
     }
-    public enum MicStatus { case idle, listening, processing }
 
-    // MARK: Mic / capture
+    // MARK: Mic / capture (English)
 
     public func micTapped() {
         switch phase {
@@ -102,14 +105,14 @@ public final class VoiceViewModel {
     private func startListening() {
         errorMessage = nil
         isOffline = false
-        variants = []
-        intent = ""
+        translation = nil
+        source = ""
         phase = .listening
         captureTask = Task { [weak self] in
             guard let self else { return }
             do {
                 for try await transcript in self.voiceCapture() {
-                    self.intent = transcript.text
+                    self.source = transcript.text
                 }
                 self.captureEndedNaturally()
             } catch is CancellationError {
@@ -154,28 +157,13 @@ public final class VoiceViewModel {
         }
     }
 
-    // MARK: Generate
+    // MARK: Translate
 
+    /// One button: translate fresh input, or re-translate when a result is already shown.
     public func submit() {
-        let text = intent.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = source.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        let tone = ToneOfVoice.current.register
-        run { try await self.howToSay(text, tone: tone) }
-    }
-
-    public func regenerate() {
-        let text = intent.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        let tone = ToneOfVoice.current.register
-        run { try await self.regenerateHowToSay(text, tone: tone) }
-    }
-
-    /// One button drives both: regenerate when results are shown, otherwise generate a fresh set.
-    public func pick() {
-        if phase == .results { regenerate() } else { submit() }
-    }
-
-    private func run(_ operation: @escaping () async throws -> [PhraseVariant]) {
+        let target = TargetLanguage.current
         requestTask?.cancel()
         phase = .processing
         errorMessage = nil
@@ -183,11 +171,13 @@ public final class VoiceViewModel {
         requestTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let result = try await operation()
-                self.variants = result
-                self.savedVariantIDs = []
-                self.savedExpressionIDs = [:]
-                self.phase = .results
+                let result = try await self.translate(text, targetLanguage: target.promptName)
+                self.submittedSource = text
+                self.translation = result
+                self.resultTargetIsRussian = (target == .russian)
+                self.isSaved = false
+                self.savedExpressionID = nil
+                self.phase = .result
             } catch is CancellationError {
                 // superseded
             } catch {
@@ -205,8 +195,8 @@ public final class VoiceViewModel {
         switch llm {
         case .notConfigured:
             isOffline = true
-            errorMessage = Loc.t("Нет ключа Claude API. Добавьте его, чтобы получать варианты.",
-                                 "No Claude API key. Add one to get options.")
+            errorMessage = Loc.t("Нет ключа Claude API. Добавьте его, чтобы переводить.",
+                                 "No Claude API key. Add one to translate.")
         case .overloaded:
             errorMessage = Loc.t("Сервис перегружен, попробуйте позже.", "Service is overloaded — try later.")
         case .requestFailed(let info) where info.contains("offline"):
@@ -226,50 +216,51 @@ public final class VoiceViewModel {
         }
     }
 
-    // MARK: Play
+    // MARK: Play (the English side)
 
-    public func play(_ variant: PhraseVariant) {
+    public func play() {
+        let text = englishText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
         playTask?.cancel()
-        playingVariantID = variant.id
+        isPlaying = true
         playTask = Task { [weak self] in
             guard let self else { return }
             do {
-                for try await state in self.pronounce(variant.en) where state == .finished {
-                    break
-                }
+                for try await state in self.pronounce(text) where state == .finished { break }
             } catch {
                 // playback failure is non-fatal
             }
-            if self.playingVariantID == variant.id { self.playingVariantID = nil }
+            self.isPlaying = false
         }
     }
 
     // MARK: Save / unsave (enrich-then-store)
 
-    public func toggleSave(_ variant: PhraseVariant) {
-        let id = variant.id
-        if savedVariantIDs.contains(id) {
-            savedVariantIDs.remove(id)                          // instant UI
-            let storedID = savedExpressionIDs[id]
-            savedExpressionIDs[id] = nil
+    public func toggleSave() {
+        guard let translation, !submittedSource.isEmpty else { return }
+        if isSaved {
+            isSaved = false                                  // instant UI
+            let storedID = savedExpressionID
+            savedExpressionID = nil
             if let storedID {
                 Task { [weak self] in try? await self?.studyList.delete(id: storedID) }
             }
         } else {
-            savedVariantIDs.insert(id)                          // instant UI; enrich+store in background
+            isSaved = true                                   // instant UI; enrich+store in background
+            // English side is the study card's `en`; the Russian side (if any) pre-fills the known meaning.
+            let en = resultTargetIsRussian ? submittedSource : translation
+            let knownRU = resultTargetIsRussian ? translation : submittedSource
             Task { [weak self] in
                 guard let self else { return }
                 do {
-                    let stored = try await self.saveExpression(
-                        en: variant.en, knownRU: nil, context: variant.contextRU
-                    )
-                    if self.savedVariantIDs.contains(id) {
-                        self.savedExpressionIDs[id] = stored.id
+                    let stored = try await self.saveExpression(en: en, knownRU: knownRU, context: "")
+                    if self.isSaved {
+                        self.savedExpressionID = stored.id
                     } else {
                         try? await self.studyList.delete(id: stored.id)   // unsaved while saving
                     }
                 } catch {
-                    self.savedVariantIDs.remove(id)             // revert on failure
+                    self.isSaved = false                     // revert on failure
                     self.errorMessage = Loc.t("Не удалось сохранить в изучаемое.",
                                               "Couldn't save to your study list.")
                 }
@@ -280,9 +271,12 @@ public final class VoiceViewModel {
     public func reset() {
         captureTask?.cancel(); requestTask?.cancel(); playTask?.cancel()
         phase = .idle
-        variants = []
-        intent = ""
+        translation = nil
+        source = ""
+        submittedSource = ""
         errorMessage = nil
-        playingVariantID = nil
+        isPlaying = false
+        isSaved = false
+        savedExpressionID = nil
     }
 }

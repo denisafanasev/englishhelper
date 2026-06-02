@@ -10,7 +10,12 @@ import Foundation
 
 public enum ConnectionHealth: Sendable, Equatable {
     case ok
-    case failed(String)
+    case failed(Reason)
+
+    /// Localizable failure reasons (the UI maps these to text).
+    public enum Reason: Sendable, Equatable {
+        case noKey, offline, timeout, overloaded, badResponse, unavailable, unknown
+    }
 }
 
 public protocol ConnectionHealthUseCase: Sendable {
@@ -27,23 +32,16 @@ public struct ConnectionHealthInteractor: ConnectionHealthUseCase {
             return .ok
         } catch let error as LLMError {
             switch error {
-            case .notConfigured:
-                return .failed("Нет ключа Claude API")
-            case .overloaded:
-                return .failed("Сервис перегружен, попробуйте позже")
-            case .requestFailed(let info) where info.contains("offline"):
-                return .failed("Нет соединения")
-            case .requestFailed(let info) where info.contains("timed out"):
-                return .failed("Сервис не ответил вовремя")
-            case .requestFailed:
-                return .failed("Сервис недоступен")
-            case .invalidOutput:
-                return .failed("Неожиданный ответ сервиса")
-            case .cancelled:
-                return .failed("Проверка отменена")
+            case .notConfigured: return .failed(.noKey)
+            case .overloaded: return .failed(.overloaded)
+            case .requestFailed(let info) where info.contains("offline"): return .failed(.offline)
+            case .requestFailed(let info) where info.contains("timed out"): return .failed(.timeout)
+            case .requestFailed: return .failed(.unavailable)
+            case .invalidOutput: return .failed(.badResponse)
+            case .cancelled: return .failed(.unknown)
             }
         } catch {
-            return .failed("Ошибка подключения")
+            return .failed(.unknown)
         }
     }
 }

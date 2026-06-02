@@ -35,7 +35,7 @@ public struct VoiceView: View {
                 }
                 .scrollDismissesKeyboard(.interactively)
             }
-            .navigationTitle("Как сказать")
+            .navigationTitle(Loc.t("Как сказать", "How to say"))
             .settingsTrigger()
             .sheet(isPresented: $model.showMicPriming) { primingSheet }
         }
@@ -45,7 +45,7 @@ public struct VoiceView: View {
 
     private var inputSection: some View {
         VStack(spacing: Tokens.Space.s16) {
-            GlassField("Что хотите сказать по-русски?", text: $model.intent) {
+            GlassField(Loc.t("Что хотите сказать по-русски?", "What do you want to say in Russian?"), text: $model.intent) {
                 fieldFocused = false
                 model.pick()
             }
@@ -57,9 +57,11 @@ public struct VoiceView: View {
                         fieldFocused = false
                         model.micTapped()
                     }
-                    .accessibilityLabel("Микрофон")
-                    .accessibilityValue(model.isListening ? "Слушаю" : "Готов")
-                    .accessibilityHint(model.isListening ? "Коснитесь, чтобы остановить" : "Коснитесь, чтобы говорить по-русски")
+                    .accessibilityLabel(Loc.t("Микрофон", "Microphone"))
+                    .accessibilityValue(model.isListening ? Loc.t("Слушаю", "Listening") : Loc.t("Готов", "Ready"))
+                    .accessibilityHint(model.isListening
+                        ? Loc.t("Коснитесь, чтобы остановить", "Tap to stop")
+                        : Loc.t("Коснитесь, чтобы говорить по-русски", "Tap to speak Russian"))
 
                     Text(micCaption)
                         .textStyle(Tokens.Text.footnote)
@@ -67,7 +69,7 @@ public struct VoiceView: View {
                 }
             }
 
-            EHButton("Подобрать варианты", icon: "sparkles", kind: .primary, fillWidth: true) {
+            EHButton(Loc.t("Подобрать варианты", "Find phrasings"), icon: "sparkles", kind: .primary, fillWidth: true) {
                 fieldFocused = false
                 model.pick()
             }
@@ -83,9 +85,9 @@ public struct VoiceView: View {
 
     private var micCaption: String {
         switch model.micStatus {
-        case .listening: "Слушаю… коснитесь, чтобы остановить"
-        case .processing: "Минуту…"
-        case .idle: "Нажмите и говорите по-русски"
+        case .listening: Loc.t("Слушаю… коснитесь, чтобы остановить", "Listening… tap to stop")
+        case .processing: Loc.t("Минуту…", "One moment…")
+        case .idle: Loc.t("Нажмите и говорите по-русски", "Tap and speak Russian")
         }
     }
 
@@ -97,10 +99,12 @@ public struct VoiceView: View {
             if model.intent.isEmpty {
                 StatusView(
                     systemImage: "text.bubble",
-                    title: "Как сказать это по-английски?",
+                    title: Loc.t("Как сказать это по-английски?", "How do you say it in English?"),
                     message: showsMic
-                        ? "Спросите голосом или введите фразу по-русски — подберу три варианта с разной вежливостью."
-                        : "Введите фразу по-русски — подберу три варианта с разной вежливостью."
+                        ? Loc.t("Спросите голосом или введите фразу по-русски — подберу три варианта с разной вежливостью.",
+                                "Ask by voice or type a phrase in Russian — I'll offer three options at different politeness levels.")
+                        : Loc.t("Введите фразу по-русски — подберу три варианта с разной вежливостью.",
+                                "Type a phrase in Russian — I'll offer three options at different politeness levels.")
                 )
                 .padding(.top, Tokens.Space.s24)
             }
@@ -109,7 +113,7 @@ public struct VoiceView: View {
             EmptyView()
 
         case .processing:
-            LoadingView("Подбираю варианты…")
+            LoadingView(Loc.t("Подбираю варианты…", "Finding phrasings…"))
                 .padding(.top, Tokens.Space.s24)
 
         case .results:
@@ -118,9 +122,9 @@ public struct VoiceView: View {
         case .failed:
             StatusView(
                 systemImage: model.isOffline ? "wifi.slash" : "exclamationmark.triangle",
-                title: model.isOffline ? "Нет соединения" : "Не получилось",
+                title: model.isOffline ? Loc.t("Нет соединения", "No connection") : Loc.t("Не получилось", "Something went wrong"),
                 message: model.errorMessage,
-                actionTitle: model.canSubmit ? "Повторить" : nil,
+                actionTitle: model.canSubmit ? Loc.t("Повторить", "Retry") : nil,
                 action: model.canSubmit ? { model.submit() } : nil
             )
             .padding(.top, Tokens.Space.s24)
@@ -149,7 +153,8 @@ public struct VoiceView: View {
         HStack(spacing: Tokens.Space.s12) {
             Image(systemName: "key.slash")
                 .foregroundStyle(Tokens.Signal.warning)
-            Text("Нет ключа Claude API — варианты не загрузятся. Добавьте ключ в Secrets.xcconfig.")
+            Text(Loc.t("Нет ключа Claude API — варианты не загрузятся. Добавьте ключ в Secrets.xcconfig.",
+                       "No Claude API key — options won't load. Add a key in Secrets.xcconfig."))
                 .textStyle(Tokens.Text.footnote)
                 .foregroundStyle(Tokens.Content.secondary)
         }
@@ -164,18 +169,19 @@ public struct VoiceView: View {
                 .font(.system(size: 44))
                 .foregroundStyle(Tokens.Content.primary)
                 .padding(.top, Tokens.Space.s32)
-            Text("Доступ к микрофону")
+            Text(Loc.t("Доступ к микрофону", "Microphone access"))
                 .textStyle(Tokens.Text.title2)
                 .foregroundStyle(Tokens.Content.primary)
-            Text("Чтобы услышать ваш вопрос по-русски и подобрать английские фразы, приложению нужен микрофон. Запись не сохраняется.")
+            Text(Loc.t("Чтобы услышать ваш вопрос по-русски и подобрать английские фразы, приложению нужен микрофон. Запись не сохраняется.",
+                       "To hear your question in Russian and find English phrases, the app needs the microphone. Nothing is recorded."))
                 .textStyle(Tokens.Text.body)
                 .foregroundStyle(Tokens.Content.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, Tokens.Space.s24)
             Spacer()
             VStack(spacing: Tokens.Space.s8) {
-                EHButton("Разрешить", kind: .primary, fillWidth: true) { model.confirmPriming() }
-                EHButton("Не сейчас", kind: .ghost, fillWidth: true) { model.cancelPriming() }
+                EHButton(Loc.t("Разрешить", "Allow"), kind: .primary, fillWidth: true) { model.confirmPriming() }
+                EHButton(Loc.t("Не сейчас", "Not now"), kind: .ghost, fillWidth: true) { model.cancelPriming() }
             }
             .padding(.horizontal, Tokens.Space.s20)
             .padding(.bottom, Tokens.Space.s24)

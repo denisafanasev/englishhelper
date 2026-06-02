@@ -23,7 +23,7 @@ public struct StudyListView: View {
                 ScreenBackground()
                 contentSection
             }
-            .navigationTitle("Изучаю")
+            .navigationTitle(Loc.t("Изучаю", "Study"))
             .settingsTrigger()
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -35,11 +35,11 @@ public struct StudyListView: View {
                         Image(systemName: "square.and.arrow.up")
                     }
                     .disabled(model.expressions.isEmpty)
-                    .accessibilityLabel("Экспортировать список")
+                    .accessibilityLabel(Loc.t("Экспортировать список", "Export list"))
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { model.showAddSheet = true } label: { Image(systemName: "plus") }
-                        .accessibilityLabel("Добавить выражение")
+                        .accessibilityLabel(Loc.t("Добавить выражение", "Add expression"))
                 }
             }
             .task { await model.load() }
@@ -51,7 +51,7 @@ public struct StudyListView: View {
                     model.clearExport()
                 }
             }
-            .alert("Экспорт", isPresented: exportErrorBinding) {
+            .alert(Loc.t("Экспорт", "Export"), isPresented: exportErrorBinding) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(model.exportError ?? "")
@@ -64,15 +64,16 @@ public struct StudyListView: View {
     @ViewBuilder private var contentSection: some View {
         switch model.phase {
         case .loading:
-            LoadingView("Загружаю…")
+            LoadingView(Loc.t("Загружаю…", "Loading…"))
         case .failed:
-            StatusView(systemImage: "exclamationmark.triangle", title: "Не удалось загрузить",
+            StatusView(systemImage: "exclamationmark.triangle", title: Loc.t("Не удалось загрузить", "Couldn't load"),
                        message: model.errorMessage,
-                       actionTitle: "Повторить", action: { Task { await model.load() } })
+                       actionTitle: Loc.t("Повторить", "Retry"), action: { Task { await model.load() } })
         case .empty:
-            StatusView(systemImage: "rectangle.stack", title: "Пока пусто",
-                       message: "Сохраняйте фразы из «Голоса», «Перевода» или «Камеры» — или добавьте вручную.",
-                       actionTitle: "Добавить", action: { model.showAddSheet = true })
+            StatusView(systemImage: "rectangle.stack", title: Loc.t("Пока пусто", "Nothing yet"),
+                       message: Loc.t("Сохраняйте фразы из «In», «Out» или «Камеры» — или добавьте вручную.",
+                                      "Save phrases from “In”, “Out”, or “Camera” — or add them manually."),
+                       actionTitle: Loc.t("Добавить", "Add"), action: { model.showAddSheet = true })
         case .loaded:
             list
         }
@@ -90,12 +91,12 @@ public struct StudyListView: View {
                                               bottom: Tokens.Space.s4, trailing: Tokens.Space.s16))
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) { model.delete(expression) } label: {
-                            Label("Удалить", systemImage: "trash")
+                            Label(Loc.t("Удалить", "Delete"), systemImage: "trash")
                         }
                     }
                     .swipeActions(edge: .leading) {
                         Button { model.toggleLearned(expression) } label: {
-                            Label(expression.learned ? "Не выучено" : "Выучено",
+                            Label(expression.learned ? Loc.t("Не выучено", "Not learned") : Loc.t("Выучено", "Learned"),
                                   systemImage: expression.learned ? "arrow.uturn.left" : "checkmark")
                         }
                         .tint(Tokens.Signal.success)
@@ -115,14 +116,15 @@ public struct StudyListView: View {
                     if model.needsAPIKey {
                         HStack(spacing: Tokens.Space.s8) {
                             Image(systemName: "key.slash").foregroundStyle(Tokens.Signal.warning)
-                            Text("Без ключа Claude API карточка сохранится без перевода и примеров.")
+                            Text(Loc.t("Без ключа Claude API карточка сохранится без перевода и примеров.",
+                                       "Without a Claude API key, the card is saved without translation or examples."))
                                 .textStyle(Tokens.Text.footnote)
                                 .foregroundStyle(Tokens.Content.secondary)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    GlassField("Английское выражение", text: $model.newEnglish)
-                    GlassField("Контекст (необязательно)", text: $model.newContext)
+                    GlassField(Loc.t("Английское выражение", "English expression"), text: $model.newEnglish)
+                    GlassField(Loc.t("Контекст (необязательно)", "Context (optional)"), text: $model.newContext)
 
                     if let addError = model.addError {
                         Text(addError)
@@ -132,9 +134,9 @@ public struct StudyListView: View {
                     }
 
                     if model.isAdding {
-                        LoadingView("Дополняю переводом и примерами…")
+                        LoadingView(Loc.t("Дополняю переводом и примерами…", "Adding translation and examples…"))
                     } else {
-                        EHButton("Сохранить", icon: "sparkles", kind: .primary, fillWidth: true) {
+                        EHButton(Loc.t("Сохранить", "Save"), icon: "sparkles", kind: .primary, fillWidth: true) {
                             model.add()
                         }
                         .disabled(!model.canAdd)
@@ -144,11 +146,11 @@ public struct StudyListView: View {
                 .padding(Tokens.Space.s20)
             }
             .background(Tokens.Surface.background)
-            .navigationTitle("Новое выражение")
+            .navigationTitle(Loc.t("Новое выражение", "New expression"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Отмена") { model.showAddSheet = false }
+                    Button(Loc.t("Отмена", "Cancel")) { model.showAddSheet = false }
                 }
             }
         }
@@ -204,7 +206,7 @@ private struct StudyRow: View {
                         .foregroundStyle(Tokens.Content.secondary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Озвучить")
+                .accessibilityLabel(Loc.t("Озвучить", "Play"))
                 if expression.learned {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(Tokens.Signal.success)
@@ -215,7 +217,7 @@ private struct StudyRow: View {
         .padding(Tokens.Space.s16)
         .glassPanel(cornerRadius: Tokens.Radius.card)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(expression.en). \(expression.ru). \(expression.learned ? "Выучено" : "Не выучено")")
-        .accessibilityAction(named: "Озвучить") { onPlay() }
+        .accessibilityLabel("\(expression.en). \(expression.ru). \(expression.learned ? Loc.t("Выучено", "Learned") : Loc.t("Не выучено", "Not learned"))")
+        .accessibilityAction(named: Loc.t("Озвучить", "Play")) { onPlay() }
     }
 }

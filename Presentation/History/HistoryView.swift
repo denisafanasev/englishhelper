@@ -23,7 +23,7 @@ public struct HistoryView: View {
                 ScreenBackground()
                 contentSection
             }
-            .navigationTitle("История")
+            .navigationTitle(Loc.t("История", "History"))
             .settingsTrigger()
             .navigationDestination(for: HistoryEntry.self) { entry in
                 HistoryDetailView(model: model.makeDetailViewModel(for: entry))
@@ -35,14 +35,15 @@ public struct HistoryView: View {
     @ViewBuilder private var contentSection: some View {
         switch model.phase {
         case .loading:
-            LoadingView("Загружаю…")
+            LoadingView(Loc.t("Загружаю…", "Loading…"))
         case .failed:
-            StatusView(systemImage: "exclamationmark.triangle", title: "Не удалось загрузить",
+            StatusView(systemImage: "exclamationmark.triangle", title: Loc.t("Не удалось загрузить", "Couldn't load"),
                        message: model.errorMessage,
-                       actionTitle: "Повторить", action: { Task { await model.load() } })
+                       actionTitle: Loc.t("Повторить", "Retry"), action: { Task { await model.load() } })
         case .empty:
-            StatusView(systemImage: "clock.arrow.circlepath", title: "История пуста",
-                       message: "Здесь появятся ваши запросы: «Как сказать», переводы и фото-переводы.")
+            StatusView(systemImage: "clock.arrow.circlepath", title: Loc.t("История пуста", "No history yet"),
+                       message: Loc.t("Здесь появятся ваши запросы: «Как сказать», переводы и фото-переводы.",
+                                      "Your requests will appear here: how-to-say, translations, and photo translations."))
         case .loaded:
             List {
                 ForEach(model.entries) { entry in
@@ -95,7 +96,7 @@ private struct HistoryRow: View {
         .glassPanel(cornerRadius: Tokens.Radius.card)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(kindTitle(entry.kind)). \(entry.inputText)")
-        .accessibilityHint("Открыть результат")
+        .accessibilityHint(Loc.t("Открыть результат", "Open result"))
     }
 }
 
@@ -117,7 +118,7 @@ private struct HistoryDetailView: View {
                     .textStyle(Tokens.Text.footnote)
                     .foregroundStyle(Tokens.Content.tertiary)
 
-                labeledCard(title: "Запрос") {
+                labeledCard(title: Loc.t("Запрос", "Request")) {
                     Text(entry.inputText)
                         .textStyle(Tokens.Text.body)
                         .foregroundStyle(Tokens.Content.primary)
@@ -132,7 +133,7 @@ private struct HistoryDetailView: View {
         .navigationTitle(kindTitle(entry.kind))
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.loadSavedState() }
-        .alert("Изучаемое", isPresented: errorBinding) {
+        .alert(Loc.t("Изучаемое", "Study list"), isPresented: errorBinding) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(model.errorMessage ?? "")
@@ -159,7 +160,7 @@ private struct HistoryDetailView: View {
         case .translate(let ru), .photoTranslate(let ru):
             VStack(alignment: .leading, spacing: Tokens.Space.s12) {
                 HStack {
-                    sectionTitle("Перевод")
+                    sectionTitle(Loc.t("Перевод", "Translation"))
                     Spacer()
                     bookmark(isSaved: model.isSaved(HistoryDetailViewModel.translationKey)) {
                         model.toggleSaveTranslation()
@@ -171,14 +172,14 @@ private struct HistoryDetailView: View {
 
                 Button(action: model.playTranslationSource) {
                     Label(
-                        model.isPlaying(HistoryDetailViewModel.translationKey) ? "Озвучивается…" : "Озвучить оригинал",
+                        model.isPlaying(HistoryDetailViewModel.translationKey) ? Loc.t("Озвучивается…", "Playing…") : Loc.t("Озвучить оригинал", "Play original"),
                         systemImage: model.isPlaying(HistoryDetailViewModel.translationKey) ? "speaker.wave.2.fill" : "speaker.wave.2"
                     )
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Tokens.Content.secondary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Озвучить английский оригинал")
+                .accessibilityLabel(Loc.t("Озвучить английский оригинал", "Play the English original"))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(Tokens.Space.s16)
@@ -193,7 +194,7 @@ private struct HistoryDetailView: View {
                 .foregroundStyle(isSaved ? Tokens.Content.primary : Tokens.Content.tertiary)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(isSaved ? "Убрать из изучаемого" : "Сохранить в изучаемое")
+        .accessibilityLabel(isSaved ? Loc.t("Убрать из изучаемого", "Remove from study list") : Loc.t("Сохранить в изучаемое", "Save to study list"))
     }
 
     private func sectionTitle(_ text: String) -> some View {
@@ -229,9 +230,9 @@ private func kindIcon(_ kind: RequestKind) -> String {
 
 private func kindTitle(_ kind: RequestKind) -> String {
     switch kind {
-    case .howToSay: "Как сказать"
-    case .translate: "Перевод"
-    case .photoTranslate: "Фото-перевод"
+    case .howToSay: Loc.t("Как сказать", "How to say")
+    case .translate: Loc.t("Перевод", "Translation")
+    case .photoTranslate: Loc.t("Фото-перевод", "Photo translation")
     }
 }
 

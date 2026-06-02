@@ -34,7 +34,19 @@ public final class SettingsViewModel {
         health = .checking
         switch await connectionHealth() {
         case .ok: health = .ok
-        case .failed(let reason): health = .failed(reason)
+        case .failed(let reason): health = .failed(Self.message(for: reason))
+        }
+    }
+
+    private static func message(for reason: ConnectionHealth.Reason) -> String {
+        switch reason {
+        case .noKey: Loc.t("Нет ключа Claude API", "No Claude API key")
+        case .offline: Loc.t("Нет соединения", "No connection")
+        case .timeout: Loc.t("Сервис не ответил вовремя", "The service didn't respond in time")
+        case .overloaded: Loc.t("Сервис перегружен, попробуйте позже", "Service is overloaded — try later")
+        case .badResponse: Loc.t("Неожиданный ответ сервиса", "Unexpected response from the service")
+        case .unavailable: Loc.t("Сервис недоступен", "Service unavailable")
+        case .unknown: Loc.t("Ошибка подключения", "Connection error")
         }
     }
 }

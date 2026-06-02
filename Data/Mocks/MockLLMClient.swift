@@ -31,6 +31,8 @@ public final class MockLLMClient: LLMClient {
             """
         case "translateText", "photoTranslate":
             return #"{"ru":"Это тестовый перевод."}"#
+        case "translateToTarget":
+            return #"{"translation":"Это тестовый перевод."}"#
         case "photoBlocks":
             return """
             {"blocks":[
