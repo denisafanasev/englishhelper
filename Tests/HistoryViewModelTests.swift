@@ -2,7 +2,7 @@
 //  HistoryViewModelTests.swift
 //  EnglishHelperTests
 //
-//  "История" view-model: load seeded → loaded; empty → empty.
+//  "История" view-models: list load, and saving phrases from the read-only detail.
 //
 
 import Testing
@@ -13,21 +13,78 @@ import Presentation
 
 @Suite @MainActor struct HistoryViewModelTests {
 
+    private func makeListVM(_ repo: MockHistoryRepository) -> HistoryViewModel {
+        let exprRepo = MockExpressionRepository(seed: [])
+        return HistoryViewModel(
+            history: RequestHistoryInteractor(history: repo),
+            saveExpression: SaveExpressionInteractor(
+                enrich: EnrichExpressionInteractor(llm: MockLLMClient()), repository: exprRepo
+            ),
+            studyList: StudyListInteractor(repository: exprRepo)
+        )
+    }
+
+    private func waitUntil(_ condition: () -> Bool, timeout: Duration = .seconds(2)) async throws {
+        let clock = ContinuousClock()
+        let start = clock.now
+        while !condition() {
+            if clock.now - start > timeout { return }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
     @Test func loadSeededShowsLoaded() async {
         let repo = MockHistoryRepository(seed: [
             HistoryEntry(inputText: "I appreciate it", result: .translate(ru: "Я ценю это")),
             HistoryEntry(inputText: "как сказать привет",
                          result: .howToSay([PhraseVariant(en: "Hi", register: .casual, contextRU: "неформально")])),
         ])
-        let vm = HistoryViewModel(history: RequestHistoryInteractor(history: repo))
+        let vm = makeListVM(repo)
         await vm.load()
         #expect(vm.phase == .loaded)
         #expect(vm.entries.count == 2)
     }
 
     @Test func loadEmptyShowsEmpty() async {
-        let vm = HistoryViewModel(history: RequestHistoryInteractor(history: MockHistoryRepository(seed: [])))
+        let vm = makeListVM(MockHistoryRepository(seed: []))
         await vm.load()
         #expect(vm.phase == .empty)
+    }
+
+    // MARK: Detail — save into study list
+
+    private func makeDetailVM(entry: HistoryEntry) -> (HistoryDetailViewModel, MockExpressionRepository) {
+        let repo = MockExpressionRepository(seed: [])
+        let vm = HistoryDetailViewModel(
+            entry: entry,
+            saveExpression: SaveExpressionInteractor(
+                enrich: EnrichExpressionInteractor(llm: MockLLMClient()), repository: repo
+            ),
+            studyList: StudyListInteractor(repository: repo)
+        )
+        return (vm, repo)
+    }
+
+    @Test func saveVariantFromHowToSayStores() async throws {
+        let variant = PhraseVariant(en: "Could you give me a hand?", register: .casual, contextRU: "дружелюбно")
+        let entry = HistoryEntry(inputText: "помоги мне", result: .howToSay([variant]))
+        let (vm, repo) = makeDetailVM(entry: entry)
+
+        vm.toggleSaveVariant(variant)
+        try await waitUntil { vm.isSaved(HistoryDetailViewModel.variantKey(variant)) }
+        #expect(vm.isSaved(HistoryDetailViewModel.variantKey(variant)))
+        let all = try await repo.all()
+        #expect(all.contains { $0.en == "Could you give me a hand?" })
+    }
+
+    @Test func saveTranslationStoresEnglishSource() async throws {
+        let entry = HistoryEntry(inputText: "I appreciate it", result: .translate(ru: "Я ценю это"))
+        let (vm, repo) = makeDetailVM(entry: entry)
+
+        vm.toggleSaveTranslation()
+        try await waitUntil { vm.isSaved(HistoryDetailViewModel.translationKey) }
+        #expect(vm.isSaved(HistoryDetailViewModel.translationKey))
+        let all = try await repo.all()
+        #expect(all.contains { $0.en == "I appreciate it" })
     }
 }

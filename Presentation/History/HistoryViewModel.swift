@@ -18,10 +18,23 @@ public final class HistoryViewModel {
     public private(set) var errorMessage: String?
 
     private let history: any RequestHistoryUseCase
+    private let saveExpression: any SaveExpressionUseCase
+    private let studyList: any StudyListUseCase
     private let limit = 200
 
-    public init(history: any RequestHistoryUseCase) {
+    public init(
+        history: any RequestHistoryUseCase,
+        saveExpression: any SaveExpressionUseCase,
+        studyList: any StudyListUseCase
+    ) {
         self.history = history
+        self.saveExpression = saveExpression
+        self.studyList = studyList
+    }
+
+    /// VM for the read-only detail, which can also save phrases into the study list.
+    public func makeDetailViewModel(for entry: HistoryEntry) -> HistoryDetailViewModel {
+        HistoryDetailViewModel(entry: entry, saveExpression: saveExpression, studyList: studyList)
     }
 
     public func load() async {

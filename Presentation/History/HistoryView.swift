@@ -25,7 +25,9 @@ public struct HistoryView: View {
             }
             .navigationTitle("История")
             .settingsTrigger()
-            .navigationDestination(for: HistoryEntry.self) { HistoryDetailView(entry: $0) }
+            .navigationDestination(for: HistoryEntry.self) { entry in
+                HistoryDetailView(model: model.makeDetailViewModel(for: entry))
+            }
             .task { await model.load() }
         }
     }
@@ -100,7 +102,13 @@ private struct HistoryRow: View {
 // MARK: - Detail (read-only)
 
 private struct HistoryDetailView: View {
-    let entry: HistoryEntry
+    @State private var model: HistoryDetailViewModel
+
+    init(model: HistoryDetailViewModel) {
+        _model = State(initialValue: model)
+    }
+
+    private var entry: HistoryEntry { model.entry }
 
     var body: some View {
         ScrollView {
@@ -123,6 +131,11 @@ private struct HistoryDetailView: View {
         .background(ScreenBackground())
         .navigationTitle(kindTitle(entry.kind))
         .navigationBarTitleDisplayMode(.inline)
+        .alert("Изучаемое", isPresented: errorBinding) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(model.errorMessage ?? "")
+        }
     }
 
     @ViewBuilder private var resultSection: some View {
@@ -131,7 +144,13 @@ private struct HistoryDetailView: View {
             VStack(spacing: Tokens.Space.s12) {
                 ForEach(variants) { variant in
                     VStack(alignment: .leading, spacing: Tokens.Space.s8) {
-                        RegisterTagView(registerLevel(variant.register))
+                        HStack(alignment: .top) {
+                            RegisterTagView(registerLevel(variant.register))
+                            Spacer(minLength: Tokens.Space.s8)
+                            bookmark(isSaved: model.isSaved(HistoryDetailViewModel.variantKey(variant))) {
+                                model.toggleSaveVariant(variant)
+                            }
+                        }
                         Text(variant.en)
                             .textStyle(Tokens.Text.title3)
                             .foregroundStyle(Tokens.Content.primary)
@@ -147,19 +166,50 @@ private struct HistoryDetailView: View {
                 }
             }
         case .translate(let ru), .photoTranslate(let ru):
-            labeledCard(title: "Перевод") {
+            VStack(alignment: .leading, spacing: Tokens.Space.s12) {
+                HStack {
+                    sectionTitle("Перевод")
+                    Spacer()
+                    bookmark(isSaved: model.isSaved(HistoryDetailViewModel.translationKey)) {
+                        model.toggleSaveTranslation()
+                    }
+                }
                 Text(ru)
                     .textStyle(Tokens.Text.title3)
                     .foregroundStyle(Tokens.Content.primary)
+                Text("Закладка сохранит английский оригинал в изучаемое")
+                    .textStyle(Tokens.Text.footnote)
+                    .foregroundStyle(Tokens.Content.tertiary)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(Tokens.Space.s16)
+            .glassPanel(cornerRadius: Tokens.Radius.card)
         }
+    }
+
+    private func bookmark(isSaved: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(isSaved ? Tokens.Content.primary : Tokens.Content.tertiary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(isSaved ? "Убрать из изучаемого" : "Сохранить в изучаемое")
+    }
+
+    private func sectionTitle(_ text: String) -> some View {
+        Text(text.uppercased())
+            .textStyle(Tokens.Text.caption2)
+            .foregroundStyle(Tokens.Content.tertiary)
+    }
+
+    private var errorBinding: Binding<Bool> {
+        Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.clearError() } })
     }
 
     private func labeledCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s8) {
-            Text(title)
-                .textStyle(Tokens.Text.caption2)
-                .foregroundStyle(Tokens.Content.tertiary)
+            sectionTitle(title)
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
