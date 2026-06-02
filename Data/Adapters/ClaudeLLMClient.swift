@@ -17,12 +17,24 @@ public final class ClaudeLLMClient: LLMClient {
     private let session: URLSession
     private let anthropicVersion = "2023-06-01"
     private let maxTokens = 1024
+    /// Retries on transient 429/529/5xx with exponential backoff (Anthropic's recommendation).
+    private let maxRetries: Int
+    private let baseRetryDelay: Double   // seconds
 
-    public init(apiKey: String, model: String, baseURL: URL, session: URLSession = .shared) {
+    public init(
+        apiKey: String,
+        model: String,
+        baseURL: URL,
+        session: URLSession = .shared,
+        maxRetries: Int = 2,
+        baseRetryDelay: Double = 0.5
+    ) {
         self.apiKey = apiKey
         self.model = model
         self.endpoint = baseURL.appending(path: "v1/messages")
         self.session = session
+        self.maxRetries = maxRetries
+        self.baseRetryDelay = baseRetryDelay
     }
 
     public func run<Template: PromptTemplate>(
@@ -53,28 +65,7 @@ public final class ClaudeLLMClient: LLMClient {
         request.setValue(anthropicVersion, forHTTPHeaderField: "anthropic-version")
         request.httpBody = try JSONEncoder().encode(body)
 
-        let data: Data
-        let response: URLResponse
-        do {
-            (data, response) = try await session.data(for: request)
-        } catch is CancellationError {
-            throw LLMError.cancelled
-        } catch let error as URLError where error.code == .timedOut {
-            throw LLMError.requestFailed("timed out")
-        } catch let error as URLError where error.code == .notConnectedToInternet || error.code == .networkConnectionLost {
-            throw LLMError.requestFailed("offline")
-        } catch {
-            throw LLMError.requestFailed(error.localizedDescription)
-        }
-
-        guard let http = response as? HTTPURLResponse else {
-            throw LLMError.requestFailed("no HTTP response")
-        }
-        guard (200..<300).contains(http.statusCode) else {
-            let detail = String(data: data, encoding: .utf8) ?? ""
-            if http.statusCode == 401 { throw LLMError.notConfigured }
-            throw LLMError.requestFailed("HTTP \(http.statusCode): \(detail)")
-        }
+        let data = try await send(request)
 
         let decoded: MessagesResponse
         do {
@@ -86,6 +77,58 @@ public final class ClaudeLLMClient: LLMClient {
         guard !text.isEmpty else { throw LLMError.invalidOutput("empty model response") }
 
         return try template.decode(Self.extractJSON(from: text))
+    }
+
+    /// Sends the request, retrying transient 429 / 529 / 5xx with exponential backoff.
+    private func send(_ request: URLRequest) async throws -> Data {
+        var attempt = 0
+        while true {
+            let data: Data
+            let response: URLResponse
+            do {
+                (data, response) = try await session.data(for: request)
+            } catch is CancellationError {
+                throw LLMError.cancelled
+            } catch let error as URLError where error.code == .timedOut {
+                throw LLMError.requestFailed("timed out")
+            } catch let error as URLError where error.code == .notConnectedToInternet || error.code == .networkConnectionLost {
+                throw LLMError.requestFailed("offline")
+            } catch {
+                throw LLMError.requestFailed(error.localizedDescription)
+            }
+
+            guard let http = response as? HTTPURLResponse else {
+                throw LLMError.requestFailed("no HTTP response")
+            }
+            if (200..<300).contains(http.statusCode) { return data }
+            if http.statusCode == 401 { throw LLMError.notConfigured }
+
+            let isOverload = http.statusCode == 429 || http.statusCode == 529
+            let isRetryable = isOverload || http.statusCode >= 500
+            if isRetryable && attempt < maxRetries {
+                attempt += 1
+                try await backoff(attempt: attempt, response: http)
+                continue
+            }
+            if isOverload { throw LLMError.overloaded }
+            let detail = String(data: data, encoding: .utf8) ?? ""
+            throw LLMError.requestFailed("HTTP \(http.statusCode): \(detail)")
+        }
+    }
+
+    /// Wait before a retry: honor `Retry-After` if present, else exponential backoff.
+    private func backoff(attempt: Int, response: HTTPURLResponse) async throws {
+        let seconds: Double
+        if let header = response.value(forHTTPHeaderField: "Retry-After"), let value = Double(header) {
+            seconds = min(value, 10)
+        } else {
+            seconds = min(baseRetryDelay * pow(2, Double(attempt - 1)), 8)
+        }
+        do {
+            try await Task.sleep(for: .seconds(seconds))
+        } catch {
+            throw LLMError.cancelled
+        }
     }
 
     /// Strip markdown fences and isolate the outermost JSON object.

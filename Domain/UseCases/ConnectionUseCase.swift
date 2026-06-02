@@ -29,6 +29,8 @@ public struct ConnectionHealthInteractor: ConnectionHealthUseCase {
             switch error {
             case .notConfigured:
                 return .failed("Нет ключа Claude API")
+            case .overloaded:
+                return .failed("Сервис перегружен, попробуйте позже")
             case .requestFailed(let info) where info.contains("offline"):
                 return .failed("Нет соединения")
             case .requestFailed(let info) where info.contains("timed out"):

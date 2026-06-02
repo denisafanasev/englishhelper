@@ -20,6 +20,8 @@ func presentableError(_ error: Error) -> PresentableError {
     switch llm {
     case .notConfigured:
         return PresentableError(message: "Нет ключа Claude API. Добавьте его, чтобы продолжить.", isOffline: true)
+    case .overloaded:
+        return PresentableError(message: "Сервис перегружен, попробуйте позже.", isOffline: false)
     case .requestFailed(let info) where info.contains("offline"):
         return PresentableError(message: "Нет соединения. Проверьте интернет и попробуйте снова.", isOffline: true)
     case .requestFailed(let info) where info.contains("timed out"):

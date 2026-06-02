@@ -190,6 +190,8 @@ public final class VoiceViewModel {
         case .notConfigured:
             isOffline = true
             errorMessage = "Нет ключа Claude API. Добавьте его, чтобы получать варианты."
+        case .overloaded:
+            errorMessage = "Сервис перегружен, попробуйте позже."
         case .requestFailed(let info) where info.contains("offline"):
             isOffline = true
             errorMessage = "Нет соединения. Проверьте интернет и попробуйте снова."
