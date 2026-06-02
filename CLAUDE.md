@@ -109,7 +109,12 @@ extractable** — acceptable for this personal/dev app; a production build would
   Introduced the app shell: native `TabView` (Liquid-Glass tab bar) with **Голос** + **Перевод**
   tabs (grows each step). `AppContainer.makeTranslateViewModel`; shared `presentableError` mapper.
   32/32 tests green; builds + launches.
-- ⏳ 4. "Фото-перевод" · 5. "Список" + export · 6. "История" · 7. "Настройки".
+- ✅ **4. "Фото-перевод"** (EN→RU). Camera (UIKit `UIImagePickerController`, guarded by
+  `isSourceTypeAvailable` — hidden on Simulator) + library (`PhotosPicker`, no permission needed)
+  → OCR (+ boxes) → RU translation. Boxes drawn over the photo; translation panel sits on a
+  **SOLID scrim** (white text, AA contrast — never glass under text). Play source / save.
+  Camera permission priming before the system dialog. New tab **Камера**. 35/35 tests green.
+- ⏳ 5. "Список" + export · 6. "История" · 7. "Настройки".
 
 **Notes / trade-offs so far:**
 - **Liquid Glass vs readability:** all glass goes through `glassPanel`, which swaps to a SOLID

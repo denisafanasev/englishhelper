@@ -25,7 +25,8 @@ struct EnglishHelperApp: App {
         WindowGroup {
             RootView(
                 voice: container.makeVoiceViewModel(),
-                translate: container.makeTranslateViewModel()
+                translate: container.makeTranslateViewModel(),
+                photo: container.makePhotoTranslateViewModel()
             )
         }
     }

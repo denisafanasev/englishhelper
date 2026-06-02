@@ -11,10 +11,12 @@ import SwiftUI
 public struct RootView: View {
     @State private var voice: VoiceViewModel
     @State private var translate: TranslateViewModel
+    @State private var photo: PhotoTranslateViewModel
 
-    public init(voice: VoiceViewModel, translate: TranslateViewModel) {
+    public init(voice: VoiceViewModel, translate: TranslateViewModel, photo: PhotoTranslateViewModel) {
         _voice = State(initialValue: voice)
         _translate = State(initialValue: translate)
+        _photo = State(initialValue: photo)
     }
 
     public var body: some View {
@@ -24,6 +26,9 @@ public struct RootView: View {
             }
             Tab("Перевод", systemImage: "character.bubble") {
                 TranslateView(model: translate)
+            }
+            Tab("Камера", systemImage: "camera") {
+                PhotoTranslateView(model: photo)
             }
         }
     }
