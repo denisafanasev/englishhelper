@@ -42,6 +42,7 @@ public final class AppContainer: Sendable {
     public let pronounce: any PlayPronunciationUseCase
     public let connectionHealth: any ConnectionHealthUseCase
     public let translateToTarget: any TranslateToTargetUseCase
+    public let explainExpression: any ExplainExpressionUseCase
 
     public init(
         config: AppConfig,
@@ -83,6 +84,7 @@ public final class AppContainer: Sendable {
         self.pronounce = PlayPronunciationInteractor(synthesizer: speechSynthesizer)
         self.connectionHealth = ConnectionHealthInteractor(llm: llm)
         self.translateToTarget = TranslateToTargetInteractor(llm: llm, history: history)
+        self.explainExpression = ExplainExpressionInteractor(llm: llm)
     }
 
     /// v1: the whole graph on LIVE adapters. Swapping any engine is exactly ONE line below
@@ -136,6 +138,7 @@ public final class AppContainer: Sendable {
     public func makeInViewModel() -> InViewModel {
         InViewModel(
             translate: translateToTarget,
+            explain: explainExpression,
             voiceCapture: voiceCaptureEN,
             pronounce: pronounce,
             saveExpression: saveExpression,

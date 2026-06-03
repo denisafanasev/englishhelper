@@ -15,10 +15,23 @@ import Domain
 public final class InViewModel {
     public enum Phase: Equatable { case idle, listening, processing, result, failed }
 
+    /// What pressing the action button does: translate the input, or explain its nuance.
+    public enum Mode: String, CaseIterable, Sendable {
+        case translate, explain
+        public var title: String {
+            switch self {
+            case .translate: Loc.t("Перевод", "Translate")
+            case .explain: Loc.t("Объяснение", "Explain")
+            }
+        }
+    }
+
     // UI state
     public private(set) var phase: Phase = .idle
+    public var mode: Mode = .translate
     public var source: String = ""                       // editable transcript / typed input
-    public private(set) var translation: String?
+    public private(set) var translation: String?         // Translate mode result
+    public private(set) var explanation: ExpressionExplanation?   // Explain mode result
     public private(set) var errorMessage: String?
     public private(set) var isOffline = false
     public private(set) var isPlaying = false
@@ -30,6 +43,7 @@ public final class InViewModel {
 
     // Dependencies (use cases)
     private let translate: any TranslateToTargetUseCase
+    private let explain: any ExplainExpressionUseCase
     private let voiceCapture: any VoiceCaptureUseCase    // English ASR
     private let pronounce: any PlayPronunciationUseCase
     private let saveExpression: any SaveExpressionUseCase
@@ -44,6 +58,7 @@ public final class InViewModel {
 
     public init(
         translate: any TranslateToTargetUseCase,
+        explain: any ExplainExpressionUseCase,
         voiceCapture: any VoiceCaptureUseCase,
         pronounce: any PlayPronunciationUseCase,
         saveExpression: any SaveExpressionUseCase,
@@ -51,6 +66,7 @@ public final class InViewModel {
         isConfigured: Bool
     ) {
         self.translate = translate
+        self.explain = explain
         self.voiceCapture = voiceCapture
         self.pronounce = pronounce
         self.saveExpression = saveExpression
@@ -104,6 +120,7 @@ public final class InViewModel {
         errorMessage = nil
         isOffline = false
         translation = nil
+        explanation = nil
         source = ""
         phase = .listening
         captureTask = Task { [weak self] in
@@ -155,14 +172,16 @@ public final class InViewModel {
         }
     }
 
-    // MARK: Translate
+    // MARK: Translate / Explain
 
-    /// One button: translate fresh input, or re-translate when a result is already shown.
+    /// One button: act on fresh input, or re-run when a result is already shown. The current `mode`
+    /// decides whether the LLM TRANSLATES the input into the native language or EXPLAINS its nuance.
     public func submit() {
         let text = source.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         let target = TargetLanguage.current
         let tone = ToneOfVoice.current.register   // styles the composed phrase, if the model composes
+        let mode = self.mode
         requestTask?.cancel()
         phase = .processing
         errorMessage = nil
@@ -170,9 +189,17 @@ public final class InViewModel {
         requestTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let result = try await self.translate(text, targetLanguage: target.promptName, tone: tone)
+                switch mode {
+                case .translate:
+                    let result = try await self.translate(text, targetLanguage: target.promptName, tone: tone)
+                    self.translation = result
+                    self.explanation = nil
+                case .explain:
+                    let result = try await self.explain(text, explanationLanguage: target.promptName)
+                    self.explanation = result
+                    self.translation = nil
+                }
                 self.submittedSource = text
-                self.translation = result
                 self.isSaved = false
                 self.savedExpressionID = nil
                 self.phase = .result
@@ -181,6 +208,20 @@ public final class InViewModel {
             } catch {
                 self.handleRequestError(error)
             }
+        }
+    }
+
+    /// Switch the Translate/Explain mode. With a result already shown (or in flight), re-run the
+    /// same input in the new mode so you see it both ways; otherwise just remember the choice.
+    public func selectMode(_ newMode: Mode) {
+        guard newMode != mode else { return }
+        mode = newMode
+        if canSubmit, phase == .result || phase == .processing {
+            submit()
+        } else {
+            translation = nil
+            explanation = nil
+            if phase == .result { phase = .idle }
         }
     }
 
@@ -242,7 +283,7 @@ public final class InViewModel {
     // MARK: Save / unsave (enrich-then-store)
 
     public func toggleSave() {
-        guard let translation, !submittedSource.isEmpty else { return }
+        guard !submittedSource.isEmpty, translation != nil || explanation != nil else { return }
         if isSaved {
             isSaved = false                                  // instant UI
             let storedID = savedExpressionID
@@ -252,8 +293,8 @@ public final class InViewModel {
             }
         } else {
             isSaved = true                                   // instant UI; enrich+store in background
-            // We always study the SOURCE (what was translated), with the translation as its meaning —
-            // never the variant in the user's own language.
+            // We always study the SOURCE (what was translated/explained) — never the variant in the
+            // user's own language. In Explain mode there's no direct gloss, so enrich derives it.
             let en = submittedSource
             let knownRU = translation
             Task { [weak self] in
@@ -278,6 +319,7 @@ public final class InViewModel {
         captureTask?.cancel(); requestTask?.cancel(); playTask?.cancel()
         phase = .idle
         translation = nil
+        explanation = nil
         source = ""
         submittedSource = ""
         errorMessage = nil

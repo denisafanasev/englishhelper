@@ -35,7 +35,7 @@ public struct VoiceView: View {
                 }
                 .scrollDismissesKeyboard(.interactively)
             }
-            .navigationTitle(Loc.t("Как сказать", "How to say"))
+            .navigationTitle(Loc.t("Как сказать", "Say it"))
             .settingsTrigger()
             .sheet(isPresented: $model.showMicPriming) { primingSheet }
         }
@@ -75,6 +75,14 @@ public struct VoiceView: View {
             }
             .disabled(!canPick)
             .opacity(canPick ? 1 : 0.5)
+
+            SegmentedSelector(
+                ToneOfVoice.allCases,
+                selected: model.tone,
+                label: { $0.shortTitle },
+                onSelect: { model.selectTone($0) }
+            )
+            .accessibilityLabel(Loc.t("Тон фраз", "Phrase tone"))
         }
     }
 

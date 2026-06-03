@@ -18,6 +18,14 @@ public enum ToneOfVoice: String, CaseIterable, Sendable {
         case .slang: Loc.t("Неформальный, сленговый", "Casual, slangy")
         }
     }
+    /// Compact label for the on-screen tone selector (the full `title` is too long for a segment).
+    public var shortTitle: String {
+        switch self {
+        case .formal: Loc.t("Вежливый", "Polite")
+        case .casual: Loc.t("Обычный", "Casual")
+        case .slang: Loc.t("Сленг", "Slang")
+        }
+    }
     public var register: Register {
         switch self {
         case .formal: .formal
@@ -30,15 +38,6 @@ public enum ToneOfVoice: String, CaseIterable, Sendable {
         ToneOfVoice(rawValue: UserDefaults.standard.string(forKey: storageKey) ?? "") ?? .casual
     }
     static let storageKey = "toneOfVoice"
-}
-
-@MainActor
-@Observable
-public final class ToneStore {
-    public var tone: ToneOfVoice {
-        didSet { UserDefaults.standard.set(tone.rawValue, forKey: ToneOfVoice.storageKey) }
-    }
-    public init() { tone = ToneOfVoice.current }
 }
 
 public enum ThemePreference: String, CaseIterable, Sendable {

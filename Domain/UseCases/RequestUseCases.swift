@@ -129,6 +129,24 @@ public struct TranslateToTargetInteractor: TranslateToTargetUseCase {
     }
 }
 
+// MARK: - explainExpression ("Понять"/Get: explain nuance in the native language)
+
+public protocol ExplainExpressionUseCase: Sendable {
+    /// Explain an English expression in `explanationLanguage` (the user's native language):
+    /// meaning, tone/register, cultural context, and a native-language analogy. Not recorded in
+    /// history — it's a reference lookup, not a produced phrase/translation.
+    func callAsFunction(_ text: String, explanationLanguage: String) async throws -> ExpressionExplanation
+}
+
+public struct ExplainExpressionInteractor: ExplainExpressionUseCase {
+    private let llm: LLMClient
+    public init(llm: LLMClient) { self.llm = llm }
+
+    public func callAsFunction(_ text: String, explanationLanguage: String) async throws -> ExpressionExplanation {
+        try await llm.run(ExplainExpressionTemplate(explanationLanguage: explanationLanguage), input: text)
+    }
+}
+
 // MARK: - photoTranslate
 
 public protocol PhotoTranslateUseCase: Sendable {

@@ -32,7 +32,7 @@ public struct InView: View {
                 }
                 .scrollDismissesKeyboard(.interactively)
             }
-            .navigationTitle(Loc.t("Понять", "Understand"))
+            .navigationTitle(Loc.t("Понять", "Get it"))
             .settingsTrigger()
             .sheet(isPresented: $model.showMicPriming) { primingSheet }
         }
@@ -64,19 +64,34 @@ public struct InView: View {
                     .foregroundStyle(Tokens.Content.tertiary)
             }
 
-            EHButton(Loc.t("Перевести", "Translate"), icon: "character.book.closed",
-                     kind: .primary, fillWidth: true) {
+            EHButton(actionTitle, icon: actionIcon, kind: .primary, fillWidth: true) {
                 fieldFocused = false
                 model.submit()
             }
             .disabled(!canTranslate)
             .opacity(canTranslate ? 1 : 0.5)
+
+            SegmentedSelector(
+                InViewModel.Mode.allCases,
+                selected: model.mode,
+                label: { $0.title },
+                onSelect: { model.selectMode($0) }
+            )
+            .accessibilityLabel(Loc.t("Режим", "Mode"))
         }
     }
 
     /// Enabled only with non-empty input and not mid-request/listening.
     private var canTranslate: Bool {
         model.canSubmit && model.phase != .processing && !model.isListening
+    }
+
+    private var actionTitle: String {
+        model.mode == .explain ? Loc.t("Объяснить", "Explain") : Loc.t("Перевести", "Translate")
+    }
+
+    private var actionIcon: String {
+        model.mode == .explain ? "lightbulb" : "character.book.closed"
     }
 
     private var micCaption: String {
@@ -97,8 +112,8 @@ public struct InView: View {
                     systemImage: "character.bubble",
                     title: Loc.t("Что это значит?", "What does it mean?"),
                     message: Loc.t(
-                        "Введите или надиктуйте фразу — переведу её по смыслу. Или попросите «скажи, что…» — сформулирую ответ в выбранном тоне.",
-                        "Type or dictate a phrase — I'll translate its meaning. Or ask “say that…” and I'll word it in the chosen tone.")
+                        "Введите или надиктуйте выражение. В режиме «Перевод» переведу его по смыслу; в режиме «Объяснение» расскажу, что оно значит, насколько формально или резко звучит и с чем это можно сравнить.",
+                        "Type or dictate an expression. In Translate I'll render its meaning; in Explain I'll tell you what it means, how formal or blunt it sounds, and what it compares to.")
                 )
                 .padding(.top, Tokens.Space.s24)
             }
@@ -107,7 +122,7 @@ public struct InView: View {
             EmptyView()
 
         case .processing:
-            LoadingView(Loc.t("Перевожу…", "Translating…"))
+            LoadingView(model.mode == .explain ? Loc.t("Объясняю…", "Explaining…") : Loc.t("Перевожу…", "Translating…"))
                 .padding(.top, Tokens.Space.s24)
 
         case .result:
@@ -126,13 +141,15 @@ public struct InView: View {
     }
 
     @ViewBuilder private var resultSection: some View {
-        if let translation = model.translation {
-            VStack(spacing: Tokens.Space.s16) {
+        VStack(spacing: Tokens.Space.s16) {
+            if let explanation = model.explanation {
+                explanationCard(explanation)
+            } else if let translation = model.translation {
                 translationCard(translation)
-                EHButton(Loc.t("Перевести ещё", "Translate more"),
-                         icon: "arrow.triangle.2.circlepath", kind: .glass, fillWidth: true) {
-                    model.reset()
-                }
+            }
+            EHButton(Loc.t("Новое выражение", "New phrase"),
+                     icon: "arrow.triangle.2.circlepath", kind: .glass, fillWidth: true) {
+                model.reset()
             }
         }
     }
@@ -182,6 +199,67 @@ public struct InView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Tokens.Space.s16)
         .glassPanel(cornerRadius: Tokens.Radius.card)
+    }
+
+    /// Explain mode: the English source is the headline (the study item — bookmark + play attach to
+    /// it), with the nuance broken out below in the native language.
+    private func explanationCard(_ explanation: ExpressionExplanation) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.s16) {
+            HStack(alignment: .top) {
+                Text(model.sourceText)
+                    .textStyle(Tokens.Text.title3)
+                    .foregroundStyle(Tokens.Content.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: Tokens.Space.s8)
+                Button { model.toggleSave() } label: {
+                    Image(systemName: model.isSaved ? "bookmark.fill" : "bookmark")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(model.isSaved ? Tokens.Content.primary : Tokens.Content.tertiary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(model.isSaved
+                    ? Loc.t("Убрать из изучаемого", "Remove from study list")
+                    : Loc.t("Сохранить в изучаемое", "Save to study list"))
+            }
+
+            if !model.sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Button { model.play() } label: {
+                    Label(
+                        model.isPlaying ? Loc.t("Озвучивается…", "Playing…") : Loc.t("Озвучить", "Play"),
+                        systemImage: model.isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2"
+                    )
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Tokens.Content.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Loc.t("Озвучить оригинал", "Play original"))
+            }
+
+            Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)
+
+            explanationRow(Loc.t("Значение", "Meaning"), explanation.meaning)
+            explanationRow(Loc.t("Тон и регистр", "Tone & register"), explanation.register)
+            explanationRow(Loc.t("В контексте", "In context"), explanation.context)
+            explanationRow(Loc.t("Аналогия", "Analogy"), explanation.analogy)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Tokens.Space.s16)
+        .glassPanel(cornerRadius: Tokens.Radius.card)
+    }
+
+    @ViewBuilder private func explanationRow(_ label: String, _ text: String) -> some View {
+        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            VStack(alignment: .leading, spacing: Tokens.Space.s4) {
+                Text(label.uppercased())
+                    .textStyle(Tokens.Text.caption2)
+                    .foregroundStyle(Tokens.Content.tertiary)
+                Text(text)
+                    .textStyle(Tokens.Text.body)
+                    .foregroundStyle(Tokens.Content.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     // MARK: Banners & sheets

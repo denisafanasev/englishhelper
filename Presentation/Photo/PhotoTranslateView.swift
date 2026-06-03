@@ -32,7 +32,7 @@ public struct PhotoTranslateView: View {
                     .padding(Tokens.Space.s20)
                 }
             }
-            .navigationTitle(Loc.t("Фото-перевод", "Photo translation"))
+            .navigationTitle(Loc.t("Фото-перевод", "See it"))
             .settingsTrigger()
             .sheet(isPresented: $model.showCameraPriming) { primingSheet }
             .fullScreenCover(isPresented: $model.presentCamera) {

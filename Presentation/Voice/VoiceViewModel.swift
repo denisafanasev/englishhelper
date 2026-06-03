@@ -17,6 +17,11 @@ public final class VoiceViewModel {
     // UI state
     public private(set) var phase: Phase = .idle
     public var intent: String = ""                       // editable transcript / typed input
+    /// Tone/register for the generated phrases — chosen on-screen, persisted (shared with the
+    /// "Понять" compose path via `ToneOfVoice.current`).
+    public var tone: ToneOfVoice = ToneOfVoice.current {
+        didSet { UserDefaults.standard.set(tone.rawValue, forKey: ToneOfVoice.storageKey) }
+    }
     public private(set) var variants: [PhraseVariant] = []
     public private(set) var errorMessage: String?
     public private(set) var isOffline = false
@@ -159,20 +164,27 @@ public final class VoiceViewModel {
     public func submit() {
         let text = intent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        let tone = ToneOfVoice.current.register
-        run { try await self.howToSay(text, tone: tone) }
+        run { try await self.howToSay(text, tone: self.tone.register) }
     }
 
     public func regenerate() {
         let text = intent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        let tone = ToneOfVoice.current.register
-        run { try await self.regenerateHowToSay(text, tone: tone) }
+        run { try await self.regenerateHowToSay(text, tone: self.tone.register) }
     }
 
     /// One button drives both: regenerate when results are shown, otherwise generate a fresh set.
     public func pick() {
         if phase == .results { regenerate() } else { submit() }
+    }
+
+    /// Pick a tone from the on-screen selector. With variants already shown (or in flight),
+    /// immediately produce a fresh set in the new tone — "change the tone → get new variants".
+    /// Otherwise just remember it for the next generation.
+    public func selectTone(_ newTone: ToneOfVoice) {
+        guard newTone != tone else { return }
+        tone = newTone
+        if canSubmit, phase == .results || phase == .processing { submit() }
     }
 
     private func run(_ operation: @escaping () async throws -> [PhraseVariant]) {

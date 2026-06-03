@@ -26,6 +26,26 @@ public struct HowToSayResult: Codable, Sendable, Equatable {
     public let variants: [PhraseVariant]
 }
 
+/// `{ meaning, register, context, analogy }` — a learner-facing explanation of an English
+/// expression, written in the user's NATIVE language (not a translation).
+public struct ExpressionExplanation: Codable, Sendable, Equatable {
+    /// What the expression actually means / what is implied.
+    public let meaning: String
+    /// Tone of voice + how formal, casual, slangy, rude or offensive it is, and who says it to whom.
+    public let register: String
+    /// How it lands in an English-speaking culture — when and where it's used.
+    public let context: String
+    /// A comparison to an equivalent in the learner's own language/culture.
+    public let analogy: String
+
+    public init(meaning: String, register: String, context: String, analogy: String) {
+        self.meaning = meaning
+        self.register = register
+        self.context = context
+        self.analogy = analogy
+    }
+}
+
 /// `{ "ru", "example", "synonyms": [..] }`
 public struct CardEnrichment: Codable, Sendable, Equatable {
     public let ru: String
@@ -187,6 +207,63 @@ public struct TranslateToTargetTemplate: PromptTemplate {
 
     public func decode(_ rawJSON: String) throws -> TargetTranslation {
         try decodeJSON(TargetTranslation.self, from: rawJSON)
+    }
+}
+
+// MARK: - explainExpression ("Понять"/Get, Explain mode)
+
+/// An English word/phrase → a structured explanation in the learner's NATIVE language: what it
+/// means, its tone/register, how it lands in an English-speaking culture, and an analogy to the
+/// learner's own language. For understanding nuance, NOT translating.
+public struct ExplainExpressionTemplate: PromptTemplate {
+    public typealias Input = String
+    public typealias Output = ExpressionExplanation
+
+    public let id = "explainExpression"
+    public let explanationLanguage: String   // the user's native language, e.g. "Russian"
+    public init(explanationLanguage: String) {
+        self.explanationLanguage = explanationLanguage
+    }
+
+    public var systemPrompt: String {
+        """
+        You explain an English word, phrase, or expression to a native \(explanationLanguage) speaker
+        who is learning English. Write EVERY field in \(explanationLanguage), in clear, friendly
+        language a non-native speaker understands. Explain the nuance — do NOT just translate it.
+
+        Return four fields:
+        - "meaning": what the expression actually means and what is implied — the real sense, not a
+          word-for-word translation.
+        - "register": the tone of voice and how formal, neutral, casual, slangy, rude, or offensive
+          it is, and who would say it to whom in which situations.
+        - "context": what it signals in an English-speaking culture — when and where it is used and
+          how it tends to land on a listener.
+        - "analogy": a comparison to an equivalent expression or situation in the
+          \(explanationLanguage)-speaking culture, so the learner can map it onto something familiar.
+
+        If the input is a single neutral word, still describe its connotations and typical usage.
+        \(plainTextRule)
+        """
+    }
+
+    public var outputJSONSchema: String {
+        """
+        {"type":"object","properties":{"meaning":{"type":"string"},"register":{"type":"string"},
+        "context":{"type":"string"},"analogy":{"type":"string"}},
+        "required":["meaning","register","context","analogy"]}
+        """
+    }
+
+    public func userMessage(for input: String) -> String { input }
+
+    public func decode(_ rawJSON: String) throws -> ExpressionExplanation {
+        let raw = try decodeJSON(ExpressionExplanation.self, from: rawJSON)
+        return ExpressionExplanation(
+            meaning: PlainText.clean(raw.meaning),
+            register: PlainText.clean(raw.register),
+            context: PlainText.clean(raw.context),
+            analogy: PlainText.clean(raw.analogy)
+        )
     }
 }
 

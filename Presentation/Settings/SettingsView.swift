@@ -2,7 +2,8 @@
 //  SettingsView.swift
 //  EnglishHelper — Presentation
 //
-//  Settings sheet: live API status, interface + target language, tone, theme, app info.
+//  Settings sheet: live API status, interface + native language, theme, app info.
+//  (Phrase tone moved onto the "Сказать"/Say it screen.)
 //
 
 import SwiftUI
@@ -11,7 +12,6 @@ import DesignSystem
 public struct SettingsView: View {
     @State private var model: SettingsViewModel
     private let theme: ThemeStore
-    private let tone: ToneStore
     private let language: LanguageStore
     private let target: TargetLanguageStore
     private let onClose: () -> Void
@@ -19,14 +19,12 @@ public struct SettingsView: View {
     public init(
         model: SettingsViewModel,
         theme: ThemeStore,
-        tone: ToneStore,
         language: LanguageStore,
         target: TargetLanguageStore,
         onClose: @escaping () -> Void
     ) {
         _model = State(initialValue: model)
         self.theme = theme
-        self.tone = tone
         self.language = language
         self.target = target
         self.onClose = onClose
@@ -34,7 +32,6 @@ public struct SettingsView: View {
 
     public var body: some View {
         @Bindable var theme = theme
-        @Bindable var tone = tone
         @Bindable var language = language
         @Bindable var target = target
         NavigationStack {
@@ -45,7 +42,6 @@ public struct SettingsView: View {
                         connectionCard
                         languageCard(language: $language.language)
                         targetCard(target: $target.language)
-                        toneCard(tone: $tone.tone)
                         themeCard(theme: $theme.preference)
                         infoCard
                     }
@@ -132,53 +128,21 @@ public struct SettingsView: View {
         .glassPanel(cornerRadius: Tokens.Radius.card)
     }
 
-    // MARK: Target language ("In" translates to this)
+    // MARK: Native language (the "Понять"/Get screen translates & explains into this)
 
     private func targetCard(target: Binding<TargetLanguage>) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s12) {
-            sectionTitle(Loc.t("Язык перевода (In)", "Translate to (In)"))
-            Picker(Loc.t("Язык перевода", "Translate to"), selection: target) {
+            sectionTitle(Loc.t("Родной язык", "Native language"))
+            Picker(Loc.t("Родной язык", "Native language"), selection: target) {
                 ForEach(TargetLanguage.allCases, id: \.self) { option in
                     Text(option.title).tag(option)
                 }
             }
             .pickerStyle(.segmented)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(Tokens.Space.s16)
-        .glassPanel(cornerRadius: Tokens.Radius.card)
-    }
-
-    // MARK: Tone of voice
-
-    private func toneCard(tone: Binding<ToneOfVoice>) -> some View {
-        VStack(alignment: .leading, spacing: Tokens.Space.s12) {
-            sectionTitle(Loc.t("Тон фраз", "Phrase tone"))
-            VStack(spacing: 0) {
-                ForEach(Array(ToneOfVoice.allCases.enumerated()), id: \.element) { index, option in
-                    Button { tone.wrappedValue = option } label: {
-                        HStack {
-                            Text(option.title)
-                                .textStyle(Tokens.Text.body)
-                                .foregroundStyle(Tokens.Content.primary)
-                            Spacer()
-                            if tone.wrappedValue == option {
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(Tokens.Content.primary)
-                            }
-                        }
-                        .padding(.vertical, Tokens.Space.s12)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(tone.wrappedValue == option ? [.isButton, .isSelected] : .isButton)
-
-                    if index < ToneOfVoice.allCases.count - 1 {
-                        Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)
-                    }
-                }
-            }
+            Text(Loc.t("Язык переводов и объяснений на экране «Понять».",
+                       "The language of translations and explanations on the Get it screen."))
+                .textStyle(Tokens.Text.footnote)
+                .foregroundStyle(Tokens.Content.tertiary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Tokens.Space.s16)

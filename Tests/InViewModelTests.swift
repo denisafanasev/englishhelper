@@ -22,6 +22,7 @@ import Presentation
         let history = MockHistoryRepository()
         return InViewModel(
             translate: TranslateToTargetInteractor(llm: llm, history: history),
+            explain: ExplainExpressionInteractor(llm: llm),
             voiceCapture: VoiceCaptureInteractor(recognizer: MockSpeechRecognizing()),
             pronounce: PlayPronunciationInteractor(synthesizer: MockSpeechSynthesizing()),
             saveExpression: SaveExpressionInteractor(
@@ -128,5 +129,51 @@ import Presentation
         // The source is filed as `en` — NOT the translation "Это тестовый перевод.".
         #expect(stored.contains { $0.en == "Bonjour le monde" })
         #expect(!stored.contains { $0.en == "Это тестовый перевод." })
+    }
+
+    // MARK: Explain mode
+
+    @Test func explainModeProducesExplanationNotTranslation() async throws {
+        UserDefaults.standard.set("russian", forKey: "targetLanguage")
+        let vm = makeVM()
+        vm.source = "give me a hand"
+        vm.selectMode(.explain)          // no result yet → just switches, no auto-run
+        #expect(vm.translation == nil)
+        vm.submit()
+        try await waitUntil { vm.phase == .result }
+        #expect(vm.phase == .result)
+        #expect(vm.explanation != nil)
+        #expect(vm.translation == nil)   // explain mode never leaves a stale translation
+    }
+
+    @Test func explainTemplateTargetsNativeLanguageAndNuance() {
+        let prompt = ExplainExpressionTemplate(explanationLanguage: "Russian").systemPrompt
+        #expect(prompt.contains("Russian"))     // the native language is injected
+        #expect(prompt.contains("meaning"))     // facet: what it means
+        #expect(prompt.contains("register"))    // facet: tone / formality / offensiveness
+        #expect(prompt.contains("analogy"))     // facet: native-culture analogy
+    }
+
+    @Test func explainModeSaveFilesEnglishSource() async throws {
+        UserDefaults.standard.set("russian", forKey: "targetLanguage")
+        let repo = MockExpressionRepository(seed: [])
+        let vm = makeVM(repo: repo)
+        vm.source = "give me a hand"
+        vm.selectMode(.explain)
+        vm.submit()
+        try await waitUntil { vm.phase == .result }
+
+        vm.toggleSave()                  // saveable even with no direct gloss (enrich derives it)
+        #expect(vm.isSaved)
+
+        let list = StudyListInteractor(repository: repo)
+        var stored: [Domain.Expression] = []
+        let clock = ContinuousClock(); let start = clock.now
+        while !stored.contains(where: { $0.en == "give me a hand" }) {
+            if clock.now - start > .seconds(2) { break }
+            try await Task.sleep(for: .milliseconds(10))
+            stored = (try? await list.list()) ?? []
+        }
+        #expect(stored.contains { $0.en == "give me a hand" })
     }
 }

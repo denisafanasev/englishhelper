@@ -3,10 +3,10 @@
 //  EnglishHelper — Presentation
 //
 //  App shell: tab bar (Liquid Glass) + global theme + the Settings sheet.
-//  Order: Изучаю · Понять · Сказать (center, default) · Смотреть · История.
-//  "Сказать"/Out (RU intent → 3 English variants, voice or text) and "Понять"/In (any language /
-//  English voice → one translation into the target language) are the two translation directions;
-//  "Смотреть"/Camera is the photo translator.
+//  Order: Изучаю · Понять/Get · Сказать/Say (center, default) · Смотреть/See · История.
+//  "Сказать"/Say it (RU intent → 3 English variants, voice or text) and "Понять"/Get it (translate
+//  OR explain an English expression into the native language) are the two comprehension directions;
+//  "Смотреть"/See it is the photo translator.
 //
 
 import SwiftUI
@@ -20,7 +20,6 @@ public struct RootView: View {
     @State private var settings: SettingsViewModel
 
     @State private var theme = ThemeStore()
-    @State private var tone = ToneStore()
     @State private var language = LanguageStore()
     @State private var target = TargetLanguageStore()
     @State private var ui = AppUIState()
@@ -48,13 +47,13 @@ public struct RootView: View {
             Tab(Loc.t("Изучаю", "Study"), systemImage: "rectangle.stack", value: "library") {
                 StudyListView(model: library)
             }
-            Tab(Loc.t("Понять", "Understand"), systemImage: "character.bubble", value: "in") {
+            Tab(Loc.t("Понять", "Get"), systemImage: "character.bubble", value: "in") {
                 InView(model: inbound)
             }
             Tab(Loc.t("Сказать", "Say"), systemImage: "mic.fill", value: "out") {
                 VoiceView(model: out)
             }
-            Tab(Loc.t("Смотреть", "Look"), systemImage: "camera", value: "camera") {
+            Tab(Loc.t("Смотреть", "See"), systemImage: "camera", value: "camera") {
                 PhotoTranslateView(model: photo)
             }
             Tab(Loc.t("История", "History"), systemImage: "clock.arrow.circlepath", value: "history") {
@@ -65,7 +64,7 @@ public struct RootView: View {
         .environment(\.locale, language.locale)
         .preferredColorScheme(theme.colorScheme)
         .sheet(isPresented: $ui.showSettings) {
-            SettingsView(model: settings, theme: theme, tone: tone, language: language, target: target) {
+            SettingsView(model: settings, theme: theme, language: language, target: target) {
                 ui.showSettings = false
             }
         }
