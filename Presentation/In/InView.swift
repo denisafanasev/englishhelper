@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import UIKit
 import Domain
 import DesignSystem
 
@@ -57,7 +58,7 @@ public struct InView: View {
                 .accessibilityValue(model.isListening ? Loc.t("Слушаю", "Listening") : Loc.t("Готов", "Ready"))
                 .accessibilityHint(model.isListening
                     ? Loc.t("Коснитесь, чтобы остановить", "Tap to stop")
-                    : Loc.t("Коснитесь, чтобы говорить по-английски", "Tap to speak English"))
+                    : Loc.t("Коснитесь, чтобы говорить на изучаемом языке", "Tap to speak the language you're learning"))
 
                 Text(micCaption)
                     .textStyle(Tokens.Text.footnote)
@@ -98,7 +99,7 @@ public struct InView: View {
         switch model.micStatus {
         case .listening: Loc.t("Слушаю… коснитесь, чтобы остановить", "Listening… tap to stop")
         case .processing: Loc.t("Минуту…", "One moment…")
-        case .idle: Loc.t("Нажмите и говорите по-английски", "Tap and speak English")
+        case .idle: Loc.t("Нажмите и говорите на изучаемом языке", "Tap and speak the language you're learning")
         }
     }
 
@@ -154,57 +155,10 @@ public struct InView: View {
         }
     }
 
-    /// The translation (your language) on top — what you read to understand. The SOURCE phrase below
-    /// is the study item: bookmark + play attach to it, so saving files what was translated, never
-    /// the variant in your own language.
+    /// Translate mode: the studied-language rendering is the headline (play + bookmark + the saved
+    /// study item); the native translation sits below as the "understanding" line.
     private func translationCard(_ translation: String) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s12) {
-            Text(translation)
-                .textStyle(Tokens.Text.title3)
-                .foregroundStyle(Tokens.Content.primary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)
-
-            HStack(alignment: .top) {
-                Text(model.sourceText)
-                    .textStyle(Tokens.Text.body)
-                    .foregroundStyle(Tokens.Content.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: Tokens.Space.s8)
-                Button { model.toggleSave() } label: {
-                    Image(systemName: model.isSaved ? "bookmark.fill" : "bookmark")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(model.isSaved ? Tokens.Content.primary : Tokens.Content.tertiary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(model.isSaved
-                    ? Loc.t("Убрать из изучаемого", "Remove from study list")
-                    : Loc.t("Сохранить в изучаемое", "Save to study list"))
-            }
-
-            if !model.sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Button { model.play() } label: {
-                    Label(
-                        model.isPlaying ? Loc.t("Озвучивается…", "Playing…") : Loc.t("Озвучить оригинал", "Play original"),
-                        systemImage: model.isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2"
-                    )
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Tokens.Content.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Loc.t("Озвучить оригинал", "Play original"))
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(Tokens.Space.s16)
-        .glassPanel(cornerRadius: Tokens.Radius.card)
-    }
-
-    /// Explain mode: the English source is the headline (the study item — bookmark + play attach to
-    /// it), with the nuance broken out below in the native language.
-    private func explanationCard(_ explanation: ExpressionExplanation) -> some View {
-        VStack(alignment: .leading, spacing: Tokens.Space.s16) {
             HStack(alignment: .top) {
                 Text(model.sourceText)
                     .textStyle(Tokens.Text.title3)
@@ -232,7 +186,62 @@ public struct InView: View {
                     .foregroundStyle(Tokens.Content.secondary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(Loc.t("Озвучить оригинал", "Play original"))
+                .accessibilityLabel(Loc.t("Озвучить", "Play"))
+            }
+
+            Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)
+
+            Text(translation)
+                .textStyle(Tokens.Text.body)
+                .foregroundStyle(Tokens.Content.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Tokens.Space.s16)
+        .glassPanel(cornerRadius: Tokens.Radius.card)
+    }
+
+    /// Explain mode: the studied-language rendering is the headline (the study item — bookmark + play
+    /// attach to it), with the nuance broken out below in the native language.
+    private func explanationCard(_ explanation: ExpressionExplanation) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.s16) {
+            HStack(alignment: .top) {
+                Text(model.sourceText)
+                    .textStyle(Tokens.Text.title3)
+                    .foregroundStyle(Tokens.Content.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: Tokens.Space.s8)
+                Button { model.toggleSave() } label: {
+                    Image(systemName: model.isSaved ? "bookmark.fill" : "bookmark")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(model.isSaved ? Tokens.Content.primary : Tokens.Content.tertiary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(model.isSaved
+                    ? Loc.t("Убрать из изучаемого", "Remove from study list")
+                    : Loc.t("Сохранить в изучаемое", "Save to study list"))
+            }
+
+            HStack(spacing: Tokens.Space.s20) {
+                if !model.sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Button { model.play() } label: {
+                        Label(
+                            model.isPlaying ? Loc.t("Озвучивается…", "Playing…") : Loc.t("Озвучить", "Play"),
+                            systemImage: model.isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2"
+                        )
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Tokens.Content.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Loc.t("Озвучить", "Play"))
+                }
+                Button { UIPasteboard.general.string = explanationPlainText(explanation) } label: {
+                    Label(Loc.t("Скопировать", "Copy"), systemImage: "doc.on.doc")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Tokens.Content.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Loc.t("Скопировать объяснение", "Copy explanation"))
             }
 
             Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)
@@ -245,6 +254,24 @@ public struct InView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Tokens.Space.s16)
         .glassPanel(cornerRadius: Tokens.Radius.card)
+    }
+
+    /// The whole explanation as plain text — the studied expression followed by each section with
+    /// its (uppercased) title — for copying to the clipboard exactly as shown.
+    private func explanationPlainText(_ e: ExpressionExplanation) -> String {
+        var parts: [String] = []
+        let head = model.sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !head.isEmpty { parts.append(head) }
+        func section(_ label: String, _ text: String) {
+            let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !body.isEmpty else { return }
+            parts.append("\(label.uppercased())\n\(body)")
+        }
+        section(Loc.t("Значение", "Meaning"), e.meaning)
+        section(Loc.t("Тон и регистр", "Tone & register"), e.register)
+        section(Loc.t("В контексте", "In context"), e.context)
+        section(Loc.t("Аналогия", "Analogy"), e.analogy)
+        return parts.joined(separator: "\n\n")
     }
 
     @ViewBuilder private func explanationRow(_ label: String, _ text: String) -> some View {
@@ -288,8 +315,8 @@ public struct InView: View {
                 .textStyle(Tokens.Text.title2)
                 .foregroundStyle(Tokens.Content.primary)
             Text(Loc.t(
-                "Чтобы услышать вашу английскую речь и перевести её, приложению нужен микрофон. Запись не сохраняется.",
-                "To hear your English speech and translate it, the app needs the microphone. Nothing is recorded."))
+                "Чтобы услышать вашу речь и перевести её, приложению нужен микрофон. Запись не сохраняется.",
+                "To hear your speech and translate it, the app needs the microphone. Nothing is recorded."))
                 .textStyle(Tokens.Text.body)
                 .foregroundStyle(Tokens.Content.secondary)
                 .multilineTextAlignment(.center)

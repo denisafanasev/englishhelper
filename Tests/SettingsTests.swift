@@ -52,4 +52,28 @@ import Presentation
 
         UserDefaults.standard.removeObject(forKey: key)
     }
+
+    @Test func nativeLanguageSupportsFourLanguages() {
+        #expect(TargetLanguage.allCases.count == 4)
+        #expect(TargetLanguage.french.promptName == "French")
+        #expect(TargetLanguage.spanish.promptName == "Spanish")
+        #expect(TargetLanguage.french.speechLocale == "fr-FR")
+        #expect(TargetLanguage.spanish.speechLocale == "es-ES")
+        #expect(Set(TargetLanguage.allCases.map(\.abbreviation)) == ["RU", "EN", "FR", "ES"])
+    }
+
+    @Test func studiedLanguageSupportsFourLanguagesDefaultEnglish() {
+        let key = "studiedLanguage"
+        UserDefaults.standard.removeObject(forKey: key)
+        #expect(StudiedLanguage.current == .english)   // default is English
+        #expect(StudiedLanguage.allCases.count == 4)
+        #expect(StudiedLanguage.french.promptName == "French")
+        #expect(StudiedLanguage.french.speechLocale == "fr-FR")
+        #expect(Set(StudiedLanguage.allCases.map(\.abbreviation)) == ["RU", "EN", "FR", "ES"])
+
+        let store = StudiedLanguageStore()
+        store.language = .spanish
+        #expect(StudiedLanguage.current == .spanish)   // persists
+        UserDefaults.standard.removeObject(forKey: key)
+    }
 }

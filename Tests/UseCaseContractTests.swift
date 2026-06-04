@@ -69,4 +69,22 @@ import Adapters
         #expect(result.synonyms.allSatisfy { !PlainText.hasDecoration($0) })
         #expect(result.synonyms.allSatisfy { !$0.isEmpty })
     }
+
+    // MARK: Per-language flow parametrization
+
+    /// "Say it": variants are produced in the STUDIED language; notes in the NATIVE language.
+    @Test func howToSayTemplateInjectsStudiedAndNative() {
+        let prompt = HowToSayTemplate(tone: .casual, studiedLanguage: "English", nativeLanguage: "French").systemPrompt
+        #expect(prompt.contains("French speaker who is learning English"))   // native learner of studied
+        #expect(prompt.contains("English variants"))                          // variants in studied
+        #expect(prompt.contains("note IN French"))                            // notes in native
+    }
+
+    /// "See it": each photo block is rendered in BOTH the studied and the native language.
+    @Test func photoBlocksTemplateInjectsStudiedAndNative() {
+        let prompt = PhotoBlocksTemplate(studiedLanguage: "Spanish", nativeLanguage: "Russian").systemPrompt
+        #expect(prompt.contains("Spanish"))          // "en" rendering = studied
+        #expect(prompt.contains("Russian"))          // "ru" rendering = native
+        #expect(prompt.contains("ANY language"))     // source detected, not assumed English
+    }
 }

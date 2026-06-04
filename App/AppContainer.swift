@@ -42,6 +42,7 @@ public final class AppContainer: Sendable {
     public let pronounce: any PlayPronunciationUseCase
     public let connectionHealth: any ConnectionHealthUseCase
     public let translateToTarget: any TranslateToTargetUseCase
+    public let understand: any UnderstandUseCase
     public let explainExpression: any ExplainExpressionUseCase
 
     public init(
@@ -84,6 +85,7 @@ public final class AppContainer: Sendable {
         self.pronounce = PlayPronunciationInteractor(synthesizer: speechSynthesizer)
         self.connectionHealth = ConnectionHealthInteractor(llm: llm)
         self.translateToTarget = TranslateToTargetInteractor(llm: llm, history: history)
+        self.understand = UnderstandInteractor(llm: llm, history: history)
         self.explainExpression = ExplainExpressionInteractor(llm: llm)
     }
 
@@ -96,9 +98,16 @@ public final class AppContainer: Sendable {
             llm: ClaudeLLMClient(apiKey: config.claudeAPIKey ?? "",
                                  model: config.claudeModel,
                                  baseURL: config.claudeBaseURL),
-            speechRecognizer: NativeSpeechRecognizer(),     // ← swap ASR engine here (ru, Out)
-            speechRecognizerEN: NativeSpeechRecognizer(locale: Locale(identifier: "en-US")),  // en, In
-            speechSynthesizer: NativeSpeechSynthesizer(),   // ← swap TTS engine here
+            // "Say it": the microphone follows the user's chosen native language (resolved per capture).
+            speechRecognizer: NativeSpeechRecognizer(localeProvider: {
+                Locale(identifier: TargetLanguage.current.speechLocale)
+            }),
+            // "Get it" mic listens in the STUDIED language (you capture studied-language speech to understand it).
+            speechRecognizerEN: NativeSpeechRecognizer(localeProvider: {
+                Locale(identifier: StudiedLanguage.current.speechLocale)
+            }),
+            // All TTS speaks the STUDIED language (resolved per utterance). ← swap TTS engine here
+            speechSynthesizer: NativeSpeechSynthesizer(localeProvider: { StudiedLanguage.current.speechLocale }),
             textRecognizer: VisionTextRecognizer(),         // ← swap OCR engine here
             expressions: SwiftDataExpressionRepository(modelContainer: modelContainer),
             history: SwiftDataHistoryRepository(modelContainer: modelContainer),
@@ -137,7 +146,7 @@ public final class AppContainer: Sendable {
     @MainActor
     public func makeInViewModel() -> InViewModel {
         InViewModel(
-            translate: translateToTarget,
+            understand: understand,
             explain: explainExpression,
             voiceCapture: voiceCaptureEN,
             pronounce: pronounce,

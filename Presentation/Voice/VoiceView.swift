@@ -45,7 +45,7 @@ public struct VoiceView: View {
 
     private var inputSection: some View {
         VStack(spacing: Tokens.Space.s16) {
-            GlassField(Loc.t("Что хотите сказать по-русски?", "What do you want to say in Russian?"), text: $model.intent) {
+            GlassField(Loc.t("Что хотите сказать?", "What do you want to say?"), text: $model.intent) {
                 fieldFocused = false
                 model.pick()
             }
@@ -61,7 +61,7 @@ public struct VoiceView: View {
                     .accessibilityValue(model.isListening ? Loc.t("Слушаю", "Listening") : Loc.t("Готов", "Ready"))
                     .accessibilityHint(model.isListening
                         ? Loc.t("Коснитесь, чтобы остановить", "Tap to stop")
-                        : Loc.t("Коснитесь, чтобы говорить по-русски", "Tap to speak Russian"))
+                        : Loc.t("Коснитесь, чтобы говорить на родном языке", "Tap to speak your native language"))
 
                     Text(micCaption)
                         .textStyle(Tokens.Text.footnote)
@@ -95,7 +95,7 @@ public struct VoiceView: View {
         switch model.micStatus {
         case .listening: Loc.t("Слушаю… коснитесь, чтобы остановить", "Listening… tap to stop")
         case .processing: Loc.t("Минуту…", "One moment…")
-        case .idle: Loc.t("Нажмите и говорите по-русски", "Tap and speak Russian")
+        case .idle: Loc.t("Нажмите и говорите на родном языке", "Tap and speak your native language")
         }
     }
 
@@ -107,12 +107,12 @@ public struct VoiceView: View {
             if model.intent.isEmpty {
                 StatusView(
                     systemImage: "text.bubble",
-                    title: Loc.t("Как сказать это по-английски?", "How do you say it in English?"),
+                    title: Loc.t("Как это сказать?", "How do you say it?"),
                     message: showsMic
-                        ? Loc.t("Спросите голосом или введите фразу по-русски — подберу три варианта с разной вежливостью.",
-                                "Ask by voice or type a phrase in Russian — I'll offer three options at different politeness levels.")
-                        : Loc.t("Введите фразу по-русски — подберу три варианта с разной вежливостью.",
-                                "Type a phrase in Russian — I'll offer three options at different politeness levels.")
+                        ? Loc.t("Спросите голосом или введите фразу — подберу три варианта с разной вежливостью.",
+                                "Ask by voice or type a phrase — I'll offer three options at different politeness levels.")
+                        : Loc.t("Введите фразу — подберу три варианта с разной вежливостью.",
+                                "Type a phrase — I'll offer three options at different politeness levels.")
                 )
                 .padding(.top, Tokens.Space.s24)
             }
@@ -180,8 +180,8 @@ public struct VoiceView: View {
             Text(Loc.t("Доступ к микрофону", "Microphone access"))
                 .textStyle(Tokens.Text.title2)
                 .foregroundStyle(Tokens.Content.primary)
-            Text(Loc.t("Чтобы услышать ваш вопрос по-русски и подобрать английские фразы, приложению нужен микрофон. Запись не сохраняется.",
-                       "To hear your question in Russian and find English phrases, the app needs the microphone. Nothing is recorded."))
+            Text(Loc.t("Чтобы услышать вас и подобрать фразы, приложению нужен микрофон. Запись не сохраняется.",
+                       "To hear you and find phrasings, the app needs the microphone. Nothing is recorded."))
                 .textStyle(Tokens.Text.body)
                 .foregroundStyle(Tokens.Content.secondary)
                 .multilineTextAlignment(.center)

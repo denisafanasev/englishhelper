@@ -18,11 +18,21 @@ import Domain
 private let speechLog = Logger(subsystem: "com.englishhelper.app", category: "speech")
 
 public final class NativeSpeechRecognizer: SpeechRecognizing, @unchecked Sendable {
-    private let locale: Locale
-    public init(locale: Locale = Locale(identifier: "ru-RU")) { self.locale = locale }
+    private let localeProvider: @Sendable () -> Locale
+
+    /// Fixed-locale recognizer (e.g. en-US for the "get it" English input).
+    public init(locale: Locale = Locale(identifier: "ru-RU")) {
+        self.localeProvider = { locale }
+    }
+
+    /// Dynamic-locale recognizer: the locale is resolved at the START of each capture, so the
+    /// "say it" microphone follows the user's currently-selected native language.
+    public init(localeProvider: @escaping @Sendable () -> Locale) {
+        self.localeProvider = localeProvider
+    }
 
     public func transcribe() -> AsyncThrowingStream<SpeechTranscript, Error> {
-        let session = RecognitionSession(locale: locale)
+        let session = RecognitionSession(locale: localeProvider())
         return AsyncThrowingStream { continuation in
             continuation.onTermination = { @Sendable _ in session.stop() }
             session.start(yielding: continuation)

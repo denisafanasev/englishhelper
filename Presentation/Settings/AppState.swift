@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Domain
+import DesignSystem
 
 /// Preferred tone/register for generated phrases ("Как сказать" / "Текст").
 public enum ToneOfVoice: String, CaseIterable, Sendable {
@@ -84,26 +85,20 @@ public final class AppUIState {
 // MARK: - Interface language (RU / EN, default: system)
 
 public enum AppLanguage: String, CaseIterable, Sendable {
-    case system, ru, en
-    public var title: String {
-        switch self {
-        case .system: Loc.t("Системный", "System")
-        case .ru: "Русский"
-        case .en: "English"
-        }
-    }
-    static let storageKey = "interfaceLanguage"
+    case ru, en, fr, es
+    /// Short code shown in the on-screen picker (RU / EN / FR / ES).
+    public var abbreviation: String { rawValue.uppercased() }
 
-    public static var preference: AppLanguage {
-        AppLanguage(rawValue: UserDefaults.standard.string(forKey: storageKey) ?? "") ?? .system
+    static let storageKey = AppLocale.storageKey
+
+    /// The user's explicit choice, or nil if they haven't picked one yet.
+    public static var stored: AppLanguage? {
+        UserDefaults.standard.string(forKey: storageKey).flatMap(AppLanguage.init(rawValue:))
     }
-    /// The language actually used (system → ru if the device prefers Russian, else en).
+    /// The language actually used: the stored choice, else the system default among the supported
+    /// languages, else English. (Resolution lives in `AppLocale` so `DSLoc` agrees with us.)
     public static var effective: AppLanguage {
-        switch preference {
-        case .system: (Locale.preferredLanguages.first ?? "en").lowercased().hasPrefix("ru") ? .ru : .en
-        case .ru: .ru
-        case .en: .en
-        }
+        AppLanguage(rawValue: AppLocale.currentCode()) ?? .en
     }
 }
 
@@ -113,32 +108,60 @@ public final class LanguageStore {
     public var language: AppLanguage {
         didSet { UserDefaults.standard.set(language.rawValue, forKey: AppLanguage.storageKey) }
     }
-    public init() { language = AppLanguage.preference }
-    public var locale: Locale { AppLanguage.effective == .ru ? Locale(identifier: "ru") : Locale(identifier: "en") }
+    /// Starts from the effective language; nothing is persisted until the user actually picks one
+    /// (a property's `didSet` doesn't fire for its initial value).
+    public init() { language = AppLanguage.effective }
+    public var locale: Locale { Locale(identifier: AppLanguage.effective.rawValue) }
 }
 
-/// Tiny runtime localizer — picks Russian or English by the selected interface language.
+/// Tiny runtime localizer. Forwards to the DesignSystem resolver + catalog so Presentation and
+/// DesignSystem share one source of truth. Russian + English are inline at the call site; French +
+/// Spanish are looked up by the English string (see `LocCatalog`).
 public enum Loc {
-    public static func t(_ ru: String, _ en: String) -> String {
-        AppLanguage.effective == .en ? en : ru
+    public static func t(_ ru: String, _ en: String) -> String { DSLoc.t(ru, en) }
+    /// Explicit four-language variant — for interpolated strings (no static key to look up).
+    public static func t(_ ru: String, _ en: String, _ fr: String, _ es: String) -> String {
+        DSLoc.t(ru, en, fr, es)
     }
 }
 
 // MARK: - Target language for "In" translation (RU / EN, default: RU)
 
 public enum TargetLanguage: String, CaseIterable, Sendable {
-    case russian, english
+    case russian, english, french, spanish
     public var title: String {
         switch self {
         case .russian: Loc.t("Русский", "Russian")
         case .english: Loc.t("Английский", "English")
+        case .french: Loc.t("Французский", "French")
+        case .spanish: Loc.t("Испанский", "Spanish")
         }
     }
-    /// Name used in the LLM prompt.
+    /// Short code shown in the on-screen picker (RU / EN / FR / ES).
+    public var abbreviation: String {
+        switch self {
+        case .russian: "RU"
+        case .english: "EN"
+        case .french: "FR"
+        case .spanish: "ES"
+        }
+    }
+    /// Name used in the LLM prompt (translation target / explanation language / "say it" source).
     public var promptName: String {
         switch self {
         case .russian: "Russian"
         case .english: "English"
+        case .french: "French"
+        case .spanish: "Spanish"
+        }
+    }
+    /// BCP-47 locale for recognizing speech in this language (the "say it" microphone input).
+    public var speechLocale: String {
+        switch self {
+        case .russian: "ru-RU"
+        case .english: "en-US"
+        case .french: "fr-FR"
+        case .spanish: "es-ES"
         }
     }
     static let storageKey = "targetLanguage"
@@ -154,4 +177,61 @@ public final class TargetLanguageStore {
         didSet { UserDefaults.standard.set(language.rawValue, forKey: TargetLanguage.storageKey) }
     }
     public init() { language = TargetLanguage.current }
+}
+
+// MARK: - Studied language (the language being LEARNED; RU/EN/FR/ES, default: English)
+//
+// The card headline + all TTS are in this language across see/say/get. Mirrors TargetLanguage but
+// defaults to English (kept a distinct type so a "studied" read can never be confused with "native").
+
+public enum StudiedLanguage: String, CaseIterable, Sendable {
+    case russian, english, french, spanish
+    public var title: String {
+        switch self {
+        case .russian: Loc.t("Русский", "Russian")
+        case .english: Loc.t("Английский", "English")
+        case .french: Loc.t("Французский", "French")
+        case .spanish: Loc.t("Испанский", "Spanish")
+        }
+    }
+    /// Short code shown in the on-screen picker (RU / EN / FR / ES).
+    public var abbreviation: String {
+        switch self {
+        case .russian: "RU"
+        case .english: "EN"
+        case .french: "FR"
+        case .spanish: "ES"
+        }
+    }
+    /// Name used in the LLM prompt (the studied target for translations / variants / explanations).
+    public var promptName: String {
+        switch self {
+        case .russian: "Russian"
+        case .english: "English"
+        case .french: "French"
+        case .spanish: "Spanish"
+        }
+    }
+    /// BCP-47 locale for TTS in this language, and for the "get it" microphone input.
+    public var speechLocale: String {
+        switch self {
+        case .russian: "ru-RU"
+        case .english: "en-US"
+        case .french: "fr-FR"
+        case .spanish: "es-ES"
+        }
+    }
+    static let storageKey = "studiedLanguage"
+    public static var current: StudiedLanguage {
+        StudiedLanguage(rawValue: UserDefaults.standard.string(forKey: storageKey) ?? "") ?? .english
+    }
+}
+
+@MainActor
+@Observable
+public final class StudiedLanguageStore {
+    public var language: StudiedLanguage {
+        didSet { UserDefaults.standard.set(language.rawValue, forKey: StudiedLanguage.storageKey) }
+    }
+    public init() { language = StudiedLanguage.current }
 }

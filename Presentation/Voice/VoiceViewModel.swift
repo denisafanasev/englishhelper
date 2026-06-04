@@ -152,7 +152,9 @@ public final class VoiceViewModel {
             errorMessage = Loc.t("Не расслышал. Попробуйте ещё раз.", "Didn't catch that. Try again.")
         case SpeechRecognitionError.underlying(let detail):
             errorMessage = Loc.t("Не удалось распознать речь: \(detail). Можно ввести текст вручную.",
-                                 "Couldn't recognize speech: \(detail). You can type the text instead.")
+                                 "Couldn't recognize speech: \(detail). You can type the text instead.",
+                                 "Impossible de reconnaître la parole : \(detail). Vous pouvez saisir le texte à la place.",
+                                 "No se pudo reconocer el habla: \(detail). Puedes escribir el texto.")
         default:
             errorMessage = Loc.t("Не удалось распознать речь. Введите текст вручную.",
                                  "Couldn't recognize speech. Type the text instead.")
@@ -164,13 +166,17 @@ public final class VoiceViewModel {
     public func submit() {
         let text = intent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        run { try await self.howToSay(text, tone: self.tone.register) }
+        let studied = StudiedLanguage.current.promptName   // variants are produced in the studied language
+        let native = TargetLanguage.current.promptName     // notes + intent normalization in native
+        run { try await self.howToSay(text, tone: self.tone.register, studiedLanguage: studied, nativeLanguage: native) }
     }
 
     public func regenerate() {
         let text = intent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        run { try await self.regenerateHowToSay(text, tone: self.tone.register) }
+        let studied = StudiedLanguage.current.promptName
+        let native = TargetLanguage.current.promptName
+        run { try await self.regenerateHowToSay(text, tone: self.tone.register, studiedLanguage: studied, nativeLanguage: native) }
     }
 
     /// One button drives both: regenerate when results are shown, otherwise generate a fresh set.

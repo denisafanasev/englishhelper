@@ -2,9 +2,10 @@
 //  InViewModel.swift
 //  EnglishHelper — Presentation
 //
-//  "In" (reverse): English voice OR typed text in any language → ONE translation into the
-//  configured target language (Russian by default). Mirrors VoiceViewModel's lifecycle but yields
-//  a single translation instead of three variants. Consumes USE CASES only.
+//  "Get it": voice OR typed text in ANY language. Translate mode renders it in the STUDIED language
+//  (card headline + TTS) plus a NATIVE translation; Explain mode renders the studied form plus an
+//  explanation written in the native language. Faithful translation only (no compose/tone).
+//  Consumes USE CASES only.
 //
 
 import Foundation
@@ -30,21 +31,21 @@ public final class InViewModel {
     public private(set) var phase: Phase = .idle
     public var mode: Mode = .translate
     public var source: String = ""                       // editable transcript / typed input
-    public private(set) var translation: String?         // Translate mode result
-    public private(set) var explanation: ExpressionExplanation?   // Explain mode result
+    public private(set) var studied: String?             // input rendered in the studied language (headline + TTS)
+    public private(set) var translation: String?         // Translate mode: native rendering (the line below)
+    public private(set) var explanation: ExpressionExplanation?   // Explain mode result (native)
     public private(set) var errorMessage: String?
     public private(set) var isOffline = false
     public private(set) var isPlaying = false
     public private(set) var isSaved = false
     public var showMicPriming = false
 
-    private var submittedSource = ""                     // source text that produced `translation`
     private var savedExpressionID: UUID?
 
     // Dependencies (use cases)
-    private let translate: any TranslateToTargetUseCase
+    private let understand: any UnderstandUseCase        // faithful translate → studied + native
     private let explain: any ExplainExpressionUseCase
-    private let voiceCapture: any VoiceCaptureUseCase    // English ASR
+    private let voiceCapture: any VoiceCaptureUseCase    // studied-language ASR
     private let pronounce: any PlayPronunciationUseCase
     private let saveExpression: any SaveExpressionUseCase
     private let studyList: any StudyListUseCase
@@ -57,7 +58,7 @@ public final class InViewModel {
     private let primingDefaultsKey = "didPrimeMic"        // shared with Out — one mic grant
 
     public init(
-        translate: any TranslateToTargetUseCase,
+        understand: any UnderstandUseCase,
         explain: any ExplainExpressionUseCase,
         voiceCapture: any VoiceCaptureUseCase,
         pronounce: any PlayPronunciationUseCase,
@@ -65,7 +66,7 @@ public final class InViewModel {
         studyList: any StudyListUseCase,
         isConfigured: Bool
     ) {
-        self.translate = translate
+        self.understand = understand
         self.explain = explain
         self.voiceCapture = voiceCapture
         self.pronounce = pronounce
@@ -80,9 +81,9 @@ public final class InViewModel {
     public var canSubmit: Bool { !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     public var needsAPIKey: Bool { !isConfigured }
 
-    /// The phrase being translated (the source) — the study card's `en` and what we play back.
-    /// We always study the source, never the translation into the user's own language.
-    public var sourceText: String { submittedSource }
+    /// The studied-language rendering — the card headline, the TTS source, and the study card's
+    /// front. We study the language being LEARNED, never the user's own language.
+    public var sourceText: String { studied ?? "" }
 
     public enum MicStatus { case idle, listening, processing }
     public var micStatus: MicStatus {
@@ -119,6 +120,7 @@ public final class InViewModel {
     private func startListening() {
         errorMessage = nil
         isOffline = false
+        studied = nil
         translation = nil
         explanation = nil
         source = ""
@@ -165,7 +167,9 @@ public final class InViewModel {
             errorMessage = Loc.t("Не расслышал. Попробуйте ещё раз.", "Didn't catch that. Try again.")
         case SpeechRecognitionError.underlying(let detail):
             errorMessage = Loc.t("Не удалось распознать речь: \(detail). Можно ввести текст вручную.",
-                                 "Couldn't recognize speech: \(detail). You can type the text instead.")
+                                 "Couldn't recognize speech: \(detail). You can type the text instead.",
+                                 "Impossible de reconnaître la parole : \(detail). Vous pouvez saisir le texte à la place.",
+                                 "No se pudo reconocer el habla: \(detail). Puedes escribir el texto.")
         default:
             errorMessage = Loc.t("Не удалось распознать речь. Введите текст вручную.",
                                  "Couldn't recognize speech. Type the text instead.")
@@ -179,8 +183,8 @@ public final class InViewModel {
     public func submit() {
         let text = source.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        let target = TargetLanguage.current
-        let tone = ToneOfVoice.current.register   // styles the composed phrase, if the model composes
+        let studiedLang = StudiedLanguage.current.promptName
+        let nativeLang = TargetLanguage.current.promptName
         let mode = self.mode
         requestTask?.cancel()
         phase = .processing
@@ -191,15 +195,16 @@ public final class InViewModel {
             do {
                 switch mode {
                 case .translate:
-                    let result = try await self.translate(text, targetLanguage: target.promptName, tone: tone)
-                    self.translation = result
+                    let result = try await self.understand(text, studiedLanguage: studiedLang, nativeLanguage: nativeLang)
+                    self.studied = result.studied         // headline + TTS
+                    self.translation = result.native      // understanding line
                     self.explanation = nil
                 case .explain:
-                    let result = try await self.explain(text, explanationLanguage: target.promptName)
+                    let result = try await self.explain(text, studiedLanguage: studiedLang, nativeLanguage: nativeLang)
+                    self.studied = result.studied
                     self.explanation = result
                     self.translation = nil
                 }
-                self.submittedSource = text
                 self.isSaved = false
                 self.savedExpressionID = nil
                 self.phase = .result
@@ -219,6 +224,7 @@ public final class InViewModel {
         if canSubmit, phase == .result || phase == .processing {
             submit()
         } else {
+            studied = nil
             translation = nil
             explanation = nil
             if phase == .result { phase = .idle }
@@ -283,7 +289,7 @@ public final class InViewModel {
     // MARK: Save / unsave (enrich-then-store)
 
     public func toggleSave() {
-        guard !submittedSource.isEmpty, translation != nil || explanation != nil else { return }
+        guard let studied, !studied.isEmpty else { return }
         if isSaved {
             isSaved = false                                  // instant UI
             let storedID = savedExpressionID
@@ -293,9 +299,9 @@ public final class InViewModel {
             }
         } else {
             isSaved = true                                   // instant UI; enrich+store in background
-            // We always study the SOURCE (what was translated/explained) — never the variant in the
-            // user's own language. In Explain mode there's no direct gloss, so enrich derives it.
-            let en = submittedSource
+            // We study the STUDIED-language rendering (the headline), with the native translation as
+            // its gloss. In Explain mode there's no direct gloss, so enrich derives it.
+            let en = studied
             let knownRU = translation
             Task { [weak self] in
                 guard let self else { return }
@@ -318,10 +324,10 @@ public final class InViewModel {
     public func reset() {
         captureTask?.cancel(); requestTask?.cancel(); playTask?.cancel()
         phase = .idle
+        studied = nil
         translation = nil
         explanation = nil
         source = ""
-        submittedSource = ""
         errorMessage = nil
         isPlaying = false
         isSaved = false

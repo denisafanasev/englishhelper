@@ -13,6 +13,7 @@ public struct SettingsView: View {
     @State private var model: SettingsViewModel
     private let theme: ThemeStore
     private let language: LanguageStore
+    private let studied: StudiedLanguageStore
     private let target: TargetLanguageStore
     private let onClose: () -> Void
 
@@ -20,12 +21,14 @@ public struct SettingsView: View {
         model: SettingsViewModel,
         theme: ThemeStore,
         language: LanguageStore,
+        studied: StudiedLanguageStore,
         target: TargetLanguageStore,
         onClose: @escaping () -> Void
     ) {
         _model = State(initialValue: model)
         self.theme = theme
         self.language = language
+        self.studied = studied
         self.target = target
         self.onClose = onClose
     }
@@ -33,6 +36,7 @@ public struct SettingsView: View {
     public var body: some View {
         @Bindable var theme = theme
         @Bindable var language = language
+        @Bindable var studied = studied
         @Bindable var target = target
         NavigationStack {
             ZStack {
@@ -41,6 +45,7 @@ public struct SettingsView: View {
                     VStack(spacing: Tokens.Space.s20) {
                         connectionCard
                         languageCard(language: $language.language)
+                        studiedCard(studied: $studied.language)
                         targetCard(target: $target.language)
                         themeCard(theme: $theme.preference)
                         infoCard
@@ -116,29 +121,56 @@ public struct SettingsView: View {
     private func languageCard(language: Binding<AppLanguage>) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s12) {
             sectionTitle(Loc.t("Язык интерфейса", "Interface language"))
-            Picker(Loc.t("Язык интерфейса", "Interface language"), selection: language) {
-                ForEach(AppLanguage.allCases, id: \.self) { option in
-                    Text(option.title).tag(option)
-                }
-            }
-            .pickerStyle(.segmented)
+            // SegmentedSelector reads `selected:` as a VALUE (not just a binding), so this view
+            // takes a real dependency on the interface language — tapping a segment re-runs the
+            // whole sheet's `Loc.t(...)` immediately, switching the interface live.
+            SegmentedSelector(
+                AppLanguage.allCases,
+                selected: language.wrappedValue,
+                label: { $0.abbreviation },
+                onSelect: { language.wrappedValue = $0 }
+            )
+            .accessibilityLabel(Loc.t("Язык интерфейса", "Interface language"))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Tokens.Space.s16)
         .glassPanel(cornerRadius: Tokens.Radius.card)
     }
 
-    // MARK: Native language (the "Понять"/Get screen translates & explains into this)
+    // MARK: Studied language (the language being learned — card headlines + all speech use it)
+
+    private func studiedCard(studied: Binding<StudiedLanguage>) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.s12) {
+            sectionTitle(Loc.t("Изучаемый язык", "Studied language"))
+            SegmentedSelector(
+                StudiedLanguage.allCases,
+                selected: studied.wrappedValue,
+                label: { $0.abbreviation },
+                onSelect: { studied.wrappedValue = $0 }
+            )
+            .accessibilityLabel(Loc.t("Изучаемый язык", "Studied language"))
+            Text(Loc.t("Язык, который вы учите. На нём показываются фразы и работает озвучка.",
+                       "The language you're learning. Phrases are shown in it and all speech uses it."))
+                .textStyle(Tokens.Text.footnote)
+                .foregroundStyle(Tokens.Content.tertiary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Tokens.Space.s16)
+        .glassPanel(cornerRadius: Tokens.Radius.card)
+    }
+
+    // MARK: Native language (final translations + explanations are produced in this language)
 
     private func targetCard(target: Binding<TargetLanguage>) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s12) {
             sectionTitle(Loc.t("Родной язык", "Native language"))
-            Picker(Loc.t("Родной язык", "Native language"), selection: target) {
-                ForEach(TargetLanguage.allCases, id: \.self) { option in
-                    Text(option.title).tag(option)
-                }
-            }
-            .pickerStyle(.segmented)
+            SegmentedSelector(
+                TargetLanguage.allCases,
+                selected: target.wrappedValue,
+                label: { $0.abbreviation },
+                onSelect: { target.wrappedValue = $0 }
+            )
+            .accessibilityLabel(Loc.t("Родной язык", "Native language"))
             Text(Loc.t("Язык переводов и объяснений на экране «Понять».",
                        "The language of translations and explanations on the Get it screen."))
                 .textStyle(Tokens.Text.footnote)
@@ -175,7 +207,7 @@ public struct SettingsView: View {
             Divider().overlay(Tokens.Hairline.default)
             infoRow(Loc.t("Модель", "Model"), model.modelName)
             Divider().overlay(Tokens.Hairline.default)
-            infoRow(Loc.t("Голос озвучки", "Speech voice"), model.voiceLanguage)
+            infoRow(Loc.t("Голос озвучки", "Speech voice"), studied.language.title)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Tokens.Space.s16)

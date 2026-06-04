@@ -26,19 +26,36 @@ public struct HowToSayResult: Codable, Sendable, Equatable {
     public let variants: [PhraseVariant]
 }
 
-/// `{ meaning, register, context, analogy }` — a learner-facing explanation of an English
-/// expression, written in the user's NATIVE language (not a translation).
+/// `{ studied, native }` — a faithful rendering of the input in BOTH the studied language (the
+/// card headline + TTS) and the native language (the understanding line). "Get it" / Translate.
+public struct Understanding: Codable, Sendable, Equatable {
+    /// The input rendered in the STUDIED language (headline + spoken).
+    public let studied: String
+    /// The input rendered in the NATIVE language (the understanding line).
+    public let native: String
+    public init(studied: String, native: String) {
+        self.studied = studied
+        self.native = native
+    }
+}
+
+/// `{ studied, meaning, register, context, analogy }` — a learner-facing explanation of an
+/// expression. `studied` is the expression in the STUDIED language (headline + TTS); the rest are
+/// written in the user's NATIVE language (not a translation).
 public struct ExpressionExplanation: Codable, Sendable, Equatable {
+    /// The expression rendered in the STUDIED language (headline + spoken).
+    public let studied: String
     /// What the expression actually means / what is implied.
     public let meaning: String
     /// Tone of voice + how formal, casual, slangy, rude or offensive it is, and who says it to whom.
     public let register: String
-    /// How it lands in an English-speaking culture — when and where it's used.
+    /// How it lands in the studied-language culture — when and where it's used.
     public let context: String
-    /// A comparison to an equivalent in the learner's own language/culture.
+    /// A comparison to an equivalent in the learner's own (native) language/culture.
     public let analogy: String
 
-    public init(meaning: String, register: String, context: String, analogy: String) {
+    public init(studied: String, meaning: String, register: String, context: String, analogy: String) {
+        self.studied = studied
         self.meaning = meaning
         self.register = register
         self.context = context
@@ -79,15 +96,24 @@ public struct HowToSayTemplate: PromptTemplate {
 
     public let id = "howToSay"
     public let tone: Register
-    public init(tone: Register = .casual) { self.tone = tone }
+    public let studiedLanguage: String   // the language being learned — the variants are in THIS language
+    public let nativeLanguage: String    // the learner's own language — the notes are in THIS language
+    public init(tone: Register = .casual, studiedLanguage: String = "English", nativeLanguage: String = "Russian") {
+        self.tone = tone
+        self.studiedLanguage = studiedLanguage
+        self.nativeLanguage = nativeLanguage
+    }
 
     public var systemPrompt: String {
         """
-        You help a Russian speaker say something naturally in English.
-        Given a Russian intent, return EXACTLY THREE English variants, all in a \(toneHint) tone,
+        You help a \(nativeLanguage) speaker who is learning \(studiedLanguage) say something naturally
+        in \(studiedLanguage). The input may be written in \(nativeLanguage), in \(studiedLanguage), or
+        in ANY other language — detect it and understand the intended meaning (interpret the intent as
+        if expressed in \(nativeLanguage) first).
+        Then return EXACTLY THREE \(studiedLanguage) variants of that intent, all in a \(toneHint) tone,
         each a DIFFERENT natural phrasing.
-        Each variant has: "en" (the English phrasing), "register" (use "\(toneRegister)"),
-        and "context_ru" (one short Russian note on when/why to use it).
+        Each variant has: "en" (the \(studiedLanguage) phrasing), "register" (use "\(toneRegister)"),
+        and "context_ru" (one short note IN \(nativeLanguage) on when/why to use it).
         Do not output more or fewer than three. \(plainTextRule)
         """
     }
@@ -220,26 +246,30 @@ public struct ExplainExpressionTemplate: PromptTemplate {
     public typealias Output = ExpressionExplanation
 
     public let id = "explainExpression"
-    public let explanationLanguage: String   // the user's native language, e.g. "Russian"
-    public init(explanationLanguage: String) {
-        self.explanationLanguage = explanationLanguage
+    public let studiedLanguage: String   // the language being learned (the "studied" headline)
+    public let nativeLanguage: String    // the explanation is written in THIS language
+    public init(studiedLanguage: String = "English", nativeLanguage: String = "Russian") {
+        self.studiedLanguage = studiedLanguage
+        self.nativeLanguage = nativeLanguage
     }
 
     public var systemPrompt: String {
         """
-        You explain an English word, phrase, or expression to a native \(explanationLanguage) speaker
-        who is learning English. Write EVERY field in \(explanationLanguage), in clear, friendly
-        language a non-native speaker understands. Explain the nuance — do NOT just translate it.
+        A \(nativeLanguage) speaker who is learning \(studiedLanguage) wants to understand an expression.
+        The input may be in \(studiedLanguage), in \(nativeLanguage), or in ANY other language — detect it.
+        First render the expression in \(studiedLanguage) in the field "studied" (if it is already in
+        \(studiedLanguage), copy it verbatim). Then EXPLAIN that \(studiedLanguage) expression to the
+        \(nativeLanguage) speaker. Write meaning/register/context/analogy in \(nativeLanguage), in clear,
+        friendly language. Explain the nuance — do NOT just translate.
 
-        Return four fields:
-        - "meaning": what the expression actually means and what is implied — the real sense, not a
-          word-for-word translation.
-        - "register": the tone of voice and how formal, neutral, casual, slangy, rude, or offensive
-          it is, and who would say it to whom in which situations.
-        - "context": what it signals in an English-speaking culture — when and where it is used and
-          how it tends to land on a listener.
-        - "analogy": a comparison to an equivalent expression or situation in the
-          \(explanationLanguage)-speaking culture, so the learner can map it onto something familiar.
+        Return:
+        - "studied": the expression in \(studiedLanguage).
+        - "meaning": what it actually means and what is implied — the real sense, not a literal translation.
+        - "register": the tone of voice and how formal, neutral, casual, slangy, rude, or offensive it
+          is, and who would say it to whom in which situations.
+        - "context": what it signals in \(studiedLanguage)-speaking culture — when and where it is used.
+        - "analogy": a comparison to an equivalent expression or situation in \(nativeLanguage)-speaking
+          culture, so the learner can map it onto something familiar.
 
         If the input is a single neutral word, still describe its connotations and typical usage.
         \(plainTextRule)
@@ -248,9 +278,9 @@ public struct ExplainExpressionTemplate: PromptTemplate {
 
     public var outputJSONSchema: String {
         """
-        {"type":"object","properties":{"meaning":{"type":"string"},"register":{"type":"string"},
-        "context":{"type":"string"},"analogy":{"type":"string"}},
-        "required":["meaning","register","context","analogy"]}
+        {"type":"object","properties":{"studied":{"type":"string"},"meaning":{"type":"string"},
+        "register":{"type":"string"},"context":{"type":"string"},"analogy":{"type":"string"}},
+        "required":["studied","meaning","register","context","analogy"]}
         """
     }
 
@@ -259,11 +289,58 @@ public struct ExplainExpressionTemplate: PromptTemplate {
     public func decode(_ rawJSON: String) throws -> ExpressionExplanation {
         let raw = try decodeJSON(ExpressionExplanation.self, from: rawJSON)
         return ExpressionExplanation(
+            studied: PlainText.clean(raw.studied),
             meaning: PlainText.clean(raw.meaning),
             register: PlainText.clean(raw.register),
             context: PlainText.clean(raw.context),
             analogy: PlainText.clean(raw.analogy)
         )
+    }
+}
+
+// MARK: - understand ("Понять"/Get, Translate mode — faithful, into studied + native)
+
+/// Faithful translation of input (ANY language) into BOTH the studied language (headline + TTS) and
+/// the native language (understanding line). No composing, no tone — pure translation, source
+/// auto-detected. Each rendering is translated from the ORIGINAL (never chained); when the input is
+/// already in a target language, that field is the input verbatim.
+public struct UnderstandTemplate: PromptTemplate {
+    public typealias Input = String
+    public typealias Output = Understanding
+
+    public let id = "understand"
+    public let studiedLanguage: String
+    public let nativeLanguage: String
+    public init(studiedLanguage: String = "English", nativeLanguage: String = "Russian") {
+        self.studiedLanguage = studiedLanguage
+        self.nativeLanguage = nativeLanguage
+    }
+
+    public var systemPrompt: String {
+        """
+        The user wants to understand some text. It may be in \(studiedLanguage), in \(nativeLanguage),
+        or in ANY other language — detect the source language automatically. Provide a FAITHFUL
+        translation that preserves the exact meaning and register; do NOT compose, embellish, add
+        commentary, or change the register.
+        Return TWO fields, each translated independently from the ORIGINAL text (never translate one
+        translation into another):
+        - "studied": the text in \(studiedLanguage) (if the input is already in \(studiedLanguage),
+          copy it verbatim).
+        - "native": the text in \(nativeLanguage) (if the input is already in \(nativeLanguage),
+          copy it verbatim).
+        \(plainTextRule)
+        """
+    }
+
+    public var outputJSONSchema: String {
+        #"{"type":"object","properties":{"studied":{"type":"string"},"native":{"type":"string"}},"required":["studied","native"]}"#
+    }
+
+    public func userMessage(for input: String) -> String { input }
+
+    public func decode(_ rawJSON: String) throws -> Understanding {
+        let raw = try decodeJSON(Understanding.self, from: rawJSON)
+        return Understanding(studied: PlainText.clean(raw.studied), native: PlainText.clean(raw.native))
     }
 }
 
@@ -281,15 +358,25 @@ public struct PhotoBlocksTemplate: PromptTemplate {
     public typealias Output = PhotoBlocksResult
 
     public let id = "photoBlocks"
-    public init() {}
+    public let studiedLanguage: String   // each block is rendered in THIS language as "en" (headline + TTS)
+    public let nativeLanguage: String    // ...and in THIS language as "ru" (understanding line)
+    public init(studiedLanguage: String = "English", nativeLanguage: String = "Russian") {
+        self.studiedLanguage = studiedLanguage
+        self.nativeLanguage = nativeLanguage
+    }
 
     public var systemPrompt: String {
         """
-        You read English text from a photo. Group the text into BLOCKS of connected meaning — decide
-        how many blocks yourself (e.g. a sign, a paragraph, one menu item). For each block return the
-        English text in "en" and a natural Russian translation in "ru". Ignore decorative noise and
-        anything that isn't English text; if there is no English text, return an empty "blocks" array.
-        \(plainTextRule)
+        You read text from a photo. The text may be in ANY language. Group it into BLOCKS of connected
+        meaning — decide how many blocks yourself (e.g. a sign, a paragraph, one menu item) and detect
+        each block's language. For each block return:
+        - "en": the block rendered in \(studiedLanguage) (if the block is already in \(studiedLanguage),
+          copy it verbatim).
+        - "ru": the block rendered in \(nativeLanguage) (if the block is already in \(nativeLanguage),
+          copy it verbatim).
+        Translate each rendering from the ORIGINAL block text (do not chain translations). Ignore
+        decorative noise, logos, and fragments that are only numbers or symbols; if there is no
+        readable text, return an empty "blocks" array. \(plainTextRule)
         """
     }
 
@@ -302,7 +389,7 @@ public struct PhotoBlocksTemplate: PromptTemplate {
     }
 
     public func userMessage(for input: RecognizableImage) -> String {
-        "Извлеки блоки английского текста с изображения и переведи каждый блок на русский."
+        "Read the text blocks from the image; render each in \(studiedLanguage) as \"en\" and in \(nativeLanguage) as \"ru\"."
     }
 
     public func image(for input: RecognizableImage) -> Data? { input.data }

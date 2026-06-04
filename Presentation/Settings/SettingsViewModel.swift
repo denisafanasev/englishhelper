@@ -14,20 +14,17 @@ public final class SettingsViewModel {
     public private(set) var health: Health = .checking
     public let appVersion: String
     public let modelName: String
-    public let voiceLanguage: String
 
     private let connectionHealth: any ConnectionHealthUseCase
 
     public init(
         connectionHealth: any ConnectionHealthUseCase,
         appVersion: String,
-        modelName: String,
-        voiceLanguage: String = "English (US)"
+        modelName: String
     ) {
         self.connectionHealth = connectionHealth
         self.appVersion = appVersion
         self.modelName = modelName
-        self.voiceLanguage = voiceLanguage
     }
 
     public func check() async {

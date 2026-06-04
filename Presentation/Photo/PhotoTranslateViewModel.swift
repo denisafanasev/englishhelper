@@ -94,10 +94,12 @@ public final class PhotoTranslateViewModel {
         errorMessage = nil
         isOffline = false
         phase = .processing
+        let studied = StudiedLanguage.current.promptName   // blocks rendered in studied (headline + TTS)
+        let native = TargetLanguage.current.promptName     // ...and in native (the understanding line)
         requestTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let result = try await self.photoTranslate(RecognizableImage(data: data))
+                let result = try await self.photoTranslate(RecognizableImage(data: data), studiedLanguage: studied, nativeLanguage: native)
                 self.blocks = result
                 self.phase = .result
             } catch is CancellationError {

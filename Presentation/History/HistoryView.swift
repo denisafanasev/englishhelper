@@ -122,6 +122,21 @@ private struct HistoryDetailView: View {
                     Text(entry.inputText)
                         .textStyle(Tokens.Text.body)
                         .foregroundStyle(Tokens.Content.primary)
+                    // For translate/photo the request text IS the studied-language rendering, so its
+                    // playback (in the studied voice) belongs here, not on the native translation card.
+                    if isPlayableSource {
+                        Button(action: model.playTranslationSource) {
+                            Label(
+                                model.isPlaying(HistoryDetailViewModel.translationKey) ? Loc.t("Озвучивается…", "Playing…") : Loc.t("Озвучить", "Play"),
+                                systemImage: model.isPlaying(HistoryDetailViewModel.translationKey) ? "speaker.wave.2.fill" : "speaker.wave.2"
+                            )
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Tokens.Content.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(Loc.t("Озвучить", "Play"))
+                        .padding(.top, Tokens.Space.s4)
+                    }
                 }
 
                 resultSection
@@ -169,21 +184,19 @@ private struct HistoryDetailView: View {
                 Text(ru)
                     .textStyle(Tokens.Text.title3)
                     .foregroundStyle(Tokens.Content.primary)
-
-                Button(action: model.playTranslationSource) {
-                    Label(
-                        model.isPlaying(HistoryDetailViewModel.translationKey) ? Loc.t("Озвучивается…", "Playing…") : Loc.t("Озвучить оригинал", "Play original"),
-                        systemImage: model.isPlaying(HistoryDetailViewModel.translationKey) ? "speaker.wave.2.fill" : "speaker.wave.2"
-                    )
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Tokens.Content.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Loc.t("Озвучить английский оригинал", "Play the English original"))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(Tokens.Space.s16)
             .glassPanel(cornerRadius: Tokens.Radius.card)
+        }
+    }
+
+    /// Translate / photo requests store the studied-language rendering as the request text, so it's
+    /// playable (in the studied voice). A how-to-say request is a raw intent — not played.
+    private var isPlayableSource: Bool {
+        switch entry.kind {
+        case .translate, .photoTranslate: true
+        case .howToSay: false
         }
     }
 

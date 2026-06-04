@@ -21,7 +21,7 @@ import Presentation
     ) -> InViewModel {
         let history = MockHistoryRepository()
         return InViewModel(
-            translate: TranslateToTargetInteractor(llm: llm, history: history),
+            understand: UnderstandInteractor(llm: llm, history: history),
             explain: ExplainExpressionInteractor(llm: llm),
             voiceCapture: VoiceCaptureInteractor(recognizer: MockSpeechRecognizing()),
             pronounce: PlayPronunciationInteractor(synthesizer: MockSpeechSynthesizing()),
@@ -42,22 +42,23 @@ import Presentation
         }
     }
 
-    @Test func submitProducesSingleTranslation() async throws {
+    @Test func submitProducesStudiedAndNative() async throws {
         UserDefaults.standard.set("russian", forKey: "targetLanguage")
+        UserDefaults.standard.set("english", forKey: "studiedLanguage")
         let vm = makeVM()
         vm.source = "Could you give me a hand?"
         vm.submit()
         try await waitUntil { vm.phase == .result }
         #expect(vm.phase == .result)
-        #expect(vm.translation == "Это тестовый перевод.")
+        #expect(vm.studied == "Could you give me a hand?")   // headline = studied rendering
+        #expect(vm.translation == "Это тестовый перевод.")    // understanding line = native
     }
 
-    @Test func translateTemplateOffersTranslateAndCompose() {
-        let prompt = TranslateToTargetTemplate(targetLanguage: "Russian", tone: .formal).systemPrompt
-        #expect(prompt.contains("Russian"))          // target language is injected
-        #expect(prompt.contains("Translate"))         // mode 1: faithful translation
-        #expect(prompt.contains("Compose"))           // mode 2: compose from an instruction
-        #expect(prompt.contains("formal"))            // tone of voice is applied to composing
+    @Test func understandTemplateIsFaithfulStudiedPlusNative() {
+        let prompt = UnderstandTemplate(studiedLanguage: "English", nativeLanguage: "Russian").systemPrompt
+        #expect(prompt.contains("English"))    // studied rendering
+        #expect(prompt.contains("Russian"))    // native rendering
+        #expect(prompt.contains("FAITHFUL"))   // faithful translation only (no compose/tone)
     }
 
     @Test func secondTapStopsPlayback() async throws {
@@ -82,19 +83,20 @@ import Presentation
         #expect(vm.isOffline)
     }
 
-    @Test func saveFilesEnglishSourceAsCard() async throws {
+    /// The study card front is the STUDIED-language rendering (what you're learning), never the raw
+    /// input or the native translation.
+    @Test func saveStudiesTheStudiedRendering() async throws {
         UserDefaults.standard.set("russian", forKey: "targetLanguage")
+        UserDefaults.standard.set("english", forKey: "studiedLanguage")
         let repo = MockExpressionRepository(seed: [])
         let vm = makeVM(repo: repo)
-        vm.source = "Could you give me a hand?"
+        vm.source = "Bonjour le monde"          // a non-studied input; studied rendering is what we save
         vm.submit()
         try await waitUntil { vm.phase == .result }
 
         vm.toggleSave()
         #expect(vm.isSaved)   // optimistic flag flips instantly
 
-        // With target = Russian, the English source is the study card's `en` — wait for the
-        // background enrich+store to land in the repository.
         let list = StudyListInteractor(repository: repo)
         var stored: [Domain.Expression] = []
         let clock = ContinuousClock(); let start = clock.now
@@ -103,31 +105,10 @@ import Presentation
             try await Task.sleep(for: .milliseconds(10))
             stored = (try? await list.list()) ?? []
         }
+        // Front = the studied rendering (mock "Could you give me a hand?") — NOT the raw input
+        // "Bonjour le monde" nor the native gloss "Это тестовый перевод.".
         #expect(stored.contains { $0.en == "Could you give me a hand?" })
-    }
-
-    /// The study card is ALWAYS the source (what was translated), never the user's-language result —
-    /// even when the target language is English.
-    @Test func saveFilesSourceRegardlessOfTarget() async throws {
-        UserDefaults.standard.set("english", forKey: "targetLanguage")
-        defer { UserDefaults.standard.set("russian", forKey: "targetLanguage") }
-        let repo = MockExpressionRepository(seed: [])
-        let vm = makeVM(repo: repo)
-        vm.source = "Bonjour le monde"          // a non-English source; translation would be English
-        vm.submit()
-        try await waitUntil { vm.phase == .result }
-
-        vm.toggleSave()
-        let list = StudyListInteractor(repository: repo)
-        var stored: [Domain.Expression] = []
-        let clock = ContinuousClock(); let start = clock.now
-        while !stored.contains(where: { $0.en == "Bonjour le monde" }) {
-            if clock.now - start > .seconds(2) { break }
-            try await Task.sleep(for: .milliseconds(10))
-            stored = (try? await list.list()) ?? []
-        }
-        // The source is filed as `en` — NOT the translation "Это тестовый перевод.".
-        #expect(stored.contains { $0.en == "Bonjour le monde" })
+        #expect(!stored.contains { $0.en == "Bonjour le monde" })
         #expect(!stored.contains { $0.en == "Это тестовый перевод." })
     }
 
@@ -147,8 +128,10 @@ import Presentation
     }
 
     @Test func explainTemplateTargetsNativeLanguageAndNuance() {
-        let prompt = ExplainExpressionTemplate(explanationLanguage: "Russian").systemPrompt
-        #expect(prompt.contains("Russian"))     // the native language is injected
+        let prompt = ExplainExpressionTemplate(studiedLanguage: "English", nativeLanguage: "Russian").systemPrompt
+        #expect(prompt.contains("Russian"))     // explanation is written in the native language
+        #expect(prompt.contains("English"))     // ...about the studied-language rendering
+        #expect(prompt.contains("studied"))     // returns the studied form for the headline
         #expect(prompt.contains("meaning"))     // facet: what it means
         #expect(prompt.contains("register"))    // facet: tone / formality / offensiveness
         #expect(prompt.contains("analogy"))     // facet: native-culture analogy

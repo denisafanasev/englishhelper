@@ -2,8 +2,9 @@
 //  NativeSpeechSynthesizer.swift
 //  EnglishHelper — Data (adapter for SpeechSynthesizing)
 //
-//  AVSpeechSynthesizer, English. Reports playback state and supports stop via stream cancellation.
-//  The port assumes nothing on-device: a streamed-chunk cloud TTS can satisfy it unchanged.
+//  AVSpeechSynthesizer. Speaks in the configured locale (the STUDIED language); reports playback
+//  state and supports stop via stream cancellation. The port assumes nothing on-device: a
+//  streamed-chunk cloud TTS can satisfy it unchanged.
 //
 
 import Foundation
@@ -11,11 +12,17 @@ import AVFoundation
 import Domain
 
 public final class NativeSpeechSynthesizer: SpeechSynthesizing, @unchecked Sendable {
-    private let voiceLanguage: String
-    public init(voiceLanguage: String = "en-US") { self.voiceLanguage = voiceLanguage }
+    private let localeProvider: @Sendable () -> String
+
+    /// Fixed-voice synthesizer (e.g. tests).
+    public init(voiceLanguage: String = "en-US") { self.localeProvider = { voiceLanguage } }
+
+    /// Dynamic-voice synthesizer: the voice locale is resolved per utterance, so TTS follows the
+    /// user's currently-selected STUDIED language.
+    public init(localeProvider: @escaping @Sendable () -> String) { self.localeProvider = localeProvider }
 
     public func speak(_ text: String) -> AsyncThrowingStream<SpeechPlaybackState, Error> {
-        let language = voiceLanguage
+        let language = localeProvider()
         return AsyncThrowingStream { continuation in
             nonisolated(unsafe) let synthesizer = AVSpeechSynthesizer()   // AVSpeechSynthesizer isn't Sendable
             let delegate = SynthesisDelegate(

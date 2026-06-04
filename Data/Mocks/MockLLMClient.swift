@@ -33,9 +33,12 @@ public final class MockLLMClient: LLMClient {
             return #"{"ru":"Это тестовый перевод."}"#
         case "translateToTarget":
             return #"{"translation":"Это тестовый перевод."}"#
+        case "understand":
+            return #"{"studied":"Could you give me a hand?","native":"Это тестовый перевод."}"#
         case "explainExpression":
             return """
-            {"meaning":"Просьба помочь с чем-то конкретным.",
+            {"studied":"give me a hand",
+             "meaning":"Просьба помочь с чем-то конкретным.",
              "register":"Нейтрально-вежливый тон, уместен почти везде.",
              "context":"Так обычно просят о небольшой помощи у коллег или знакомых.",
              "analogy":"По-русски это как сказать «выручи меня» — лёгкая дружелюбная просьба."}

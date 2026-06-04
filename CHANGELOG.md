@@ -2,6 +2,27 @@
 
 Release notes for EnglishHelper, written for the people who use it.
 
+## 1.2.0 — 2026-06-04
+
+**Learn any of four languages.** EnglishHelper is no longer English-only. In Settings, pick the
+language you're **learning** — **English, Russian, French, or Spanish**. Every screen now works in
+that language: it's what you see on the cards, save to your list, and hear spoken aloud.
+
+**Your language, your way.** Separately choose your **native language** (English, Russian, French,
+or Spanish). All translations and explanations come back in it.
+
+**Bring text in any language.** Type, dictate, or photograph something in *any* language and the app
+figures it out:
+- **See it** — snap a sign or menu in any language; read it in the language you're learning, with a
+  translation you understand.
+- **Say it** — say what you mean in any language; get natural phrasings in the language you're
+  learning, with notes in your own.
+- **Get it** — paste anything; see and hear it in the language you're learning, understand it in
+  your own, and (in Explain mode) get the nuance with a familiar comparison.
+
+**App in four languages.** The interface itself is now available in **French** and **Spanish**,
+alongside Russian and English — switch any time in Settings and it changes instantly.
+
 ## 1.1.0 — 2026-06-03
 
 **Explain any English expression.** The "Get it" screen now has two modes. Keep using
