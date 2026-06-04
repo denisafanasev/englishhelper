@@ -87,10 +87,7 @@ private struct HistoryRow: View {
             }
 
             Spacer(minLength: Tokens.Space.s8)
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Tokens.Content.quaternary)
+            // No in-card chevron — the NavigationLink already shows the system disclosure arrow.
         }
         .padding(Tokens.Space.s16)
         .glassPanel(cornerRadius: Tokens.Radius.card)
@@ -104,6 +101,7 @@ private struct HistoryRow: View {
 
 private struct HistoryDetailView: View {
     @State private var model: HistoryDetailViewModel
+    @Environment(AppUIState.self) private var ui
 
     init(model: HistoryDetailViewModel) {
         _model = State(initialValue: model)
@@ -123,18 +121,29 @@ private struct HistoryDetailView: View {
                         .textStyle(Tokens.Text.body)
                         .foregroundStyle(Tokens.Content.primary)
                     // For translate/photo the request text IS the studied-language rendering, so its
-                    // playback (in the studied voice) belongs here, not on the native translation card.
+                    // playback (in the studied voice) and explanation belong here.
                     if isPlayableSource {
-                        Button(action: model.playTranslationSource) {
-                            Label(
-                                model.isPlaying(HistoryDetailViewModel.translationKey) ? Loc.t("Озвучивается…", "Playing…") : Loc.t("Озвучить", "Play"),
-                                systemImage: model.isPlaying(HistoryDetailViewModel.translationKey) ? "speaker.wave.2.fill" : "speaker.wave.2"
-                            )
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Tokens.Content.secondary)
+                        HStack(spacing: Tokens.Space.s20) {
+                            Button(action: model.playTranslationSource) {
+                                Label(
+                                    model.isPlaying(HistoryDetailViewModel.translationKey) ? Loc.t("Озвучивается…", "Playing…") : Loc.t("Озвучить", "Play"),
+                                    systemImage: model.isPlaying(HistoryDetailViewModel.translationKey) ? "speaker.wave.2.fill" : "speaker.wave.2"
+                                )
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(Tokens.Content.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(Loc.t("Озвучить", "Play"))
+
+                            // Explain the studied-language request → open Get it in Explain mode.
+                            Button { ui.pendingExplain = ExplainRequest(text: entry.inputText) } label: {
+                                Label(Loc.t("Объяснить", "Explain"), systemImage: "lightbulb")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(Tokens.Content.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(Loc.t("Объяснить", "Explain"))
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(Loc.t("Озвучить", "Play"))
                         .padding(.top, Tokens.Space.s4)
                     }
                 }
@@ -220,6 +229,8 @@ private struct HistoryDetailView: View {
         Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.clearError() } })
     }
 
+    /// The REQUEST block. Rendered as a FLAT, recessed tonal card (no glass blur, no stroke) so it
+    /// reads as the quiet "what you asked" — visually distinct from the raised glass result cards.
     private func labeledCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s8) {
             sectionTitle(title)
@@ -227,7 +238,14 @@ private struct HistoryDetailView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Tokens.Space.s16)
-        .glassPanel(cornerRadius: Tokens.Radius.card)
+        .background(
+            RoundedRectangle(cornerRadius: Tokens.Radius.card, style: .continuous)
+                .fill(Color(light: Color(hex: 0xE4E4EA), dark: .white.opacity(0.10)))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Tokens.Radius.card, style: .continuous)
+                .strokeBorder(Tokens.Glass.border, lineWidth: Tokens.Hairline.width)
+        )
     }
 }
 

@@ -26,8 +26,8 @@ settings:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
     IPHONEOS_DEPLOYMENT_TARGET: "26.0"
-    MARKETING_VERSION: "1.2.0"
-    CURRENT_PROJECT_VERSION: "3"
+    MARKETING_VERSION: "1.2.1"
+    CURRENT_PROJECT_VERSION: "4"
     # Frameworks let Xcode synthesize their Info.plist; the app overrides with an explicit file.
     GENERATE_INFOPLIST_FILE: "YES"
 

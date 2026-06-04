@@ -75,10 +75,24 @@ public final class ThemeStore {
     }
 }
 
+/// A request to open the "Понять"/Get it screen in Explain mode for a specific phrase. Used to route
+/// the "Explain" action from See it / History straight to the real Get it screen (no extra sheet),
+/// optionally carrying a photo as visual context (from See it).
+public struct ExplainRequest: Equatable, Sendable {
+    public let text: String
+    public let imageData: Data?
+    public init(text: String, imageData: Data? = nil) {
+        self.text = text
+        self.imageData = imageData
+    }
+}
+
 @MainActor
 @Observable
 public final class AppUIState {
     public var showSettings = false
+    /// Set to route to Get it (Explain mode) with this phrase; RootView consumes it and clears it.
+    public var pendingExplain: ExplainRequest?
     public init() {}
 }
 

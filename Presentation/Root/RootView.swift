@@ -48,13 +48,13 @@ public struct RootView: View {
             Tab(Loc.t("Изучаю", "Study"), systemImage: "rectangle.stack", value: "library") {
                 StudyListView(model: library)
             }
-            Tab(Loc.t("Смотреть", "See"), systemImage: "camera", value: "camera") {
+            Tab(Loc.t("Смотреть", "See it"), systemImage: "camera", value: "camera") {
                 PhotoTranslateView(model: photo)
             }
-            Tab(Loc.t("Сказать", "Say"), systemImage: "mic.fill", value: "out") {
+            Tab(Loc.t("Сказать", "Say it"), systemImage: "mic.fill", value: "out") {
                 VoiceView(model: out)
             }
-            Tab(Loc.t("Понять", "Get"), systemImage: "character.bubble", value: "in") {
+            Tab(Loc.t("Понять", "Get it"), systemImage: "character.bubble", value: "in") {
                 InView(model: inbound)
             }
             Tab(Loc.t("История", "History"), systemImage: "clock.arrow.circlepath", value: "history") {
@@ -68,6 +68,13 @@ public struct RootView: View {
         .environment(ui)
         .environment(\.locale, language.locale)
         .preferredColorScheme(theme.colorScheme)
+        // "Explain" from See it / History routes here: switch to Get it and run it in Explain mode.
+        .onChange(of: ui.pendingExplain) { _, request in
+            guard let request else { return }
+            selection = "in"
+            inbound.startExplain(text: request.text, image: request.imageData)
+            ui.pendingExplain = nil
+        }
         .sheet(isPresented: $ui.showSettings) {
             SettingsView(model: settings, theme: theme, language: language, studied: studied, target: target) {
                 ui.showSettings = false

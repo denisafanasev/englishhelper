@@ -241,8 +241,21 @@ public struct TranslateToTargetTemplate: PromptTemplate {
 /// An English word/phrase → a structured explanation in the learner's NATIVE language: what it
 /// means, its tone/register, how it lands in an English-speaking culture, and an analogy to the
 /// learner's own language. For understanding nuance, NOT translating.
+///
+/// Input carries the expression plus an OPTIONAL photo: when explaining a block recognized from a
+/// photo (the "See it" screen), the image is attached so the explanation reflects where the text
+/// actually appears (a sign, menu, screenshot, post, …).
+public struct ExplainInput: Sendable, Equatable {
+    public let text: String
+    public let image: Data?
+    public init(text: String, image: Data? = nil) {
+        self.text = text
+        self.image = image
+    }
+}
+
 public struct ExplainExpressionTemplate: PromptTemplate {
-    public typealias Input = String
+    public typealias Input = ExplainInput
     public typealias Output = ExpressionExplanation
 
     public let id = "explainExpression"
@@ -257,7 +270,8 @@ public struct ExplainExpressionTemplate: PromptTemplate {
         """
         A \(nativeLanguage) speaker who is learning \(studiedLanguage) wants to understand an expression.
         Detect the input language (it may be in \(studiedLanguage), in \(nativeLanguage), or in any
-        other language).
+        other language). If a photo is attached, it shows where this expression appears (a sign, menu,
+        screen, post, …) — use that visual context so the explanation fits that specific situation.
 
         LANGUAGE RULES (critical):
         - The "studied" field is in \(studiedLanguage) (the expression itself).
@@ -290,7 +304,9 @@ public struct ExplainExpressionTemplate: PromptTemplate {
         """
     }
 
-    public func userMessage(for input: String) -> String { input }
+    public func userMessage(for input: ExplainInput) -> String { input.text }
+
+    public func image(for input: ExplainInput) -> Data? { input.image }
 
     public func decode(_ rawJSON: String) throws -> ExpressionExplanation {
         let raw = try decodeJSON(ExpressionExplanation.self, from: rawJSON)

@@ -154,7 +154,8 @@ public enum Tokens {
         /// `--glass-strong` tint  ·  theme.css:27 / theme.css:62
         public static let tintStrong = Color(light: .white.opacity(0.80), dark: Color(hex: 0x141416, opacity: 0.66))
         /// Glass edge hairline. `--glass-border`  ·  theme.css:28 / theme.css:63
-        public static let border = Color(light: .black.opacity(0.06), dark: .white.opacity(0.14))
+        /// (Light bumped from 0.06 → a defined gray: cards were nearly invisible on the light bg.)
+        public static let border = Color(light: Color(hex: 0x3C3C43, opacity: 0.22), dark: .white.opacity(0.14))
         /// Top inner highlight. `--glass-hi`  ·  theme.css:29 / theme.css:64
         public static let highlight = Color(light: .white.opacity(0.70), dark: .white.opacity(0.10))
         /// Backdrop blur radius used by glass controls (prototype: 18–24px).  ·  kit-core.jsx:73,162

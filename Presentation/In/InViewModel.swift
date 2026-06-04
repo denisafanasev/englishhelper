@@ -41,6 +41,8 @@ public final class InViewModel {
     public var showMicPriming = false
 
     private var savedExpressionID: UUID?
+    private var explainImage: Data?          // photo context for an Explain routed from See it
+    private var explainImageText: String?    // the source text that photo context belongs to
 
     // Dependencies (use cases)
     private let understand: any UnderstandUseCase        // faithful translate → studied + native
@@ -186,6 +188,8 @@ public final class InViewModel {
         let studiedLang = StudiedLanguage.current.promptName
         let nativeLang = TargetLanguage.current.promptName
         let mode = self.mode
+        // Use the routed photo context only while the input still matches what it was captured for.
+        let explainImg = (mode == .explain && explainImageText == text) ? explainImage : nil
         requestTask?.cancel()
         phase = .processing
         errorMessage = nil
@@ -200,7 +204,7 @@ public final class InViewModel {
                     self.translation = result.native      // understanding line
                     self.explanation = nil
                 case .explain:
-                    let result = try await self.explain(text, studiedLanguage: studiedLang, nativeLanguage: nativeLang)
+                    let result = try await self.explain(text, studiedLanguage: studiedLang, nativeLanguage: nativeLang, image: explainImg)
                     self.studied = result.studied
                     self.explanation = result
                     self.translation = nil
@@ -214,6 +218,16 @@ public final class InViewModel {
                 self.handleRequestError(error)
             }
         }
+    }
+
+    /// Open this screen in Explain mode for an externally-supplied phrase (routed from See it /
+    /// History), optionally with a photo as visual context, and run it immediately.
+    public func startExplain(text: String, image: Data?) {
+        mode = .explain
+        source = text
+        explainImage = image
+        explainImageText = image == nil ? nil : text
+        submit()
     }
 
     /// Switch the Translate/Explain mode. With a result already shown (or in flight), re-run the
@@ -332,5 +346,7 @@ public final class InViewModel {
         isPlaying = false
         isSaved = false
         savedExpressionID = nil
+        explainImage = nil
+        explainImageText = nil
     }
 }

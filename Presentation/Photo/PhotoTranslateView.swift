@@ -15,6 +15,7 @@ import DesignSystem
 public struct PhotoTranslateView: View {
     @State private var model: PhotoTranslateViewModel
     @State private var libraryItem: PhotosPickerItem?
+    @Environment(AppUIState.self) private var ui
 
     public init(model: PhotoTranslateViewModel) {
         _model = State(initialValue: model)
@@ -134,9 +135,8 @@ public struct PhotoTranslateView: View {
             ForEach(model.blocks) { block in
                 blockCard(block)
             }
-            EHButton(Loc.t("Другое фото", "Another photo"), icon: "arrow.triangle.2.circlepath", kind: .glass, fillWidth: true) {
-                model.reset()
-            }
+            // Take or pick a NEW photo directly from the result (replaces the current one).
+            sourceButtons
         }
     }
 
@@ -188,6 +188,15 @@ public struct PhotoTranslateView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(Loc.t("Скопировать выражение", "Copy expression"))
             }
+
+            // Explain THIS block — open Get it (Explain mode) with the block text + the photo as context.
+            Button { ui.pendingExplain = ExplainRequest(text: block.en, imageData: model.imageData) } label: {
+                Label(Loc.t("Объяснить", "Explain"), systemImage: "lightbulb")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Tokens.Content.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Loc.t("Объяснить", "Explain"))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Tokens.Space.s16)

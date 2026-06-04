@@ -146,18 +146,26 @@ public struct TranslateToTargetInteractor: TranslateToTargetUseCase {
 
 public protocol ExplainExpressionUseCase: Sendable {
     /// Render an ANY-language input in the STUDIED language and explain it in the NATIVE language:
-    /// meaning, tone/register, cultural context, and a native-language analogy. Not recorded in
-    /// history — it's a reference lookup, not a produced phrase/translation.
-    func callAsFunction(_ text: String, studiedLanguage: String, nativeLanguage: String) async throws -> ExpressionExplanation
+    /// meaning, tone/register, cultural context, and a native-language analogy. An optional `image`
+    /// (e.g. the photo a block came from) is attached as visual context. Not recorded in history —
+    /// it's a reference lookup, not a produced phrase/translation.
+    func callAsFunction(_ text: String, studiedLanguage: String, nativeLanguage: String, image: Data?) async throws -> ExpressionExplanation
+}
+
+public extension ExplainExpressionUseCase {
+    func callAsFunction(_ text: String, studiedLanguage: String, nativeLanguage: String) async throws -> ExpressionExplanation {
+        try await callAsFunction(text, studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage, image: nil)
+    }
 }
 
 public struct ExplainExpressionInteractor: ExplainExpressionUseCase {
     private let llm: LLMClient
     public init(llm: LLMClient) { self.llm = llm }
 
-    public func callAsFunction(_ text: String, studiedLanguage: String, nativeLanguage: String) async throws -> ExpressionExplanation {
+    public func callAsFunction(_ text: String, studiedLanguage: String, nativeLanguage: String, image: Data?) async throws -> ExpressionExplanation {
         try await llm.run(
-            ExplainExpressionTemplate(studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage), input: text
+            ExplainExpressionTemplate(studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage),
+            input: ExplainInput(text: text, image: image)
         )
     }
 }

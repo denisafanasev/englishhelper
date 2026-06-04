@@ -2,6 +2,33 @@
 
 Release notes for EnglishHelper, written for the people who use it.
 
+## 1.2.1 — 2026-06-04
+
+**Explain anything in a photo.** On the "See it" screen, each recognized block now has an **Explain**
+button. Tap it and you jump straight to the **Get it** screen in Explain mode for that phrase — with
+the photo sent along, so the explanation fits where the text actually appears (a sign, menu,
+screenshot, …). You get the full Get-it screen: play it, save it, copy it, or switch to a plain
+translation.
+
+**Explain from History too.** Open any past translation and tap **Explain** on the request to get the
+same full breakdown on the Get-it screen.
+
+**Copy from photos.** Each recognized block can be copied to the clipboard in the language you're
+learning.
+
+**Snap another photo, faster.** After a photo is recognized you can take or pick a new one right
+there, without backing out first.
+
+**Easier to read in Light mode.** Cards now have clearly visible edges on a light background (they
+were nearly invisible before).
+
+**History, tidied up.** The request and its translation are now visually distinct, and rows show a
+single, clean arrow.
+
+**Polish.** Copying an explanation shows a "Copied ✓" confirmation; the main tabs read
+**See it / Say it / Get it**; and the "Get it" field now says it expects text in the language you're
+learning (matching the microphone).
+
 ## 1.2.0 — 2026-06-04
 
 **Learn any of four languages.** EnglishHelper is no longer English-only. In Settings, pick the

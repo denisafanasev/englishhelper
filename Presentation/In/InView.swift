@@ -7,14 +7,12 @@
 //
 
 import SwiftUI
-import UIKit
 import Domain
 import DesignSystem
 
 public struct InView: View {
     @State private var model: InViewModel
     @FocusState private var fieldFocused: Bool
-    @State private var didCopyExplanation = false   // brief "Copied" confirmation on the Explain card
 
     public init(model: InViewModel) {
         _model = State(initialValue: model)
@@ -203,105 +201,16 @@ public struct InView: View {
     }
 
     /// Explain mode: the studied-language rendering is the headline (the study item — bookmark + play
-    /// attach to it), with the nuance broken out below in the native language.
+    /// attach to it), with the nuance broken out below in the native language. Shared card.
     private func explanationCard(_ explanation: ExpressionExplanation) -> some View {
-        VStack(alignment: .leading, spacing: Tokens.Space.s16) {
-            HStack(alignment: .top) {
-                Text(model.sourceText)
-                    .textStyle(Tokens.Text.title3)
-                    .foregroundStyle(Tokens.Content.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: Tokens.Space.s8)
-                Button { model.toggleSave() } label: {
-                    Image(systemName: model.isSaved ? "bookmark.fill" : "bookmark")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(model.isSaved ? Tokens.Content.primary : Tokens.Content.tertiary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(model.isSaved
-                    ? Loc.t("Убрать из изучаемого", "Remove from study list")
-                    : Loc.t("Сохранить в изучаемое", "Save to study list"))
-            }
-
-            HStack(spacing: Tokens.Space.s20) {
-                if !model.sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Button { model.play() } label: {
-                        Label(
-                            model.isPlaying ? Loc.t("Озвучивается…", "Playing…") : Loc.t("Озвучить", "Play"),
-                            systemImage: model.isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2"
-                        )
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Tokens.Content.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(Loc.t("Озвучить", "Play"))
-                }
-                Button {
-                    UIPasteboard.general.string = explanationPlainText(explanation)
-                    didCopyExplanation = true
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .seconds(1.6))
-                        didCopyExplanation = false
-                    }
-                } label: {
-                    Label(
-                        didCopyExplanation ? Loc.t("Скопировано", "Copied") : Loc.t("Скопировать", "Copy"),
-                        systemImage: didCopyExplanation ? "checkmark" : "doc.on.doc"
-                    )
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(didCopyExplanation ? Tokens.Content.primary : Tokens.Content.secondary)
-                }
-                .buttonStyle(.plain)
-                .disabled(didCopyExplanation)
-                .animation(Tokens.Motion.quick, value: didCopyExplanation)
-                .accessibilityLabel(didCopyExplanation
-                    ? Loc.t("Скопировано", "Copied")
-                    : Loc.t("Скопировать объяснение", "Copy explanation"))
-            }
-
-            Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)
-
-            explanationRow(Loc.t("Значение", "Meaning"), explanation.meaning)
-            explanationRow(Loc.t("Тон и регистр", "Tone & register"), explanation.register)
-            explanationRow(Loc.t("В контексте", "In context"), explanation.context)
-            explanationRow(Loc.t("Аналогия", "Analogy"), explanation.analogy)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(Tokens.Space.s16)
-        .glassPanel(cornerRadius: Tokens.Radius.card)
-    }
-
-    /// The whole explanation as plain text — the studied expression followed by each section with
-    /// its (uppercased) title — for copying to the clipboard exactly as shown.
-    private func explanationPlainText(_ e: ExpressionExplanation) -> String {
-        var parts: [String] = []
-        let head = model.sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !head.isEmpty { parts.append(head) }
-        func section(_ label: String, _ text: String) {
-            let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !body.isEmpty else { return }
-            parts.append("\(label.uppercased())\n\(body)")
-        }
-        section(Loc.t("Значение", "Meaning"), e.meaning)
-        section(Loc.t("Тон и регистр", "Tone & register"), e.register)
-        section(Loc.t("В контексте", "In context"), e.context)
-        section(Loc.t("Аналогия", "Analogy"), e.analogy)
-        return parts.joined(separator: "\n\n")
-    }
-
-    @ViewBuilder private func explanationRow(_ label: String, _ text: String) -> some View {
-        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            VStack(alignment: .leading, spacing: Tokens.Space.s4) {
-                Text(label.uppercased())
-                    .textStyle(Tokens.Text.caption2)
-                    .foregroundStyle(Tokens.Content.tertiary)
-                Text(text)
-                    .textStyle(Tokens.Text.body)
-                    .foregroundStyle(Tokens.Content.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
+        ExplanationCardView(
+            studied: model.sourceText,
+            explanation: explanation,
+            isPlaying: model.isPlaying,
+            onPlay: { model.play() },
+            isSaved: model.isSaved,
+            onToggleSave: { model.toggleSave() }
+        )
     }
 
     // MARK: Banners & sheets
