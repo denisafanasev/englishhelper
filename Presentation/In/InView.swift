@@ -14,6 +14,7 @@ import DesignSystem
 public struct InView: View {
     @State private var model: InViewModel
     @FocusState private var fieldFocused: Bool
+    @State private var didCopyExplanation = false   // brief "Copied" confirmation on the Explain card
 
     public init(model: InViewModel) {
         _model = State(initialValue: model)
@@ -43,7 +44,7 @@ public struct InView: View {
 
     private var inputSection: some View {
         VStack(spacing: Tokens.Space.s16) {
-            GlassField(Loc.t("Текст на любом языке", "Text in any language"), text: $model.source) {
+            GlassField(Loc.t("Текст на изучаемом языке", "Text in the language you're learning"), text: $model.source) {
                 fieldFocused = false
                 model.submit()
             }
@@ -235,13 +236,27 @@ public struct InView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(Loc.t("Озвучить", "Play"))
                 }
-                Button { UIPasteboard.general.string = explanationPlainText(explanation) } label: {
-                    Label(Loc.t("Скопировать", "Copy"), systemImage: "doc.on.doc")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Tokens.Content.secondary)
+                Button {
+                    UIPasteboard.general.string = explanationPlainText(explanation)
+                    didCopyExplanation = true
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .seconds(1.6))
+                        didCopyExplanation = false
+                    }
+                } label: {
+                    Label(
+                        didCopyExplanation ? Loc.t("Скопировано", "Copied") : Loc.t("Скопировать", "Copy"),
+                        systemImage: didCopyExplanation ? "checkmark" : "doc.on.doc"
+                    )
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(didCopyExplanation ? Tokens.Content.primary : Tokens.Content.secondary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(Loc.t("Скопировать объяснение", "Copy explanation"))
+                .disabled(didCopyExplanation)
+                .animation(Tokens.Motion.quick, value: didCopyExplanation)
+                .accessibilityLabel(didCopyExplanation
+                    ? Loc.t("Скопировано", "Copied")
+                    : Loc.t("Скопировать объяснение", "Copy explanation"))
             }
 
             Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)

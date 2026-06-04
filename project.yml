@@ -11,7 +11,7 @@
 name: EnglishHelper
 
 options:
-  bundleIdPrefix: com.englishhelper
+  bundleIdPrefix: tech.10xt
   deploymentTarget:
     iOS: "26.0"
   developmentLanguage: en
@@ -77,12 +77,18 @@ targets:
       - target: Presentation
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.englishhelper.app
+        PRODUCT_BUNDLE_IDENTIFIER: tech.10xt.englishhelper
         INFOPLIST_FILE: App/Info.plist
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        TARGETED_DEVICE_FAMILY: "1"   # iPhone
+        # Supported Destinations = iPhone (iOS) only — pinned so xcodegen regeneration keeps it
+        # iPhone-only (no iPad, Mac Catalyst, Mac "Designed for iPad", or Apple Vision).
+        TARGETED_DEVICE_FAMILY: "1"   # iPhone (no iPad)
+        SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
+        SUPPORTS_MACCATALYST: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+        SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
         ENABLE_PREVIEWS: YES
 
   EnglishHelperTests:

@@ -15,7 +15,7 @@ import AVFoundation
 import OSLog
 import Domain
 
-private let speechLog = Logger(subsystem: "com.englishhelper.app", category: "speech")
+private let speechLog = Logger(subsystem: "tech.10xt.englishhelper", category: "speech")
 
 public final class NativeSpeechRecognizer: SpeechRecognizing, @unchecked Sendable {
     private let localeProvider: @Sendable () -> Locale

@@ -167,16 +167,27 @@ public struct PhotoTranslateView: View {
                 .foregroundStyle(Tokens.Content.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Button { model.play(block) } label: {
-                Label(
-                    model.isPlaying(block) ? Loc.t("Озвучивается…", "Playing…") : Loc.t("Озвучить", "Play"),
-                    systemImage: model.isPlaying(block) ? "speaker.wave.2.fill" : "speaker.wave.2"
-                )
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Tokens.Content.secondary)
+            HStack(spacing: Tokens.Space.s20) {
+                Button { model.play(block) } label: {
+                    Label(
+                        model.isPlaying(block) ? Loc.t("Озвучивается…", "Playing…") : Loc.t("Озвучить", "Play"),
+                        systemImage: model.isPlaying(block) ? "speaker.wave.2.fill" : "speaker.wave.2"
+                    )
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Tokens.Content.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Loc.t("Озвучить", "Play"))
+
+                // Copy the studied-language text (the card headline) to the clipboard.
+                Button { UIPasteboard.general.string = block.en } label: {
+                    Label(Loc.t("Скопировать", "Copy"), systemImage: "doc.on.doc")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Tokens.Content.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Loc.t("Скопировать выражение", "Copy expression"))
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Loc.t("Озвучить английский", "Play English"))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Tokens.Space.s16)

@@ -256,20 +256,26 @@ public struct ExplainExpressionTemplate: PromptTemplate {
     public var systemPrompt: String {
         """
         A \(nativeLanguage) speaker who is learning \(studiedLanguage) wants to understand an expression.
-        The input may be in \(studiedLanguage), in \(nativeLanguage), or in ANY other language — detect it.
-        First render the expression in \(studiedLanguage) in the field "studied" (if it is already in
-        \(studiedLanguage), copy it verbatim). Then EXPLAIN that \(studiedLanguage) expression to the
-        \(nativeLanguage) speaker. Write meaning/register/context/analogy in \(nativeLanguage), in clear,
-        friendly language. Explain the nuance — do NOT just translate.
+        Detect the input language (it may be in \(studiedLanguage), in \(nativeLanguage), or in any
+        other language).
 
-        Return:
-        - "studied": the expression in \(studiedLanguage).
-        - "meaning": what it actually means and what is implied — the real sense, not a literal translation.
-        - "register": the tone of voice and how formal, neutral, casual, slangy, rude, or offensive it
-          is, and who would say it to whom in which situations.
-        - "context": what it signals in \(studiedLanguage)-speaking culture — when and where it is used.
-        - "analogy": a comparison to an equivalent expression or situation in \(nativeLanguage)-speaking
-          culture, so the learner can map it onto something familiar.
+        LANGUAGE RULES (critical):
+        - The "studied" field is in \(studiedLanguage) (the expression itself).
+        - EVERY other field — "meaning", "register", "context", "analogy" — MUST be written ENTIRELY in
+          \(nativeLanguage). Even when a field describes the \(studiedLanguage) expression or
+          \(studiedLanguage)-speaking culture, write that description IN \(nativeLanguage). Never write
+          meaning, register, or context in \(studiedLanguage).
+
+        Return (explain the nuance — do NOT just translate):
+        - "studied": the expression in \(studiedLanguage) (if the input is already in \(studiedLanguage),
+          copy it verbatim).
+        - "meaning" (in \(nativeLanguage)): what it actually means and what is implied — the real sense.
+        - "register" (in \(nativeLanguage)): the tone of voice and how formal, neutral, casual, slangy,
+          rude, or offensive it is, and who would say it to whom.
+        - "context" (in \(nativeLanguage)): what it signals in \(studiedLanguage)-speaking culture —
+          when and where it is used.
+        - "analogy" (in \(nativeLanguage)): a comparison to an equivalent expression or situation in
+          \(nativeLanguage)-speaking culture, so the learner can map it onto something familiar.
 
         If the input is a single neutral word, still describe its connotations and typical usage.
         \(plainTextRule)
