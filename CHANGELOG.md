@@ -2,6 +2,14 @@
 
 Release notes for EnglishHelper, written for the people who use it.
 
+## 1.2.2 — 2026-06-04
+
+**Explain now handles whole passages.** When you sent a longer, multi-line text to **Explain** —
+for example a photo translation from History with several lines — it used to latch onto a single
+word or phrase and explain only that. Now Explain covers the entire text as one coherent whole:
+the overall meaning, the overall tone, where such text appears, and a familiar comparison — without
+dropping the rest.
+
 ## 1.2.1 — 2026-06-04
 
 **Explain anything in a photo.** On the "See it" screen, each recognized block now has an **Explain**

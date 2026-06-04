@@ -238,13 +238,14 @@ public struct TranslateToTargetTemplate: PromptTemplate {
 
 // MARK: - explainExpression ("Понять"/Get, Explain mode)
 
-/// An English word/phrase → a structured explanation in the learner's NATIVE language: what it
-/// means, its tone/register, how it lands in an English-speaking culture, and an analogy to the
-/// learner's own language. For understanding nuance, NOT translating.
+/// A word, phrase, OR a longer multi-line passage → a structured explanation in the learner's NATIVE
+/// language: what it means, its tone/register, how it lands in an English-speaking culture, and an
+/// analogy to the learner's own language. For understanding nuance, NOT translating. The input is
+/// always explained as ONE coherent whole — a passage is never collapsed down to a single word.
 ///
-/// Input carries the expression plus an OPTIONAL photo: when explaining a block recognized from a
-/// photo (the "See it" screen), the image is attached so the explanation reflects where the text
-/// actually appears (a sign, menu, screenshot, post, …).
+/// Input carries the text plus an OPTIONAL photo: when explaining a block recognized from a photo
+/// (the "See it" screen), the image is attached so the explanation reflects where the text actually
+/// appears (a sign, menu, screenshot, post, …).
 public struct ExplainInput: Sendable, Equatable {
     public let text: String
     public let image: Data?
@@ -268,22 +269,32 @@ public struct ExplainExpressionTemplate: PromptTemplate {
 
     public var systemPrompt: String {
         """
-        A \(nativeLanguage) speaker who is learning \(studiedLanguage) wants to understand an expression.
-        Detect the input language (it may be in \(studiedLanguage), in \(nativeLanguage), or in any
-        other language). If a photo is attached, it shows where this expression appears (a sign, menu,
-        screen, post, …) — use that visual context so the explanation fits that specific situation.
+        A \(nativeLanguage) speaker who is learning \(studiedLanguage) wants to understand some input.
+        The input may be a single word, a phrase, or a longer MULTI-LINE passage (e.g. several lines
+        read from a photo). Detect the input language (it may be in \(studiedLanguage), in
+        \(nativeLanguage), or in any other language). If a photo is attached, it shows where this text
+        appears (a sign, menu, screen, post, …) — use that visual context so the explanation fits that
+        specific situation.
+
+        Explain ALL of the input as ONE coherent whole. NEVER reduce a multi-line passage to a single
+        word or phrase and explain only that — cover everything you were given:
+        - a single word or short phrase → explain that expression (its real sense and connotations);
+        - a longer / multi-line passage → explain the passage as a whole: its overall meaning, its
+          overall tone, where such text appears, and a familiar equivalent — do not pick out just one
+          line.
 
         LANGUAGE RULES (critical):
-        - The "studied" field is in \(studiedLanguage) (the expression itself).
+        - The "studied" field is in \(studiedLanguage) (the input itself).
         - EVERY other field — "meaning", "register", "context", "analogy" — MUST be written ENTIRELY in
-          \(nativeLanguage). Even when a field describes the \(studiedLanguage) expression or
+          \(nativeLanguage). Even when a field describes the \(studiedLanguage) text or
           \(studiedLanguage)-speaking culture, write that description IN \(nativeLanguage). Never write
           meaning, register, or context in \(studiedLanguage).
 
         Return (explain the nuance — do NOT just translate):
-        - "studied": the expression in \(studiedLanguage) (if the input is already in \(studiedLanguage),
-          copy it verbatim).
-        - "meaning" (in \(nativeLanguage)): what it actually means and what is implied — the real sense.
+        - "studied": the WHOLE input in \(studiedLanguage), preserving every line (if it is already in
+          \(studiedLanguage), copy it verbatim; never shorten it to one expression).
+        - "meaning" (in \(nativeLanguage)): what it actually means and what is implied — the real sense
+          of the whole thing.
         - "register" (in \(nativeLanguage)): the tone of voice and how formal, neutral, casual, slangy,
           rude, or offensive it is, and who would say it to whom.
         - "context" (in \(nativeLanguage)): what it signals in \(studiedLanguage)-speaking culture —
