@@ -123,27 +123,14 @@ private struct HistoryDetailView: View {
                     // For translate/photo the request text IS the studied-language rendering, so its
                     // playback (in the studied voice) and explanation belong here.
                     if isPlayableSource {
-                        HStack(spacing: Tokens.Space.s20) {
-                            Button(action: model.playTranslationSource) {
-                                Label(
-                                    model.isPlaying(HistoryDetailViewModel.translationKey) ? Loc.t("Озвучивается…", "Playing…") : Loc.t("Озвучить", "Play"),
-                                    systemImage: model.isPlaying(HistoryDetailViewModel.translationKey) ? "speaker.wave.2.fill" : "speaker.wave.2"
-                                )
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(Tokens.Content.secondary)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(Loc.t("Озвучить", "Play"))
-
-                            // Explain the studied-language request → open Get it in Explain mode.
-                            Button { ui.pendingExplain = ExplainRequest(text: entry.inputText) } label: {
-                                Label(Loc.t("Объяснить", "Explain"), systemImage: "lightbulb")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(Tokens.Content.secondary)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(Loc.t("Объяснить", "Explain"))
-                        }
+                        // Play · Copy · Explain on the studied-language request — always one line.
+                        PlayCopyExplainRow(
+                            isPlaying: model.isPlaying(HistoryDetailViewModel.translationKey),
+                            onPlay: model.playTranslationSource,
+                            copyText: entry.inputText,
+                            copyAccessibility: Loc.t("Скопировать выражение", "Copy expression"),
+                            onExplain: { ui.pendingExplain = ExplainRequest(text: entry.inputText) }
+                        )
                         .padding(.top, Tokens.Space.s4)
                     }
                 }
@@ -193,6 +180,9 @@ private struct HistoryDetailView: View {
                 Text(ru)
                     .textStyle(Tokens.Text.title3)
                     .foregroundStyle(Tokens.Content.primary)
+
+                CopyButton(ru, style: .labeled,
+                           accessibilityLabel: Loc.t("Скопировать перевод", "Copy translation"))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(Tokens.Space.s16)
