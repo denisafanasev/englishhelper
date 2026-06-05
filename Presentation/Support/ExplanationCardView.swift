@@ -2,13 +2,12 @@
 //  ExplanationCardView.swift
 //  EnglishHelper — Presentation
 //
-//  Renders an ExpressionExplanation: the studied-language headline (optional play + save), a
-//  Copy-all action with a brief confirmation, and the labelled native-language sections. Shared by
-//  "Понять"/Get it (Explain mode) and the "Смотреть"/See it explain-a-block sheet.
+//  Renders an ExpressionExplanation: the studied-language headline (optional play + save) with its
+//  own copy, the labelled native-language sections, and a separate copy for the explanation body —
+//  each with a brief confirmation. Used by "Понять"/Get it (Explain mode).
 //
 
 import SwiftUI
-import UIKit
 import Domain
 import DesignSystem
 
@@ -19,7 +18,6 @@ struct ExplanationCardView: View {
     private let onPlay: (() -> Void)?
     private let isSaved: Bool?
     private let onToggleSave: (() -> Void)?
-    @State private var didCopy = false
 
     init(
         studied: String,
@@ -67,24 +65,9 @@ struct ExplanationCardView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(Loc.t("Озвучить", "Play"))
                 }
-                Button {
-                    UIPasteboard.general.string = plainText
-                    didCopy = true
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .seconds(1.6))
-                        didCopy = false
-                    }
-                } label: {
-                    actionLabel(didCopy ? Loc.t("Скопировано", "Copied") : Loc.t("Скопировать", "Copy"),
-                                didCopy ? "checkmark" : "doc.on.doc",
-                                color: didCopy ? Tokens.Content.primary : Tokens.Content.secondary)
-                }
-                .buttonStyle(.plain)
-                .disabled(didCopy)
-                .animation(Tokens.Motion.quick, value: didCopy)
-                .accessibilityLabel(didCopy
-                    ? Loc.t("Скопировано", "Copied")
-                    : Loc.t("Скопировать объяснение", "Copy explanation"))
+                // Copy the studied-language text (the headline expression).
+                CopyButton(studied, style: .labeled,
+                           accessibilityLabel: Loc.t("Скопировать выражение", "Copy expression"))
             }
 
             Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)
@@ -93,6 +76,11 @@ struct ExplanationCardView: View {
             section(Loc.t("Тон и регистр", "Tone & register"), explanation.register)
             section(Loc.t("В контексте", "In context"), explanation.context)
             section(Loc.t("Аналогия", "Analogy"), explanation.analogy)
+
+            // Copy the explanation body (the labelled native-language sections) — separate from the
+            // studied-text copy above.
+            CopyButton(explanationText, style: .labeled,
+                       accessibilityLabel: Loc.t("Скопировать объяснение", "Copy explanation"))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Tokens.Space.s16)
@@ -120,12 +108,10 @@ struct ExplanationCardView: View {
         }
     }
 
-    /// The whole explanation as plain text — studied headline + each non-empty section with its
-    /// (uppercased) title — for copying to the clipboard exactly as shown.
-    private var plainText: String {
+    /// The explanation body as plain text — each non-empty section with its (uppercased) title — for
+    /// the "copy explanation" action. The studied headline has its own separate copy control.
+    private var explanationText: String {
         var parts: [String] = []
-        let head = studied.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !head.isEmpty { parts.append(head) }
         func add(_ label: String, _ text: String) {
             let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !body.isEmpty else { return }

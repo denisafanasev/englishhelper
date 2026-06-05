@@ -160,43 +160,47 @@ public struct PhotoTranslateView: View {
                     : Loc.t("Сохранить в изучаемое", "Save to study list"))
             }
 
-            Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)
-
-            Text(block.ru)
-                .textStyle(Tokens.Text.body)
-                .foregroundStyle(Tokens.Content.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: Tokens.Space.s20) {
+            // Actions on the studied-language text, directly under it. Play / Explain as labels; the
+            // copy is an ICON at the trailing edge — same look as the translation's copy below it (so
+            // the two copy icons line up). Explain opens Get it (Explain mode) with the block + photo.
+            HStack(spacing: Tokens.Space.s16) {
                 Button { model.play(block) } label: {
-                    Label(
-                        model.isPlaying(block) ? Loc.t("Озвучивается…", "Playing…") : Loc.t("Озвучить", "Play"),
-                        systemImage: model.isPlaying(block) ? "speaker.wave.2.fill" : "speaker.wave.2"
-                    )
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Tokens.Content.secondary)
+                    Label(Loc.t("Озвучить", "Play"),
+                          systemImage: model.isPlaying(block) ? "speaker.wave.2.fill" : "speaker.wave.2")
+                        .font(.system(size: 13, weight: .semibold))
+                        .lineLimit(1)
+                        .foregroundStyle(Tokens.Content.secondary)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Loc.t("Озвучить", "Play"))
 
-                // Copy the studied-language text (the card headline) to the clipboard.
-                Button { UIPasteboard.general.string = block.en } label: {
-                    Label(Loc.t("Скопировать", "Copy"), systemImage: "doc.on.doc")
+                Button { ui.pendingExplain = ExplainRequest(text: block.en, imageData: model.imageData) } label: {
+                    Label(Loc.t("Объяснить", "Explain"), systemImage: "lightbulb")
                         .font(.system(size: 13, weight: .semibold))
+                        .lineLimit(1)
                         .foregroundStyle(Tokens.Content.secondary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(Loc.t("Скопировать выражение", "Copy expression"))
+                .accessibilityLabel(Loc.t("Объяснить", "Explain"))
+
+                Spacer(minLength: Tokens.Space.s8)
+
+                CopyButton(block.en, style: .icon,
+                           accessibilityLabel: Loc.t("Скопировать выражение", "Copy expression"))
             }
 
-            // Explain THIS block — open Get it (Explain mode) with the block text + the photo as context.
-            Button { ui.pendingExplain = ExplainRequest(text: block.en, imageData: model.imageData) } label: {
-                Label(Loc.t("Объяснить", "Explain"), systemImage: "lightbulb")
-                    .font(.system(size: 13, weight: .semibold))
+            Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)
+
+            // Translation + an inline copy for the translated (native) text.
+            HStack(alignment: .top, spacing: Tokens.Space.s8) {
+                Text(block.ru)
+                    .textStyle(Tokens.Text.body)
                     .foregroundStyle(Tokens.Content.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: Tokens.Space.s8)
+                CopyButton(block.ru, style: .icon,
+                           accessibilityLabel: Loc.t("Скопировать перевод", "Copy translation"))
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Loc.t("Объяснить", "Explain"))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Tokens.Space.s16)

@@ -94,6 +94,34 @@ public struct InView: View {
         model.mode == .explain ? "lightbulb" : "character.book.closed"
     }
 
+    // The empty-state hint adapts to the selected mode: Explain describes the nuance breakdown,
+    // Translate describes a faithful translation.
+    private var idleIcon: String {
+        model.mode == .explain ? "lightbulb" : "character.book.closed"
+    }
+
+    private var idleTitle: String {
+        model.mode == .explain
+            ? Loc.t("Что это значит?", "What does it mean?",
+                    "Qu'est-ce que ça veut dire ?", "¿Qué significa?")
+            : Loc.t("Нужен перевод?", "Need a translation?",
+                    "Besoin d'une traduction ?", "¿Necesitas una traducción?")
+    }
+
+    private var idleMessage: String {
+        model.mode == .explain
+            ? Loc.t(
+                "Введите или надиктуйте фразу — объясню, что она означает в живой языковой среде: смысл и оттенок, насколько формально или резко звучит и с чем это можно сравнить.",
+                "Type or dictate a phrase — I'll explain what it really means in real-world use: its sense and nuance, how formal or blunt it sounds, and what it compares to.",
+                "Saisissez ou dictez une phrase — j'expliquerai ce qu'elle veut vraiment dire dans la langue vivante : son sens et sa nuance, son registre (formel ou direct) et à quoi la comparer.",
+                "Escribe o dicta una frase — te explicaré qué significa de verdad en el uso real del idioma: su sentido y matiz, qué tan formal o brusca suena y con qué se puede comparar.")
+            : Loc.t(
+                "Введите или надиктуйте фразу — дам точный перевод по смыслу на изучаемый и родной язык.",
+                "Type or dictate a phrase — I'll give a faithful translation in the language you're learning and your own.",
+                "Saisissez ou dictez une phrase — j'en donnerai une traduction fidèle dans la langue que vous apprenez et dans la vôtre.",
+                "Escribe o dicta una frase — daré una traducción fiel en el idioma que estás aprendiendo y en el tuyo.")
+    }
+
     private var micCaption: String {
         switch model.micStatus {
         case .listening: Loc.t("Слушаю… коснитесь, чтобы остановить", "Listening… tap to stop")
@@ -108,14 +136,8 @@ public struct InView: View {
         switch model.phase {
         case .idle:
             if model.source.isEmpty {
-                StatusView(
-                    systemImage: "character.bubble",
-                    title: Loc.t("Что это значит?", "What does it mean?"),
-                    message: Loc.t(
-                        "Введите или надиктуйте выражение. В режиме «Перевод» переведу его по смыслу; в режиме «Объяснение» расскажу, что оно значит, насколько формально или резко звучит и с чем это можно сравнить.",
-                        "Type or dictate an expression. In Translate I'll render its meaning; in Explain I'll tell you what it means, how formal or blunt it sounds, and what it compares to.")
-                )
-                .padding(.top, Tokens.Space.s24)
+                StatusView(systemImage: idleIcon, title: idleTitle, message: idleMessage)
+                    .padding(.top, Tokens.Space.s24)
             }
 
         case .listening:

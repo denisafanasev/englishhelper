@@ -46,6 +46,7 @@ import Presentation
         UserDefaults.standard.set("russian", forKey: "targetLanguage")
         UserDefaults.standard.set("english", forKey: "studiedLanguage")
         let vm = makeVM()
+        vm.selectMode(.translate)                            // default is now Explain; test Translate
         vm.source = "Could you give me a hand?"
         vm.submit()
         try await waitUntil { vm.phase == .result }
@@ -90,6 +91,7 @@ import Presentation
         UserDefaults.standard.set("english", forKey: "studiedLanguage")
         let repo = MockExpressionRepository(seed: [])
         let vm = makeVM(repo: repo)
+        vm.selectMode(.translate)               // default is now Explain; this test exercises Translate
         vm.source = "Bonjour le monde"          // a non-studied input; studied rendering is what we save
         vm.submit()
         try await waitUntil { vm.phase == .result }

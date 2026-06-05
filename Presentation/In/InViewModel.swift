@@ -16,9 +16,10 @@ import Domain
 public final class InViewModel {
     public enum Phase: Equatable { case idle, listening, processing, result, failed }
 
-    /// What pressing the action button does: translate the input, or explain its nuance.
+    /// What pressing the action button does: explain the input's nuance, or translate it. Order here
+    /// drives the on-screen segment order (Explain first); Explain is the default.
     public enum Mode: String, CaseIterable, Sendable {
-        case translate, explain
+        case explain, translate
         public var title: String {
             switch self {
             case .translate: Loc.t("Перевод", "Translate")
@@ -29,7 +30,7 @@ public final class InViewModel {
 
     // UI state
     public private(set) var phase: Phase = .idle
-    public var mode: Mode = .translate
+    public var mode: Mode = .explain
     public var source: String = ""                       // editable transcript / typed input
     public private(set) var studied: String?             // input rendered in the studied language (headline + TTS)
     public private(set) var translation: String?         // Translate mode: native rendering (the line below)

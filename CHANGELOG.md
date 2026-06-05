@@ -2,6 +2,21 @@
 
 Release notes for EnglishHelper, written for the people who use it.
 
+## 1.2.3 — 2026-06-05
+
+**Copy anything, with a clear confirmation.** Every copy button across the app now flips to a
+checkmark with a "Copied" confirmation (and a light haptic), so you always know it worked.
+
+**See it: copy both languages.** On a recognized block, Play / Copy / Explain now sit together on
+one row (no wrapping), and you can copy either the text in the language you're learning or its
+translation.
+
+**History: copy from your past results.** Translation entries now let you copy both the
+studied-language text and the translation, right from the detail view.
+
+**Explain: copy the explanation.** The full explanation can be copied with the same one-tap
+confirmation.
+
 ## 1.2.2 — 2026-06-04
 
 **Explain now handles whole passages.** When you sent a longer, multi-line text to **Explain** —
