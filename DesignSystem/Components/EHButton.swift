@@ -31,7 +31,7 @@ public struct EHButton: View {
                 if let icon { Image(systemName: icon) }
                 Text(title)
             }
-            .font(.system(size: 17, weight: .semibold))
+            .font(.system(size: 16, weight: .semibold))
             .tracking(-0.2)
             .foregroundStyle(foreground)
             .frame(height: 50)

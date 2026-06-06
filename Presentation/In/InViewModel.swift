@@ -172,7 +172,9 @@ public final class InViewModel {
             errorMessage = Loc.t("Не удалось распознать речь: \(detail). Можно ввести текст вручную.",
                                  "Couldn't recognize speech: \(detail). You can type the text instead.",
                                  "Impossible de reconnaître la parole : \(detail). Vous pouvez saisir le texte à la place.",
-                                 "No se pudo reconocer el habla: \(detail). Puedes escribir el texto.")
+                                 "No se pudo reconocer el habla: \(detail). Puedes escribir el texto.",
+                                 "Sprache konnte nicht erkannt werden: \(detail). Du kannst den Text eingeben.",
+                                 "Impossibile riconoscere il parlato: \(detail). Puoi digitare il testo.")
         default:
             errorMessage = Loc.t("Не удалось распознать речь. Введите текст вручную.",
                                  "Couldn't recognize speech. Type the text instead.")

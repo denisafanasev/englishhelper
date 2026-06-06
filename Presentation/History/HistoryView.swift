@@ -253,7 +253,7 @@ private func kindIcon(_ kind: RequestKind) -> String {
 private func kindTitle(_ kind: RequestKind) -> String {
     switch kind {
     case .howToSay: Loc.t("Как сказать", "How to say")
-    case .whatToSay: Loc.t("Что сказать", "What to say", "Quoi dire", "Qué decir")
+    case .whatToSay: Loc.t("Что сказать", "What to say", "Quoi dire", "Qué decir", "Was sagen", "Cosa dire")
     case .translate: Loc.t("Перевод", "Translation")
     case .photoTranslate: Loc.t("Фото-перевод", "Photo translation")
     }

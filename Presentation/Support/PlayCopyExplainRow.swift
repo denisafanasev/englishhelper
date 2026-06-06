@@ -53,7 +53,7 @@ struct PlayCopyExplainRow: View {
     @ViewBuilder private func actionLabel(_ text: String, _ icon: String, labeled: Bool) -> some View {
         if labeled {
             Label(text, systemImage: icon)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 12, weight: .semibold))
                 .lineLimit(1)
                 .foregroundStyle(Tokens.Content.secondary)
         } else {

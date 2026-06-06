@@ -20,8 +20,8 @@ public final class VoiceViewModel {
         case howToSay, whatToSay
         public var title: String {
             switch self {
-            case .howToSay: Loc.t("Как сказать", "How to say", "Comment dire", "Cómo decir")
-            case .whatToSay: Loc.t("Что сказать", "What to say", "Quoi dire", "Qué decir")
+            case .howToSay: Loc.t("Как сказать", "How to say", "Comment dire", "Cómo decir", "Wie sagt man", "Come si dice")
+            case .whatToSay: Loc.t("Что сказать", "What to say", "Quoi dire", "Qué decir", "Was sagen", "Cosa dire")
             }
         }
     }
@@ -170,7 +170,9 @@ public final class VoiceViewModel {
             errorMessage = Loc.t("Не удалось распознать речь: \(detail). Можно ввести текст вручную.",
                                  "Couldn't recognize speech: \(detail). You can type the text instead.",
                                  "Impossible de reconnaître la parole : \(detail). Vous pouvez saisir le texte à la place.",
-                                 "No se pudo reconocer el habla: \(detail). Puedes escribir el texto.")
+                                 "No se pudo reconocer el habla: \(detail). Puedes escribir el texto.",
+                                 "Sprache konnte nicht erkannt werden: \(detail). Du kannst den Text eingeben.",
+                                 "Impossibile riconoscere il parlato: \(detail). Puoi digitare il testo.")
         default:
             errorMessage = Loc.t("Не удалось распознать речь. Введите текст вручную.",
                                  "Couldn't recognize speech. Type the text instead.")

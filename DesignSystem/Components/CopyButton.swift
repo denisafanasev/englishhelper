@@ -35,7 +35,7 @@ public struct CopyButton: View {
             case .labeled:
                 Label(copied ? DSLoc.t("Скопировано", "Copied") : DSLoc.t("Скопировать", "Copy"),
                       systemImage: copied ? "checkmark" : "doc.on.doc")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
                     .foregroundStyle(copied ? Tokens.Signal.success : Tokens.Content.secondary)
                     .contentTransition(.symbolEffect(.replace))

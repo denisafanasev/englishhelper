@@ -63,6 +63,8 @@ public struct PhotoTranslateView: View {
         case .result:
             resultSection
         case .failed:
+            // No extra top padding: StatusView pads s24 internally; with the source buttons below,
+            // a second s24 pushed them under the tab bar. See VoiceView for the same fix.
             VStack(spacing: Tokens.Space.s16) {
                 StatusView(
                     systemImage: model.isOffline ? "wifi.slash" : "exclamationmark.triangle",
@@ -71,7 +73,6 @@ public struct PhotoTranslateView: View {
                 )
                 sourceButtons
             }
-            .padding(.top, Tokens.Space.s24)
         }
     }
 
@@ -82,12 +83,15 @@ public struct PhotoTranslateView: View {
             StatusView(
                 systemImage: "camera.viewfinder",
                 title: Loc.t("Переведите текст с фото", "Translate text from a photo",
-                             "Traduire le texte d'une photo", "Traducir texto de una foto"),
+                             "Traduire le texte d'une photo", "Traducir texto de una foto",
+                             "Text aus einem Foto übersetzen", "Traduci il testo da una foto"),
                 message: Loc.t(
                     "Снимите вывеску, меню или страницу — распознаю текст и покажу его на изучаемом языке с переводом.",
                     "Snap a sign, menu, or page — I'll read the text and show it in the language you're learning, with a translation.",
                     "Photographiez un panneau, un menu ou une page — je lirai le texte et l'afficherai dans la langue que vous apprenez, avec une traduction.",
-                    "Fotografía un cartel, un menú o una página — leeré el texto y lo mostraré en el idioma que estás aprendiendo, con una traducción.")
+                    "Fotografía un cartel, un menú o una página — leeré el texto y lo mostraré en el idioma que estás aprendiendo, con una traducción.",
+                    "Fotografiere ein Schild, eine Speisekarte oder eine Seite – ich erkenne den Text und zeige ihn in der Sprache, die du lernst, mit einer Übersetzung.",
+                    "Fotografa un cartello, un menu o una pagina: riconoscerò il testo e lo mostrerò nella lingua che stai imparando, con una traduzione.")
             )
             sourceButtons
         }
@@ -171,7 +175,7 @@ public struct PhotoTranslateView: View {
                 Button { model.play(block) } label: {
                     Label(Loc.t("Озвучить", "Play"),
                           systemImage: model.isPlaying(block) ? "speaker.wave.2.fill" : "speaker.wave.2")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .lineLimit(1)
                         .foregroundStyle(Tokens.Content.secondary)
                 }
@@ -180,7 +184,7 @@ public struct PhotoTranslateView: View {
 
                 Button { ui.pendingExplain = ExplainRequest(text: block.en, imageData: model.imageData) } label: {
                     Label(Loc.t("Объяснить", "Explain"), systemImage: "lightbulb")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .lineLimit(1)
                         .foregroundStyle(Tokens.Content.secondary)
                 }
@@ -280,7 +284,7 @@ private struct LibraryButtonLabel: View {
             Image(systemName: "photo.on.rectangle")
             Text(Loc.t("Из галереи", "From library"))
         }
-        .font(.system(size: 17, weight: .semibold))
+        .font(.system(size: 16, weight: .semibold))
         .foregroundStyle(Tokens.Content.primary)
         .frame(height: 50)
         .frame(maxWidth: .infinity)

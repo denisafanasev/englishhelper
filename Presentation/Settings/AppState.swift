@@ -99,8 +99,8 @@ public final class AppUIState {
 // MARK: - Interface language (RU / EN, default: system)
 
 public enum AppLanguage: String, CaseIterable, Sendable {
-    case ru, en, fr, es
-    /// Short code shown in the on-screen picker (RU / EN / FR / ES).
+    case ru, en, fr, es, de, it
+    /// Short code shown in the on-screen picker (RU / EN / FR / ES / DE / IT).
     public var abbreviation: String { rawValue.uppercased() }
 
     static let storageKey = AppLocale.storageKey
@@ -133,31 +133,35 @@ public final class LanguageStore {
 /// Spanish are looked up by the English string (see `LocCatalog`).
 public enum Loc {
     public static func t(_ ru: String, _ en: String) -> String { DSLoc.t(ru, en) }
-    /// Explicit four-language variant — for interpolated strings (no static key to look up).
-    public static func t(_ ru: String, _ en: String, _ fr: String, _ es: String) -> String {
-        DSLoc.t(ru, en, fr, es)
+    /// Explicit six-language variant — for interpolated strings (no static key to look up).
+    public static func t(_ ru: String, _ en: String, _ fr: String, _ es: String, _ de: String, _ it: String) -> String {
+        DSLoc.t(ru, en, fr, es, de, it)
     }
 }
 
 // MARK: - Target language for "In" translation (RU / EN, default: RU)
 
 public enum TargetLanguage: String, CaseIterable, Sendable {
-    case russian, english, french, spanish
+    case russian, english, french, spanish, german, italian
     public var title: String {
         switch self {
         case .russian: Loc.t("Русский", "Russian")
         case .english: Loc.t("Английский", "English")
         case .french: Loc.t("Французский", "French")
         case .spanish: Loc.t("Испанский", "Spanish")
+        case .german: Loc.t("Немецкий", "German")
+        case .italian: Loc.t("Итальянский", "Italian")
         }
     }
-    /// Short code shown in the on-screen picker (RU / EN / FR / ES).
+    /// Short code shown in the on-screen picker (RU / EN / FR / ES / DE / IT).
     public var abbreviation: String {
         switch self {
         case .russian: "RU"
         case .english: "EN"
         case .french: "FR"
         case .spanish: "ES"
+        case .german: "DE"
+        case .italian: "IT"
         }
     }
     /// Name used in the LLM prompt (translation target / explanation language / "say it" source).
@@ -167,6 +171,8 @@ public enum TargetLanguage: String, CaseIterable, Sendable {
         case .english: "English"
         case .french: "French"
         case .spanish: "Spanish"
+        case .german: "German"
+        case .italian: "Italian"
         }
     }
     /// BCP-47 locale for recognizing speech in this language (the "say it" microphone input).
@@ -176,6 +182,8 @@ public enum TargetLanguage: String, CaseIterable, Sendable {
         case .english: "en-US"
         case .french: "fr-FR"
         case .spanish: "es-ES"
+        case .german: "de-DE"
+        case .italian: "it-IT"
         }
     }
     static let storageKey = "targetLanguage"
@@ -199,22 +207,26 @@ public final class TargetLanguageStore {
 // defaults to English (kept a distinct type so a "studied" read can never be confused with "native").
 
 public enum StudiedLanguage: String, CaseIterable, Sendable {
-    case russian, english, french, spanish
+    case russian, english, french, spanish, german, italian
     public var title: String {
         switch self {
         case .russian: Loc.t("Русский", "Russian")
         case .english: Loc.t("Английский", "English")
         case .french: Loc.t("Французский", "French")
         case .spanish: Loc.t("Испанский", "Spanish")
+        case .german: Loc.t("Немецкий", "German")
+        case .italian: Loc.t("Итальянский", "Italian")
         }
     }
-    /// Short code shown in the on-screen picker (RU / EN / FR / ES).
+    /// Short code shown in the on-screen picker (RU / EN / FR / ES / DE / IT).
     public var abbreviation: String {
         switch self {
         case .russian: "RU"
         case .english: "EN"
         case .french: "FR"
         case .spanish: "ES"
+        case .german: "DE"
+        case .italian: "IT"
         }
     }
     /// Name used in the LLM prompt (the studied target for translations / variants / explanations).
@@ -224,6 +236,8 @@ public enum StudiedLanguage: String, CaseIterable, Sendable {
         case .english: "English"
         case .french: "French"
         case .spanish: "Spanish"
+        case .german: "German"
+        case .italian: "Italian"
         }
     }
     /// BCP-47 locale for TTS in this language, and for the "get it" microphone input.
@@ -233,6 +247,8 @@ public enum StudiedLanguage: String, CaseIterable, Sendable {
         case .english: "en-US"
         case .french: "fr-FR"
         case .spanish: "es-ES"
+        case .german: "de-DE"
+        case .italian: "it-IT"
         }
     }
     static let storageKey = "studiedLanguage"

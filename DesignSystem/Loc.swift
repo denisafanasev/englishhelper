@@ -6,8 +6,9 @@
 //  (the lowest UI layer) so BOTH DesignSystem components (`DSLoc`) and Presentation (`Loc`, which
 //  forwards here) share ONE resolver and ONE translation catalog.
 //
-//  Russian + English are supplied inline at each call site (`t(ru, en)`); French + Spanish come from
-//  `LocCatalog`, keyed by the exact English string. A missing key falls back to English.
+//  Russian + English are supplied inline at each call site (`t(ru, en)`); French, Spanish, German,
+//  and Italian come from `LocCatalog`, keyed by the exact English string. A missing key falls back
+//  to English.
 //
 
 import Foundation
@@ -16,7 +17,7 @@ import Foundation
 public enum AppLocale {
     public static let storageKey = "interfaceLanguage"
     /// The interface languages the app ships, as ISO 639-1 codes.
-    public static let supported = ["ru", "en", "fr", "es"]
+    public static let supported = ["ru", "en", "fr", "es", "de", "it"]
 
     /// First system-preferred language we support, else English. Used when the user hasn't chosen.
     public static func systemDefaultCode() -> String {
@@ -39,17 +40,27 @@ public enum AppLocale {
 }
 
 public enum DSLoc {
-    /// Russian + English inline; French/Spanish from `LocCatalog` (English key), English fallback.
+    /// Russian + English inline; French/Spanish/German/Italian from `LocCatalog` (English key),
+    /// English fallback for any missing key.
     public static func t(_ ru: String, _ en: String) -> String {
-        t(ru, en, LocCatalog.fr[en] ?? en, LocCatalog.es[en] ?? en)
+        switch AppLocale.currentCode() {
+        case "ru": return ru
+        case "fr": return LocCatalog.fr[en] ?? en
+        case "es": return LocCatalog.es[en] ?? en
+        case "de": return LocCatalog.de[en] ?? en
+        case "it": return LocCatalog.it[en] ?? en
+        default:   return en
+        }
     }
 
-    /// Explicit four-language variant — for strings with interpolation that can't be table-keyed.
-    public static func t(_ ru: String, _ en: String, _ fr: String, _ es: String) -> String {
+    /// Explicit six-language variant — for strings with interpolation that can't be table-keyed.
+    public static func t(_ ru: String, _ en: String, _ fr: String, _ es: String, _ de: String, _ it: String) -> String {
         switch AppLocale.currentCode() {
         case "ru": return ru
         case "fr": return fr
         case "es": return es
+        case "de": return de
+        case "it": return it
         default:   return en
         }
     }

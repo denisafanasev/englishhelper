@@ -115,25 +115,31 @@ public struct VoiceView: View {
     private var fieldPrompt: String {
         model.mode == .howToSay
             ? Loc.t("Что хотите сказать?", "What do you want to say?",
-                    "Que voulez-vous dire ?", "¿Qué quieres decir?")
+                    "Que voulez-vous dire ?", "¿Qué quieres decir?",
+                    "Was möchtest du sagen?", "Cosa vuoi dire?")
             : Loc.t("Опишите ситуацию", "Describe the situation",
-                    "Décrivez la situation", "Describe la situación")
+                    "Décrivez la situation", "Describe la situación",
+                    "Beschreibe die Situation", "Descrivi la situazione")
     }
 
     private var actionTitle: String {
         model.mode == .howToSay
             ? Loc.t("Подобрать варианты", "Find phrasings",
-                    "Trouver des formulations", "Buscar formulaciones")
+                    "Trouver des formulations", "Buscar formulaciones",
+                    "Formulierungen finden", "Trova formulazioni")
             : Loc.t("Подобрать фразы", "Suggest phrases",
-                    "Proposer des phrases", "Sugerir frases")
+                    "Proposer des phrases", "Sugerir frases",
+                    "Phrasen vorschlagen", "Suggerisci frasi")
     }
 
     private var loadingText: String {
         model.mode == .howToSay
             ? Loc.t("Подбираю варианты…", "Finding phrasings…",
-                    "Recherche de formulations…", "Buscando formulaciones…")
+                    "Recherche de formulations…", "Buscando formulaciones…",
+                    "Suche Formulierungen…", "Ricerca formulazioni…")
             : Loc.t("Подбираю фразы…", "Finding phrases…",
-                    "Recherche de phrases…", "Buscando frases…")
+                    "Recherche de phrases…", "Buscando frases…",
+                    "Suche Phrasen…", "Ricerca frasi…")
     }
 
     private var idleIcon: String {
@@ -143,9 +149,11 @@ public struct VoiceView: View {
     private var idleTitle: String {
         model.mode == .howToSay
             ? Loc.t("Как это сказать?", "How do you say it?",
-                    "Comment le dire ?", "¿Cómo se dice?")
+                    "Comment le dire ?", "¿Cómo se dice?",
+                    "Wie sagt man das?", "Come si dice?")
             : Loc.t("Что говорить?", "What should you say?",
-                    "Quoi dire ?", "¿Qué decir?")
+                    "Quoi dire ?", "¿Qué decir?",
+                    "Was solltest du sagen?", "Cosa dovresti dire?")
     }
 
     private var idleMessage: String {
@@ -154,12 +162,16 @@ public struct VoiceView: View {
                 "Введите или произнесите фразу или мысль — подберу 3 варианта, как это сказать, в выбранном тоне.",
                 "Type or say a phrase or thought — I'll offer 3 ways to say it in the chosen tone.",
                 "Saisissez ou dites une phrase ou une idée — je proposerai 3 façons de le dire dans le ton choisi.",
-                "Escribe o di una frase o idea — te ofreceré 3 formas de decirlo en el tono elegido.")
+                "Escribe o di una frase o idea — te ofreceré 3 formas de decirlo en el tono elegido.",
+                "Tippe oder sprich eine Phrase oder einen Gedanken – ich biete 3 Möglichkeiten, es im gewählten Ton zu sagen.",
+                "Scrivi o pronuncia una frase o un pensiero: ti offrirò 3 modi per dirlo nel tono scelto.")
             : Loc.t(
                 "Опишите ситуацию (например «приём у врача») — подберу самые полезные фразы для неё в выбранном тоне.",
                 "Describe a situation (e.g. a doctor's appointment) — I'll suggest the most useful phrases for it in the chosen tone.",
                 "Décrivez une situation (par ex. un rendez-vous chez le médecin) — je proposerai les phrases les plus utiles, dans le ton choisi.",
-                "Describe una situación (p. ej. una cita con el médico) — sugeriré las frases más útiles, en el tono elegido.")
+                "Describe una situación (p. ej. una cita con el médico) — sugeriré las frases más útiles, en el tono elegido.",
+                "Beschreibe eine Situation (z. B. einen Arzttermin) – ich schlage die nützlichsten Phrasen dafür im gewählten Ton vor.",
+                "Descrivi una situazione (ad es. una visita dal medico): ti suggerirò le frasi più utili, nel tono scelto.")
     }
 
     // MARK: Content (state machine)
@@ -183,6 +195,8 @@ public struct VoiceView: View {
             resultsSection
 
         case .failed:
+            // No extra top padding: StatusView already pads s24 internally, and the failed block is
+            // the tallest state (icon + message + Retry) — a second s24 pushed Retry under the tab bar.
             StatusView(
                 systemImage: model.isOffline ? "wifi.slash" : "exclamationmark.triangle",
                 title: model.isOffline ? Loc.t("Нет соединения", "No connection") : Loc.t("Не получилось", "Something went wrong"),
@@ -190,7 +204,6 @@ public struct VoiceView: View {
                 actionTitle: model.canSubmit ? Loc.t("Повторить", "Retry") : nil,
                 action: model.canSubmit ? { model.submit() } : nil
             )
-            .padding(.top, Tokens.Space.s24)
         }
     }
 

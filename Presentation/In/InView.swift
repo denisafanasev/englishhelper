@@ -103,9 +103,11 @@ public struct InView: View {
     private var idleTitle: String {
         model.mode == .explain
             ? Loc.t("Что это значит?", "What does it mean?",
-                    "Qu'est-ce que ça veut dire ?", "¿Qué significa?")
+                    "Qu'est-ce que ça veut dire ?", "¿Qué significa?",
+                    "Was bedeutet das?", "Cosa significa?")
             : Loc.t("Нужен перевод?", "Need a translation?",
-                    "Besoin d'une traduction ?", "¿Necesitas una traducción?")
+                    "Besoin d'une traduction ?", "¿Necesitas una traducción?",
+                    "Brauchst du eine Übersetzung?", "Ti serve una traduzione?")
     }
 
     private var idleMessage: String {
@@ -114,12 +116,16 @@ public struct InView: View {
                 "Введите или надиктуйте фразу — объясню, что она означает в живой языковой среде: смысл и оттенок, насколько формально или резко звучит и с чем это можно сравнить.",
                 "Type or dictate a phrase — I'll explain what it really means in real-world use: its sense and nuance, how formal or blunt it sounds, and what it compares to.",
                 "Saisissez ou dictez une phrase — j'expliquerai ce qu'elle veut vraiment dire dans la langue vivante : son sens et sa nuance, son registre (formel ou direct) et à quoi la comparer.",
-                "Escribe o dicta una frase — te explicaré qué significa de verdad en el uso real del idioma: su sentido y matiz, qué tan formal o brusca suena y con qué se puede comparar.")
+                "Escribe o dicta una frase — te explicaré qué significa de verdad en el uso real del idioma: su sentido y matiz, qué tan formal o brusca suena y con qué se puede comparar.",
+                "Tippe oder diktiere eine Phrase – ich erkläre, was sie im echten Sprachgebrauch wirklich bedeutet: Sinn und Nuance, wie förmlich oder direkt sie klingt und womit sie vergleichbar ist.",
+                "Scrivi o detta una frase: ti spiegherò cosa significa davvero nell'uso reale della lingua: senso e sfumatura, quanto suona formale o diretta e a cosa si può paragonare.")
             : Loc.t(
                 "Введите или надиктуйте фразу — дам точный перевод по смыслу на изучаемый и родной язык.",
                 "Type or dictate a phrase — I'll give a faithful translation in the language you're learning and your own.",
                 "Saisissez ou dictez une phrase — j'en donnerai une traduction fidèle dans la langue que vous apprenez et dans la vôtre.",
-                "Escribe o dicta una frase — daré una traducción fiel en el idioma que estás aprendiendo y en el tuyo.")
+                "Escribe o dicta una frase — daré una traducción fiel en el idioma que estás aprendiendo y en el tuyo.",
+                "Tippe oder diktiere eine Phrase – ich gebe eine getreue Übersetzung in der Sprache, die du lernst, und in deiner eigenen.",
+                "Scrivi o detta una frase: fornirò una traduzione fedele nella lingua che stai imparando e nella tua.")
     }
 
     private var micCaption: String {
@@ -151,6 +157,8 @@ public struct InView: View {
             resultSection
 
         case .failed:
+            // No extra top padding: StatusView pads s24 internally; a second s24 pushed Retry under
+            // the tab bar in the tallest (error + Retry) state. See VoiceView for the same fix.
             StatusView(
                 systemImage: model.isOffline ? "wifi.slash" : "exclamationmark.triangle",
                 title: model.isOffline ? Loc.t("Нет соединения", "No connection") : Loc.t("Не получилось", "Something went wrong"),
@@ -158,7 +166,6 @@ public struct InView: View {
                 actionTitle: model.canSubmit ? Loc.t("Повторить", "Retry") : nil,
                 action: model.canSubmit ? { model.submit() } : nil
             )
-            .padding(.top, Tokens.Space.s24)
         }
     }
 
@@ -203,7 +210,7 @@ public struct InView: View {
                         model.isPlaying ? Loc.t("Озвучивается…", "Playing…") : Loc.t("Озвучить", "Play"),
                         systemImage: model.isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2"
                     )
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Tokens.Content.secondary)
                 }
                 .buttonStyle(.plain)

@@ -53,23 +53,30 @@ import Presentation
         UserDefaults.standard.removeObject(forKey: key)
     }
 
-    @Test func nativeLanguageSupportsFourLanguages() {
-        #expect(TargetLanguage.allCases.count == 4)
+    @Test func nativeLanguageSupportsSixLanguages() {
+        #expect(TargetLanguage.allCases.count == 6)
         #expect(TargetLanguage.french.promptName == "French")
         #expect(TargetLanguage.spanish.promptName == "Spanish")
+        #expect(TargetLanguage.german.promptName == "German")
+        #expect(TargetLanguage.italian.promptName == "Italian")
         #expect(TargetLanguage.french.speechLocale == "fr-FR")
         #expect(TargetLanguage.spanish.speechLocale == "es-ES")
-        #expect(Set(TargetLanguage.allCases.map(\.abbreviation)) == ["RU", "EN", "FR", "ES"])
+        #expect(TargetLanguage.german.speechLocale == "de-DE")
+        #expect(TargetLanguage.italian.speechLocale == "it-IT")
+        #expect(Set(TargetLanguage.allCases.map(\.abbreviation)) == ["RU", "EN", "FR", "ES", "DE", "IT"])
     }
 
-    @Test func studiedLanguageSupportsFourLanguagesDefaultEnglish() {
+    @Test func studiedLanguageSupportsSixLanguagesDefaultEnglish() {
         let key = "studiedLanguage"
         UserDefaults.standard.removeObject(forKey: key)
         #expect(StudiedLanguage.current == .english)   // default is English
-        #expect(StudiedLanguage.allCases.count == 4)
+        #expect(StudiedLanguage.allCases.count == 6)
         #expect(StudiedLanguage.french.promptName == "French")
-        #expect(StudiedLanguage.french.speechLocale == "fr-FR")
-        #expect(Set(StudiedLanguage.allCases.map(\.abbreviation)) == ["RU", "EN", "FR", "ES"])
+        #expect(StudiedLanguage.german.promptName == "German")
+        #expect(StudiedLanguage.italian.promptName == "Italian")
+        #expect(StudiedLanguage.german.speechLocale == "de-DE")
+        #expect(StudiedLanguage.italian.speechLocale == "it-IT")
+        #expect(Set(StudiedLanguage.allCases.map(\.abbreviation)) == ["RU", "EN", "FR", "ES", "DE", "IT"])
 
         let store = StudiedLanguageStore()
         store.language = .spanish

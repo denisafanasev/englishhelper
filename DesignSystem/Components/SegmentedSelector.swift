@@ -37,7 +37,7 @@ public struct SegmentedSelector<Option: Hashable>: View {
                 let isSelected = option == selected
                 Button { onSelect(option) } label: {
                     Text(label(option))
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 14, weight: .semibold))
                         .tracking(-0.1)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)

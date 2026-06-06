@@ -89,7 +89,7 @@ struct ExplanationCardView: View {
 
     private func actionLabel(_ text: String, _ icon: String, color: Color = Tokens.Content.secondary) -> some View {
         Label(text, systemImage: icon)
-            .font(.system(size: 13, weight: .semibold))
+            .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(color)
     }
 

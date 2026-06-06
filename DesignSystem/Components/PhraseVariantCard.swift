@@ -72,7 +72,7 @@ public struct PhraseVariantCard: View {
                     .symbolEffect(.variableColor.iterative, isActive: isPlaying)
                 Text(isPlaying ? DSLoc.t("Озвучивается…", "Playing…") : DSLoc.t("Озвучить", "Play"))
             }
-            .font(.system(size: 13, weight: .semibold))
+            .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(Tokens.Content.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -223,29 +223,32 @@ public enum Tokens {
             max(0, lineHeight - UIFont.systemFont(ofSize: size, weight: weight.uiKit).lineHeight)
         }
     }
+    //  ⚠️ PRODUCT OVERRIDE: every size + lineHeight below is the design scale MINUS 1pt (a global
+    //     "one notch smaller" type request). The leading `size / lineHeight` annotation is the
+    //     adjusted value; `theme.css:NN` still points at the original design source (+1pt).
     public enum Text {
-        /// 32 / 38 / 700 / -0.5  ·  theme.css:89
-        public static let largeTitle = TextStyleToken(size: 32, lineHeight: 38, weight: .bold,     weightCSS: 700, tracking: -0.5)
-        /// 26 / 31 / 700 / -0.4  ·  theme.css:90
-        public static let title1     = TextStyleToken(size: 26, lineHeight: 31, weight: .bold,     weightCSS: 700, tracking: -0.4)
-        /// 21 / 26 / 650 / -0.3  ·  theme.css:91   (650 → .semibold, see FLAG)
-        public static let title2     = TextStyleToken(size: 21, lineHeight: 26, weight: .semibold, weightCSS: 650, tracking: -0.3)
-        /// 19 / 24 / 600 / -0.2  ·  theme.css:92
-        public static let title3     = TextStyleToken(size: 19, lineHeight: 24, weight: .semibold, weightCSS: 600, tracking: -0.2)
-        /// 17 / 22 / 600 / -0.1  ·  theme.css:93
-        public static let headline   = TextStyleToken(size: 17, lineHeight: 22, weight: .semibold, weightCSS: 600, tracking: -0.1)
-        /// 17 / 23 / 400 / 0  ·  theme.css:94
-        public static let body       = TextStyleToken(size: 17, lineHeight: 23, weight: .regular,  weightCSS: 400, tracking: 0)
-        /// 16 / 21 / 400 / 0  ·  theme.css:95
-        public static let callout    = TextStyleToken(size: 16, lineHeight: 21, weight: .regular,  weightCSS: 400, tracking: 0)
-        /// 15 / 20 / 400 / 0  ·  theme.css:96
-        public static let subhead    = TextStyleToken(size: 15, lineHeight: 20, weight: .regular,  weightCSS: 400, tracking: 0)
-        /// 13 / 17 / 400 / 0  ·  theme.css:97
-        public static let footnote   = TextStyleToken(size: 13, lineHeight: 17, weight: .regular,  weightCSS: 400, tracking: 0)
-        /// 12 / 15 / 500 / 0  ·  theme.css:98
-        public static let caption    = TextStyleToken(size: 12, lineHeight: 15, weight: .medium,   weightCSS: 500, tracking: 0)
-        /// 11 / 13 / 600 / 0.3 (UPPERCASE in use)  ·  theme.css:99
-        public static let caption2   = TextStyleToken(size: 11, lineHeight: 13, weight: .semibold, weightCSS: 600, tracking: 0.3)
+        /// 31 / 37 / 700 / -0.5  ·  theme.css:89  (design 32/38 −1)
+        public static let largeTitle = TextStyleToken(size: 31, lineHeight: 37, weight: .bold,     weightCSS: 700, tracking: -0.5)
+        /// 25 / 30 / 700 / -0.4  ·  theme.css:90  (design 26/31 −1)
+        public static let title1     = TextStyleToken(size: 25, lineHeight: 30, weight: .bold,     weightCSS: 700, tracking: -0.4)
+        /// 20 / 25 / 650 / -0.3  ·  theme.css:91  (design 21/26 −1; 650 → .semibold, see FLAG)
+        public static let title2     = TextStyleToken(size: 20, lineHeight: 25, weight: .semibold, weightCSS: 650, tracking: -0.3)
+        /// 18 / 23 / 600 / -0.2  ·  theme.css:92  (design 19/24 −1)
+        public static let title3     = TextStyleToken(size: 18, lineHeight: 23, weight: .semibold, weightCSS: 600, tracking: -0.2)
+        /// 16 / 21 / 600 / -0.1  ·  theme.css:93  (design 17/22 −1)
+        public static let headline   = TextStyleToken(size: 16, lineHeight: 21, weight: .semibold, weightCSS: 600, tracking: -0.1)
+        /// 16 / 22 / 400 / 0  ·  theme.css:94  (design 17/23 −1)
+        public static let body       = TextStyleToken(size: 16, lineHeight: 22, weight: .regular,  weightCSS: 400, tracking: 0)
+        /// 15 / 20 / 400 / 0  ·  theme.css:95  (design 16/21 −1)
+        public static let callout    = TextStyleToken(size: 15, lineHeight: 20, weight: .regular,  weightCSS: 400, tracking: 0)
+        /// 14 / 19 / 400 / 0  ·  theme.css:96  (design 15/20 −1)
+        public static let subhead    = TextStyleToken(size: 14, lineHeight: 19, weight: .regular,  weightCSS: 400, tracking: 0)
+        /// 12 / 16 / 400 / 0  ·  theme.css:97  (design 13/17 −1)
+        public static let footnote   = TextStyleToken(size: 12, lineHeight: 16, weight: .regular,  weightCSS: 400, tracking: 0)
+        /// 11 / 14 / 500 / 0  ·  theme.css:98  (design 12/15 −1)
+        public static let caption    = TextStyleToken(size: 11, lineHeight: 14, weight: .medium,   weightCSS: 500, tracking: 0)
+        /// 10 / 12 / 600 / 0.3 (UPPERCASE in use)  ·  theme.css:99  (design 11/13 −1)
+        public static let caption2   = TextStyleToken(size: 10, lineHeight: 12, weight: .semibold, weightCSS: 600, tracking: 0.3)
     }
 
     // MARK: Spacing — 4 / 8 pt grid (foundations.jsx:112)
@@ -324,8 +327,8 @@ public enum Tokens {
         public static let height: CGFloat = 22
         public static let paddingHorizontal: CGFloat = 9
         public static let radius: CGFloat = Radius.tag        // 9
-        /// Label type: 11 / 700 / +0.4, UPPERCASE (a heavier override of `Text.caption2`).
-        public static let labelFont = Font.system(size: 11, weight: .bold)
+        /// Label type: 10 / 700 / +0.4, UPPERCASE (a heavier override of `Text.caption2`; design 11 −1).
+        public static let labelFont = Font.system(size: 10, weight: .bold)
         public static let labelTracking: CGFloat = 0.4
     }
 
