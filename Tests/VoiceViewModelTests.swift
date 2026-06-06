@@ -70,6 +70,27 @@ import Presentation
         #expect(vm.isOffline)
     }
 
+    @Test func switchingModeMidFlightWithoutInputDropsRequest() async throws {
+        // A slow request keeps us in `.processing` so we can switch modes mid-flight.
+        let vm = makeVM(llm: StubLLMClient(behavior: .success, latency: .milliseconds(200)))
+        vm.intent = "как сказать спасибо"
+        vm.submit()
+        #expect(vm.phase == .processing)
+
+        // Clear the input, then switch mode: nothing to re-run with → the in-flight request is
+        // dropped and the screen returns to idle WITHOUT surfacing a cancellation error.
+        vm.intent = ""
+        vm.selectMode(.whatToSay)
+        #expect(vm.phase == .idle)
+        #expect(vm.variants.isEmpty)
+
+        // The superseded request must not resurface results or an error after it unwinds.
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(vm.phase == .idle)
+        #expect(vm.variants.isEmpty)
+        #expect(vm.errorMessage == nil)
+    }
+
     @Test func toggleSaveMarksVariantSaved() async throws {
         let vm = makeVM()
         vm.intent = "как сказать спасибо"

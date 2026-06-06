@@ -219,8 +219,9 @@ public final class VoiceViewModel {
         guard newMode != mode else { return }
         mode = newMode
         if canSubmit, phase == .results || phase == .processing {
-            submit()
-        } else if phase == .results {
+            submit()                          // re-run the same input in the new mode
+        } else if phase == .results || phase == .processing {
+            requestTask?.cancel()             // no input to re-run with → drop stale/in-flight results
             variants = []
             phase = .idle
         }
@@ -250,6 +251,10 @@ public final class VoiceViewModel {
                 self.phase = .results
             } catch is CancellationError {
                 // superseded
+            } catch LLMError.cancelled {
+                // superseded by a newer request, or dropped on a mode switch — adapters map task
+                // cancellation to LLMError.cancelled, so this (not CancellationError) is what we get.
+                // Cancellation is always self-inflicted; never surface it as a failure.
             } catch {
                 self.handleRequestError(error)
             }
