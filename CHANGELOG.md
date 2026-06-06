@@ -2,6 +2,19 @@
 
 Release notes for EnglishHelper, written for the people who use it.
 
+## 1.2.4 — 2026-06-06
+
+**"Say it" now has two modes.** A selector at the top of the screen lets you choose how it works:
+
+- **How to say** — type or say a thought and get **3** natural phrasings of it in the tone you
+  picked (as before): "how do I say I agree with them?", "let me through, please", and so on.
+- **What to say** (new) — describe a **situation** ("a doctor's appointment", "booking a car
+  service") and get the **most useful phrases for it** — anywhere from 3 to 10, depending on how
+  many the app finds genuinely helpful — in the same card format and your chosen tone.
+
+The field hint and the on-screen guidance adapt to the selected mode so the difference is clear, and
+the tone selector applies to both.
+
 ## 1.2.3 — 2026-06-05
 
 **Copy anything, with a clear confirmation.** Every copy button across the app now flips to a

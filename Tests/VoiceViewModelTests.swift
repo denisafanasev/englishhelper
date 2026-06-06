@@ -19,6 +19,7 @@ import Presentation
         return VoiceViewModel(
             howToSay: HowToSayInteractor(llm: llm, history: history),
             regenerateHowToSay: RegenerateHowToSayInteractor(llm: llm, history: history),
+            whatToSay: WhatToSayInteractor(llm: llm, history: history),
             voiceCapture: VoiceCaptureInteractor(recognizer: MockSpeechRecognizing()),
             pronounce: PlayPronunciationInteractor(synthesizer: MockSpeechSynthesizing()),
             saveExpression: SaveExpressionInteractor(
@@ -45,6 +46,19 @@ import Presentation
         try await waitUntil { vm.phase == .results }
         #expect(vm.phase == .results)
         #expect(vm.variants.count == 3)
+    }
+
+    @Test func whatToSayModeProducesSituationPhrases() async throws {
+        let vm = makeVM()
+        vm.selectMode(.whatToSay)
+        #expect(vm.mode == .whatToSay)
+        vm.intent = "приём у врача"
+        vm.submit()
+        try await waitUntil { vm.phase == .results }
+        #expect(vm.phase == .results)
+        // "What to say" returns a relevance-driven set (3–10), not a fixed three.
+        #expect(vm.variants.count >= 3)
+        #expect(vm.variants.count <= 10)
     }
 
     @Test func failureMapsToOfflineWhenNotConfigured() async throws {

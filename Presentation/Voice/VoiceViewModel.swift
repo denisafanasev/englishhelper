@@ -14,8 +14,21 @@ import Domain
 public final class VoiceViewModel {
     public enum Phase: Equatable { case idle, listening, processing, results, failed }
 
+    /// What the screen generates: phrasings of ONE thought ("how to say"), or the useful phrases for
+    /// a described SITUATION ("what to say"). Both produce phrase cards in the chosen tone.
+    public enum Mode: String, CaseIterable, Sendable {
+        case howToSay, whatToSay
+        public var title: String {
+            switch self {
+            case .howToSay: Loc.t("Как сказать", "How to say", "Comment dire", "Cómo decir")
+            case .whatToSay: Loc.t("Что сказать", "What to say", "Quoi dire", "Qué decir")
+            }
+        }
+    }
+
     // UI state
     public private(set) var phase: Phase = .idle
+    public private(set) var mode: Mode = .howToSay   // only selectMode mutates, preserving its re-run logic
     public var intent: String = ""                       // editable transcript / typed input
     /// Tone/register for the generated phrases — chosen on-screen, persisted (shared with the
     /// "Понять" compose path via `ToneOfVoice.current`).
@@ -34,6 +47,7 @@ public final class VoiceViewModel {
     // Dependencies (use cases)
     private let howToSay: any HowToSayUseCase
     private let regenerateHowToSay: any RegenerateHowToSayUseCase
+    private let whatToSay: any WhatToSayUseCase
     private let voiceCapture: any VoiceCaptureUseCase
     private let pronounce: any PlayPronunciationUseCase
     private let saveExpression: any SaveExpressionUseCase
@@ -49,6 +63,7 @@ public final class VoiceViewModel {
     public init(
         howToSay: any HowToSayUseCase,
         regenerateHowToSay: any RegenerateHowToSayUseCase,
+        whatToSay: any WhatToSayUseCase,
         voiceCapture: any VoiceCaptureUseCase,
         pronounce: any PlayPronunciationUseCase,
         saveExpression: any SaveExpressionUseCase,
@@ -57,6 +72,7 @@ public final class VoiceViewModel {
     ) {
         self.howToSay = howToSay
         self.regenerateHowToSay = regenerateHowToSay
+        self.whatToSay = whatToSay
         self.voiceCapture = voiceCapture
         self.pronounce = pronounce
         self.saveExpression = saveExpression
@@ -166,9 +182,15 @@ public final class VoiceViewModel {
     public func submit() {
         let text = intent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        let studied = StudiedLanguage.current.promptName   // variants are produced in the studied language
-        let native = TargetLanguage.current.promptName     // notes + intent normalization in native
-        run { try await self.howToSay(text, tone: self.tone.register, studiedLanguage: studied, nativeLanguage: native) }
+        let studied = StudiedLanguage.current.promptName   // phrases are produced in the studied language
+        let native = TargetLanguage.current.promptName     // notes + input normalization in native
+        let tone = self.tone.register
+        switch mode {
+        case .howToSay:
+            run { try await self.howToSay(text, tone: tone, studiedLanguage: studied, nativeLanguage: native) }
+        case .whatToSay:
+            run { try await self.whatToSay(text, tone: tone, studiedLanguage: studied, nativeLanguage: native) }
+        }
     }
 
     public func regenerate() {
@@ -176,12 +198,32 @@ public final class VoiceViewModel {
         guard !text.isEmpty else { return }
         let studied = StudiedLanguage.current.promptName
         let native = TargetLanguage.current.promptName
-        run { try await self.regenerateHowToSay(text, tone: self.tone.register, studiedLanguage: studied, nativeLanguage: native) }
+        let tone = self.tone.register
+        switch mode {
+        case .howToSay:
+            run { try await self.regenerateHowToSay(text, tone: tone, studiedLanguage: studied, nativeLanguage: native) }
+        case .whatToSay:
+            run { try await self.whatToSay(text, tone: tone, studiedLanguage: studied, nativeLanguage: native, regenerate: true) }
+        }
     }
 
     /// One button drives both: regenerate when results are shown, otherwise generate a fresh set.
     public func pick() {
         if phase == .results { regenerate() } else { submit() }
+    }
+
+    /// Switch between "how to say" (phrasings of one thought) and "what to say" (phrases for a
+    /// situation). With results already shown (or in flight) and non-empty input, re-run in the new
+    /// mode; otherwise just remember the choice (the prior results would be stale for the new mode).
+    public func selectMode(_ newMode: Mode) {
+        guard newMode != mode else { return }
+        mode = newMode
+        if canSubmit, phase == .results || phase == .processing {
+            submit()
+        } else if phase == .results {
+            variants = []
+            phase = .idle
+        }
     }
 
     /// Pick a tone from the on-screen selector. With variants already shown (or in flight),

@@ -81,9 +81,13 @@ public struct PhotoTranslateView: View {
         VStack(spacing: Tokens.Space.s20) {
             StatusView(
                 systemImage: "camera.viewfinder",
-                title: Loc.t("Переведите текст с фото", "Translate text from a photo"),
-                message: Loc.t("Снимите вывеску, меню или страницу — распознаю английский и переведу на русский.",
-                               "Snap a sign, menu, or page — I'll read the English and translate it.")
+                title: Loc.t("Переведите текст с фото", "Translate text from a photo",
+                             "Traduire le texte d'une photo", "Traducir texto de una foto"),
+                message: Loc.t(
+                    "Снимите вывеску, меню или страницу — распознаю текст и покажу его на изучаемом языке с переводом.",
+                    "Snap a sign, menu, or page — I'll read the text and show it in the language you're learning, with a translation.",
+                    "Photographiez un panneau, un menu ou une page — je lirai le texte et l'afficherai dans la langue que vous apprenez, avec une traduction.",
+                    "Fotografía un cartel, un menú o una página — leeré el texto y lo mostraré en el idioma que estás aprendiendo, con una traducción.")
             )
             sourceButtons
         }

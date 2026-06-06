@@ -85,6 +85,49 @@ public struct RegenerateHowToSayInteractor: RegenerateHowToSayUseCase {
     }
 }
 
+// MARK: - whatToSay
+
+public protocol WhatToSayUseCase: Sendable {
+    /// A SITUATION description in ANY language → the 3–10 most useful phrases for it in the STUDIED
+    /// language in `tone`, with notes in the NATIVE language. `regenerate` asks for a fresh/different
+    /// set (the prior set stays in history). Appended to history.
+    func callAsFunction(_ situation: String, tone: Register, studiedLanguage: String, nativeLanguage: String, regenerate: Bool) async throws -> [PhraseVariant]
+}
+
+public extension WhatToSayUseCase {
+    func callAsFunction(_ situation: String, tone: Register, studiedLanguage: String, nativeLanguage: String) async throws -> [PhraseVariant] {
+        try await callAsFunction(situation, tone: tone, studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage, regenerate: false)
+    }
+    func callAsFunction(_ situation: String) async throws -> [PhraseVariant] {
+        try await callAsFunction(situation, tone: .casual, studiedLanguage: "English", nativeLanguage: "Russian", regenerate: false)
+    }
+}
+
+public struct WhatToSayInteractor: WhatToSayUseCase {
+    private let llm: LLMClient
+    private let history: HistoryRepository
+
+    public init(llm: LLMClient, history: HistoryRepository) {
+        self.llm = llm
+        self.history = history
+    }
+
+    public func callAsFunction(_ situation: String, tone: Register, studiedLanguage: String, nativeLanguage: String, regenerate: Bool) async throws -> [PhraseVariant] {
+        // On regenerate, nudge for a different set (kept in English so it doesn't read as part of the
+        // situation). History records the situation as its own `.whatToSay` kind.
+        let input = regenerate
+            ? situation + "\n\n(Suggest a different or additional set of useful phrases for this situation.)"
+            : situation
+        let result = try await llm.run(
+            WhatToSayTemplate(tone: tone, studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage), input: input
+        )
+        try? await history.append(
+            HistoryEntry(inputText: situation, result: .whatToSay(result.variants))
+        )
+        return result.variants
+    }
+}
+
 // MARK: - translateText
 
 public protocol TranslateTextUseCase: Sendable {

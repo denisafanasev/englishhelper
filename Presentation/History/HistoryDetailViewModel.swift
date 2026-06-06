@@ -40,7 +40,7 @@ public final class HistoryDetailViewModel {
     public var translationRU: String? {
         switch entry.result {
         case .translate(let ru), .photoTranslate(let ru): ru
-        case .howToSay: nil
+        case .howToSay, .whatToSay: nil
         }
     }
 
@@ -56,7 +56,7 @@ public final class HistoryDetailViewModel {
             return existing.first { $0.en.caseInsensitiveCompare(target) == .orderedSame }?.id
         }
         switch entry.result {
-        case .howToSay(let variants):
+        case .howToSay(let variants), .whatToSay(let variants):
             for variant in variants {
                 if let id = storedID(for: variant.en) {
                     let key = Self.variantKey(variant)

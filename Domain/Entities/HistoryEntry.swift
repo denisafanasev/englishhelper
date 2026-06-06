@@ -8,14 +8,17 @@ import Foundation
 /// What kind of request the user made.
 public enum RequestKind: String, Codable, Sendable, CaseIterable, Hashable {
     case howToSay
+    case whatToSay
     case translate
     case photoTranslate
 }
 
 /// The typed payload of a completed request. One case per `RequestKind`.
 public enum RequestResult: Codable, Sendable, Equatable, Hashable {
-    /// `howToSay` → three register-tagged variants.
+    /// `howToSay` → three register-tagged variants of one thought.
     case howToSay([PhraseVariant])
+    /// `whatToSay` → 3–10 register-tagged phrases useful in a described situation.
+    case whatToSay([PhraseVariant])
     /// `translate` → pure Russian translation.
     case translate(ru: String)
     /// `photoTranslate` → pure Russian translation of OCR'd text.
@@ -24,6 +27,7 @@ public enum RequestResult: Codable, Sendable, Equatable, Hashable {
     public var kind: RequestKind {
         switch self {
         case .howToSay: .howToSay
+        case .whatToSay: .whatToSay
         case .translate: .translate
         case .photoTranslate: .photoTranslate
         }

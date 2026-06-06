@@ -44,8 +44,18 @@ public struct VoiceView: View {
     // MARK: Input
 
     private var inputSection: some View {
-        VStack(spacing: Tokens.Space.s16) {
-            GlassField(Loc.t("Что хотите сказать?", "What do you want to say?"), text: $model.intent) {
+        VStack(spacing: Tokens.Space.s12) {   // a touch tighter so the empty-state hint clears the tab bar
+            // Mode: phrasings of ONE thought ("how to say") vs the useful phrases for a SITUATION
+            // ("what to say"). Placed up top so the choice frames the whole interaction.
+            SegmentedSelector(
+                VoiceViewModel.Mode.allCases,
+                selected: model.mode,
+                label: { $0.title },
+                onSelect: { model.selectMode($0) }
+            )
+            .accessibilityLabel(Loc.t("Режим", "Mode"))
+
+            GlassField(fieldPrompt, text: $model.intent) {
                 fieldFocused = false
                 model.pick()
             }
@@ -69,7 +79,7 @@ public struct VoiceView: View {
                 }
             }
 
-            EHButton(Loc.t("Подобрать варианты", "Find phrasings"), icon: "sparkles", kind: .primary, fillWidth: true) {
+            EHButton(actionTitle, icon: "sparkles", kind: .primary, fillWidth: true) {
                 fieldFocused = false
                 model.pick()
             }
@@ -99,29 +109,74 @@ public struct VoiceView: View {
         }
     }
 
+    // MARK: Mode-aware copy
+
+    /// Field placeholder: a thought to phrase ("how to say") vs a situation to cover ("what to say").
+    private var fieldPrompt: String {
+        model.mode == .howToSay
+            ? Loc.t("Что хотите сказать?", "What do you want to say?",
+                    "Que voulez-vous dire ?", "¿Qué quieres decir?")
+            : Loc.t("Опишите ситуацию", "Describe the situation",
+                    "Décrivez la situation", "Describe la situación")
+    }
+
+    private var actionTitle: String {
+        model.mode == .howToSay
+            ? Loc.t("Подобрать варианты", "Find phrasings",
+                    "Trouver des formulations", "Buscar formulaciones")
+            : Loc.t("Подобрать фразы", "Suggest phrases",
+                    "Proposer des phrases", "Sugerir frases")
+    }
+
+    private var loadingText: String {
+        model.mode == .howToSay
+            ? Loc.t("Подбираю варианты…", "Finding phrasings…",
+                    "Recherche de formulations…", "Buscando formulaciones…")
+            : Loc.t("Подбираю фразы…", "Finding phrases…",
+                    "Recherche de phrases…", "Buscando frases…")
+    }
+
+    private var idleIcon: String {
+        model.mode == .howToSay ? "text.bubble" : "bubble.left.and.bubble.right"
+    }
+
+    private var idleTitle: String {
+        model.mode == .howToSay
+            ? Loc.t("Как это сказать?", "How do you say it?",
+                    "Comment le dire ?", "¿Cómo se dice?")
+            : Loc.t("Что говорить?", "What should you say?",
+                    "Quoi dire ?", "¿Qué decir?")
+    }
+
+    private var idleMessage: String {
+        model.mode == .howToSay
+            ? Loc.t(
+                "Введите или произнесите фразу или мысль — подберу 3 варианта, как это сказать, в выбранном тоне.",
+                "Type or say a phrase or thought — I'll offer 3 ways to say it in the chosen tone.",
+                "Saisissez ou dites une phrase ou une idée — je proposerai 3 façons de le dire dans le ton choisi.",
+                "Escribe o di una frase o idea — te ofreceré 3 formas de decirlo en el tono elegido.")
+            : Loc.t(
+                "Опишите ситуацию (например «приём у врача») — подберу самые полезные фразы для неё в выбранном тоне.",
+                "Describe a situation (e.g. a doctor's appointment) — I'll suggest the most useful phrases for it in the chosen tone.",
+                "Décrivez une situation (par ex. un rendez-vous chez le médecin) — je proposerai les phrases les plus utiles, dans le ton choisi.",
+                "Describe una situación (p. ej. una cita con el médico) — sugeriré las frases más útiles, en el tono elegido.")
+    }
+
     // MARK: Content (state machine)
 
     @ViewBuilder private var contentSection: some View {
         switch model.phase {
         case .idle:
             if model.intent.isEmpty {
-                StatusView(
-                    systemImage: "text.bubble",
-                    title: Loc.t("Как это сказать?", "How do you say it?"),
-                    message: showsMic
-                        ? Loc.t("Спросите голосом или введите фразу — подберу три варианта с разной вежливостью.",
-                                "Ask by voice or type a phrase — I'll offer three options at different politeness levels.")
-                        : Loc.t("Введите фразу — подберу три варианта с разной вежливостью.",
-                                "Type a phrase — I'll offer three options at different politeness levels.")
-                )
-                .padding(.top, Tokens.Space.s24)
+                StatusView(systemImage: idleIcon, title: idleTitle, message: idleMessage)
+                    .padding(.top, Tokens.Space.s8)
             }
 
         case .listening:
             EmptyView()
 
         case .processing:
-            LoadingView(Loc.t("Подбираю варианты…", "Finding phrasings…"))
+            LoadingView(loadingText)
                 .padding(.top, Tokens.Space.s24)
 
         case .results:

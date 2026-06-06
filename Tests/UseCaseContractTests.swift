@@ -80,6 +80,24 @@ import Adapters
         #expect(prompt.contains("note IN French"))                            // notes in native
     }
 
+    /// "What to say": situation → relevance-driven phrase set (3–10), in studied + native.
+    @Test func whatToSayTemplateInjectsLanguagesAndAllowsThreeToTen() {
+        let template = WhatToSayTemplate(tone: .casual, studiedLanguage: "English", nativeLanguage: "French")
+        let prompt = template.systemPrompt
+        #expect(prompt.contains("French speaker who is learning English"))   // native learner of studied
+        #expect(prompt.contains("SITUATION"))                                // situation-driven, not one phrase
+        #expect(prompt.contains("AT LEAST 3 and AT MOST 10"))                // relevance-driven count
+        #expect(template.outputJSONSchema.contains("\"maxItems\":10"))       // schema caps at ten
+    }
+
+    /// The decoder honors the 10-max even if the model overshoots.
+    @Test func whatToSayDecodeClampsToTen() throws {
+        let items = (1...14).map { #"{"en":"phrase \#($0)","register":"casual","context_ru":"нота"}"# }
+        let json = "{\"variants\":[\(items.joined(separator: ","))]}"
+        let result = try WhatToSayTemplate().decode(json)
+        #expect(result.variants.count == 10)
+    }
+
     /// "See it": each photo block is rendered in BOTH the studied and the native language.
     @Test func photoBlocksTemplateInjectsStudiedAndNative() {
         let prompt = PhotoBlocksTemplate(studiedLanguage: "Spanish", nativeLanguage: "Russian").systemPrompt

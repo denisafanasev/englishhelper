@@ -147,7 +147,85 @@ public struct HowToSayTemplate: PromptTemplate {
         guard result.variants.count == 3 else {
             throw LLMError.invalidOutput("howToSay expects exactly 3 variants, got \(result.variants.count)")
         }
-        return result
+        let cleaned = result.variants.map {
+            PhraseVariant(id: $0.id, en: PlainText.clean($0.en), register: $0.register,
+                          contextRU: PlainText.clean($0.contextRU))
+        }
+        return HowToSayResult(variants: cleaned)
+    }
+}
+
+// MARK: - whatToSay
+
+/// A SITUATION description → the 3–10 most useful phrases to say in that situation, in the studied
+/// language and chosen tone, each with a native-language note. Same card shape as `howToSay`
+/// (`HowToSayResult`), but the model decides HOW MANY phrases (by relevance), not a fixed three.
+public struct WhatToSayTemplate: PromptTemplate {
+    public typealias Input = String
+    public typealias Output = HowToSayResult
+
+    public let id = "whatToSay"
+    public let tone: Register
+    public let studiedLanguage: String   // the phrases are produced in THIS language
+    public let nativeLanguage: String    // the notes are written in THIS language
+    public init(tone: Register = .casual, studiedLanguage: String = "English", nativeLanguage: String = "Russian") {
+        self.tone = tone
+        self.studiedLanguage = studiedLanguage
+        self.nativeLanguage = nativeLanguage
+    }
+
+    public var systemPrompt: String {
+        """
+        You help a \(nativeLanguage) speaker who is learning \(studiedLanguage) handle a real-life
+        SITUATION in \(studiedLanguage). The input is a short description of a situation (e.g. "a
+        doctor's appointment", "booking a car service", "checking in at a hotel"), written in
+        \(nativeLanguage), in \(studiedLanguage), or in ANY other language — detect it and understand
+        the situation (do NOT translate the description; it is not the phrase to say).
+        Return the phrases that would actually be MOST USEFUL to say in that situation, in
+        \(studiedLanguage), all in a \(toneHint) tone. Decide how many to give by genuine usefulness:
+        AT LEAST 3 and AT MOST 10 — no filler, no near-duplicates. Order them from most to least
+        likely to be needed.
+        Each item has: "en" (the \(studiedLanguage) phrase), "register" (use "\(toneRegister)"),
+        and "context_ru" (one short note IN \(nativeLanguage) on when/why to use this phrase here).
+        \(plainTextRule)
+        """
+    }
+
+    private var toneHint: String {
+        switch tone {
+        case .formal: "formal and polite (work, strangers, writing)"
+        case .neutral, .casual: "everyday conversational (friends, colleagues)"
+        case .slang: "informal, slangy (close friends)"
+        }
+    }
+
+    private var toneRegister: String {
+        tone == .neutral ? "casual" : tone.rawValue
+    }
+
+    public var outputJSONSchema: String {
+        """
+        {"type":"object","properties":{"variants":{"type":"array","minItems":3,"maxItems":10,
+        "items":{"type":"object","properties":{"en":{"type":"string"},
+        "register":{"enum":["formal","neutral","casual","slang"]},
+        "context_ru":{"type":"string"}},"required":["en","register","context_ru"]}}},
+        "required":["variants"]}
+        """
+    }
+
+    public func userMessage(for input: String) -> String { input }
+
+    public func decode(_ rawJSON: String) throws -> HowToSayResult {
+        let result = try decodeJSON(HowToSayResult.self, from: rawJSON)
+        // Honor the 10-max even if the model overshoots; sanitize to plain text like every template.
+        let clamped = result.variants.prefix(10).map {
+            PhraseVariant(id: $0.id, en: PlainText.clean($0.en), register: $0.register,
+                          contextRU: PlainText.clean($0.contextRU))
+        }
+        guard !clamped.isEmpty else {
+            throw LLMError.invalidOutput("whatToSay returned no phrases")
+        }
+        return HowToSayResult(variants: clamped)
     }
 }
 

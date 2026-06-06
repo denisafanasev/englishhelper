@@ -153,7 +153,7 @@ private struct HistoryDetailView: View {
 
     @ViewBuilder private var resultSection: some View {
         switch entry.result {
-        case .howToSay(let variants):
+        case .howToSay(let variants), .whatToSay(let variants):
             VStack(spacing: Tokens.Space.s12) {
                 ForEach(variants) { variant in
                     // Same card as the Voice screen: tap = play, bookmark = save.
@@ -195,7 +195,7 @@ private struct HistoryDetailView: View {
     private var isPlayableSource: Bool {
         switch entry.kind {
         case .translate, .photoTranslate: true
-        case .howToSay: false
+        case .howToSay, .whatToSay: false
         }
     }
 
@@ -244,6 +244,7 @@ private struct HistoryDetailView: View {
 private func kindIcon(_ kind: RequestKind) -> String {
     switch kind {
     case .howToSay: "quote.bubble"
+    case .whatToSay: "bubble.left.and.bubble.right"
     case .translate: "character.bubble"
     case .photoTranslate: "camera"
     }
@@ -252,6 +253,7 @@ private func kindIcon(_ kind: RequestKind) -> String {
 private func kindTitle(_ kind: RequestKind) -> String {
     switch kind {
     case .howToSay: Loc.t("Как сказать", "How to say")
+    case .whatToSay: Loc.t("Что сказать", "What to say", "Quoi dire", "Qué decir")
     case .translate: Loc.t("Перевод", "Translation")
     case .photoTranslate: Loc.t("Фото-перевод", "Photo translation")
     }
@@ -259,7 +261,7 @@ private func kindTitle(_ kind: RequestKind) -> String {
 
 private func resultSnippet(_ result: RequestResult) -> String {
     switch result {
-    case .howToSay(let variants): variants.first?.en ?? "—"
+    case .howToSay(let variants), .whatToSay(let variants): variants.first?.en ?? "—"
     case .translate(let ru): ru
     case .photoTranslate(let ru): ru
     }

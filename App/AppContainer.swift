@@ -28,6 +28,7 @@ public final class AppContainer: Sendable {
 
     // Use cases (what Presentation consumes)
     public let howToSay: any HowToSayUseCase
+    public let whatToSay: any WhatToSayUseCase
     public let translateText: any TranslateTextUseCase
     public let photoTranslate: any PhotoTranslateUseCase
     public let enrich: any EnrichExpressionUseCase
@@ -68,6 +69,7 @@ public final class AppContainer: Sendable {
 
         // Wire use cases onto the ports.
         self.howToSay = HowToSayInteractor(llm: llm, history: history)
+        self.whatToSay = WhatToSayInteractor(llm: llm, history: history)
         self.translateText = TranslateTextInteractor(llm: llm, history: history)
         self.photoTranslate = PhotoTranslateInteractor(llm: llm, history: history)   // LLM vision (no local OCR)
         self.enrich = EnrichExpressionInteractor(llm: llm)
@@ -135,6 +137,7 @@ public final class AppContainer: Sendable {
         VoiceViewModel(
             howToSay: howToSay,
             regenerateHowToSay: regenerateHowToSay,
+            whatToSay: whatToSay,
             voiceCapture: voiceCapture,
             pronounce: pronounce,
             saveExpression: saveExpression,

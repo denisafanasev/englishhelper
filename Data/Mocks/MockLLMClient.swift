@@ -29,6 +29,15 @@ public final class MockLLMClient: LLMClient {
               {"en":"Gimme a hand, will ya?","register":"slang","context_ru":"Сленг, очень неформально."}
             ]}
             """
+        case "whatToSay":
+            return """
+            {"variants":[
+              {"en":"I have an appointment with Dr. Smith at 3 p.m.","register":"casual","context_ru":"На стойке регистрации."},
+              {"en":"Could you tell me where the waiting room is?","register":"casual","context_ru":"Чтобы сориентироваться."},
+              {"en":"I'd like to describe my symptoms.","register":"casual","context_ru":"В кабинете у врача."},
+              {"en":"Do I need a follow-up visit?","register":"casual","context_ru":"В конце приёма."}
+            ]}
+            """
         case "translateText", "photoTranslate":
             return #"{"ru":"Это тестовый перевод."}"#
         case "translateToTarget":
