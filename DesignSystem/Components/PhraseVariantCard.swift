@@ -38,6 +38,17 @@ public struct PhraseVariantCard: View {
                 RegisterTagView(register)
                 Spacer(minLength: Tokens.Space.s8)
                 HStack(spacing: Tokens.Space.s16) {
+                    // Play sits in the same action row as copy + save (tapping the card text also
+                    // starts/stops playback — see .onTapGesture below).
+                    Button(action: onPlay) {
+                        Image(systemName: isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2")
+                            .font(.system(size: 16, weight: .medium))
+                            .symbolEffect(.variableColor.iterative, isActive: isPlaying)
+                            .foregroundStyle(isPlaying ? Tokens.Content.primary : Tokens.Content.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(DSLoc.t("Озвучить", "Play"))
+
                     Button(action: copyToClipboard) {
                         Image(systemName: copied ? "checkmark" : "doc.on.doc")
                             .font(.system(size: 16, weight: .medium))
@@ -66,14 +77,6 @@ public struct PhraseVariantCard: View {
                 .textStyle(Tokens.Text.subhead)
                 .foregroundStyle(Tokens.Content.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: Tokens.Space.s8) {
-                Image(systemName: isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2")
-                    .symbolEffect(.variableColor.iterative, isActive: isPlaying)
-                Text(isPlaying ? DSLoc.t("Озвучивается…", "Playing…") : DSLoc.t("Озвучить", "Play"))
-            }
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(Tokens.Content.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Tokens.Space.s16)

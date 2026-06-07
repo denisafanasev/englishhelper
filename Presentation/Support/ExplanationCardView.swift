@@ -37,37 +37,40 @@ struct ExplanationCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s16) {
+            // Title + icon actions (Play · Copy · Save) in the header row, like the phrase cards.
             HStack(alignment: .top) {
                 Text(studied)
                     .textStyle(Tokens.Text.title3)
                     .foregroundStyle(Tokens.Content.primary)
                     .fixedSize(horizontal: false, vertical: true)
-                if let isSaved, let onToggleSave {
-                    Spacer(minLength: Tokens.Space.s8)
-                    Button { onToggleSave() } label: {
-                        Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundStyle(isSaved ? Tokens.Content.primary : Tokens.Content.tertiary)
+                Spacer(minLength: Tokens.Space.s8)
+                HStack(spacing: Tokens.Space.s16) {
+                    if let onPlay, !studied.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Button { onPlay() } label: {
+                            Image(systemName: isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2")
+                                .font(.system(size: 16, weight: .medium))
+                                .symbolEffect(.variableColor.iterative, isActive: isPlaying)
+                                .foregroundStyle(isPlaying ? Tokens.Content.primary : Tokens.Content.tertiary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(Loc.t("Озвучить", "Play"))
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(isSaved
-                        ? Loc.t("Убрать из изучаемого", "Remove from study list")
-                        : Loc.t("Сохранить в изучаемое", "Save to study list"))
-                }
-            }
+                    // Copy the studied-language text (the headline expression).
+                    CopyButton(studied, style: .icon,
+                               accessibilityLabel: Loc.t("Скопировать выражение", "Copy expression"))
 
-            HStack(spacing: Tokens.Space.s20) {
-                if let onPlay, !studied.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Button { onPlay() } label: {
-                        actionLabel(isPlaying ? Loc.t("Озвучивается…", "Playing…") : Loc.t("Озвучить", "Play"),
-                                    isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2")
+                    if let isSaved, let onToggleSave {
+                        Button { onToggleSave() } label: {
+                            Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundStyle(isSaved ? Tokens.Content.primary : Tokens.Content.tertiary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(isSaved
+                            ? Loc.t("Убрать из изучаемого", "Remove from study list")
+                            : Loc.t("Сохранить в изучаемое", "Save to study list"))
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(Loc.t("Озвучить", "Play"))
                 }
-                // Copy the studied-language text (the headline expression).
-                CopyButton(studied, style: .labeled,
-                           accessibilityLabel: Loc.t("Скопировать выражение", "Copy expression"))
             }
 
             Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)
@@ -85,12 +88,6 @@ struct ExplanationCardView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Tokens.Space.s16)
         .glassPanel(cornerRadius: Tokens.Radius.card)
-    }
-
-    private func actionLabel(_ text: String, _ icon: String, color: Color = Tokens.Content.secondary) -> some View {
-        Label(text, systemImage: icon)
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(color)
     }
 
     @ViewBuilder private func section(_ label: String, _ text: String) -> some View {

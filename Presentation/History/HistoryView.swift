@@ -116,23 +116,14 @@ private struct HistoryDetailView: View {
                     .textStyle(Tokens.Text.footnote)
                     .foregroundStyle(Tokens.Content.tertiary)
 
-                labeledCard(title: Loc.t("Запрос", "Request")) {
+                // For translate/photo the request text IS the studied-language rendering, so its
+                // playback (in the studied voice), copy, and explain sit in the card header — the same
+                // icon row as the phrase cards.
+                labeledCard(title: Loc.t("Запрос", "Request"),
+                            actions: { if isPlayableSource { requestActions } }) {
                     Text(entry.inputText)
                         .textStyle(Tokens.Text.body)
                         .foregroundStyle(Tokens.Content.primary)
-                    // For translate/photo the request text IS the studied-language rendering, so its
-                    // playback (in the studied voice) and explanation belong here.
-                    if isPlayableSource {
-                        // Play · Copy · Explain on the studied-language request — always one line.
-                        PlayCopyExplainRow(
-                            isPlaying: model.isPlaying(HistoryDetailViewModel.translationKey),
-                            onPlay: model.playTranslationSource,
-                            copyText: entry.inputText,
-                            copyAccessibility: Loc.t("Скопировать выражение", "Copy expression"),
-                            onExplain: { ui.pendingExplain = ExplainRequest(text: entry.inputText) }
-                        )
-                        .padding(.top, Tokens.Space.s4)
-                    }
                 }
 
                 resultSection
@@ -172,17 +163,19 @@ private struct HistoryDetailView: View {
             VStack(alignment: .leading, spacing: Tokens.Space.s12) {
                 HStack {
                     sectionTitle(Loc.t("Перевод", "Translation"))
-                    Spacer()
-                    bookmark(isSaved: model.isSaved(HistoryDetailViewModel.translationKey)) {
-                        model.toggleSaveTranslation()
+                    Spacer(minLength: Tokens.Space.s8)
+                    // Copy sits in the header next to the bookmark — same icon row as the phrase cards.
+                    HStack(spacing: Tokens.Space.s16) {
+                        CopyButton(ru, style: .icon,
+                                   accessibilityLabel: Loc.t("Скопировать перевод", "Copy translation"))
+                        bookmark(isSaved: model.isSaved(HistoryDetailViewModel.translationKey)) {
+                            model.toggleSaveTranslation()
+                        }
                     }
                 }
                 Text(ru)
                     .textStyle(Tokens.Text.title3)
                     .foregroundStyle(Tokens.Content.primary)
-
-                CopyButton(ru, style: .labeled,
-                           accessibilityLabel: Loc.t("Скопировать перевод", "Copy translation"))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(Tokens.Space.s16)
@@ -196,6 +189,32 @@ private struct HistoryDetailView: View {
         switch entry.kind {
         case .translate, .photoTranslate: true
         case .howToSay, .whatToSay: false
+        }
+    }
+
+    /// Play · Copy · Explain on the studied-language request — icon-only, matching the phrase cards.
+    private var requestActions: some View {
+        let playing = model.isPlaying(HistoryDetailViewModel.translationKey)
+        return HStack(spacing: Tokens.Space.s16) {
+            Button { model.playTranslationSource() } label: {
+                Image(systemName: playing ? "speaker.wave.2.fill" : "speaker.wave.2")
+                    .font(.system(size: 16, weight: .medium))
+                    .symbolEffect(.variableColor.iterative, isActive: playing)
+                    .foregroundStyle(playing ? Tokens.Content.primary : Tokens.Content.tertiary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Loc.t("Озвучить", "Play"))
+
+            CopyButton(entry.inputText, style: .icon,
+                       accessibilityLabel: Loc.t("Скопировать выражение", "Copy expression"))
+
+            Button { ui.pendingExplain = ExplainRequest(text: entry.inputText) } label: {
+                Image(systemName: "lightbulb")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Tokens.Content.tertiary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Loc.t("Объяснить", "Explain"))
         }
     }
 
@@ -221,9 +240,17 @@ private struct HistoryDetailView: View {
 
     /// The REQUEST block. Rendered as a FLAT, recessed tonal card (no glass blur, no stroke) so it
     /// reads as the quiet "what you asked" — visually distinct from the raised glass result cards.
-    private func labeledCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+    private func labeledCard<Actions: View, Content: View>(
+        title: String,
+        @ViewBuilder actions: () -> Actions = { EmptyView() },
+        @ViewBuilder content: () -> Content
+    ) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s8) {
-            sectionTitle(title)
+            HStack(alignment: .center) {
+                sectionTitle(title)
+                Spacer(minLength: Tokens.Space.s8)
+                actions()
+            }
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)

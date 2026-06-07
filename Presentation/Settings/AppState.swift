@@ -96,6 +96,19 @@ public final class AppUIState {
     public init() {}
 }
 
+/// First-launch onboarding gate. `isComplete` is false until the user picks their languages on the
+/// welcome screen; persisted so onboarding shows exactly once.
+@MainActor
+@Observable
+public final class OnboardingStore {
+    public var isComplete: Bool {
+        didSet { UserDefaults.standard.set(isComplete, forKey: Self.key) }
+    }
+    private static let key = "didCompleteOnboarding"
+    public init() { isComplete = UserDefaults.standard.bool(forKey: Self.key) }
+    public func complete() { isComplete = true }
+}
+
 // MARK: - Interface language (RU / EN, default: system)
 
 public enum AppLanguage: String, CaseIterable, Sendable {

@@ -53,6 +53,20 @@ import Presentation
         UserDefaults.standard.removeObject(forKey: key)
     }
 
+    @Test func onboardingDefaultsIncompleteThenPersistsCompletion() {
+        let key = "didCompleteOnboarding"
+        UserDefaults.standard.removeObject(forKey: key)
+
+        let store = OnboardingStore()
+        #expect(store.isComplete == false)   // first launch → onboarding shown
+
+        store.complete()
+        #expect(store.isComplete)
+        #expect(OnboardingStore().isComplete)   // persists across launches
+
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+
     @Test func nativeLanguageSupportsSixLanguages() {
         #expect(TargetLanguage.allCases.count == 6)
         #expect(TargetLanguage.french.promptName == "French")

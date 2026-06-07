@@ -187,11 +187,30 @@ public struct InView: View {
     /// study item); the native translation sits below as the "understanding" line.
     private func translationCard(_ translation: String) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s12) {
-            HStack(alignment: .top) {
-                Text(model.sourceText)
-                    .textStyle(Tokens.Text.title3)
-                    .foregroundStyle(Tokens.Content.primary)
-                    .fixedSize(horizontal: false, vertical: true)
+            Text(model.sourceText)
+                .textStyle(Tokens.Text.title3)
+                .foregroundStyle(Tokens.Content.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+
+            // Play · Copy · Save on the studied source, all in one action row.
+            HStack(spacing: Tokens.Space.s20) {
+                if !model.sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Button { model.play() } label: {
+                        Label(
+                            model.isPlaying ? Loc.t("Озвучивается…", "Playing…") : Loc.t("Озвучить", "Play"),
+                            systemImage: model.isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2"
+                        )
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Tokens.Content.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Loc.t("Озвучить", "Play"))
+
+                    CopyButton(model.sourceText, style: .labeled,
+                               accessibilityLabel: Loc.t("Скопировать выражение", "Copy expression"))
+                }
+
                 Spacer(minLength: Tokens.Space.s8)
                 Button { model.toggleSave() } label: {
                     Image(systemName: model.isSaved ? "bookmark.fill" : "bookmark")
@@ -202,19 +221,6 @@ public struct InView: View {
                 .accessibilityLabel(model.isSaved
                     ? Loc.t("Убрать из изучаемого", "Remove from study list")
                     : Loc.t("Сохранить в изучаемое", "Save to study list"))
-            }
-
-            if !model.sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Button { model.play() } label: {
-                    Label(
-                        model.isPlaying ? Loc.t("Озвучивается…", "Playing…") : Loc.t("Озвучить", "Play"),
-                        systemImage: model.isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2"
-                    )
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Tokens.Content.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Loc.t("Озвучить", "Play"))
             }
 
             Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)

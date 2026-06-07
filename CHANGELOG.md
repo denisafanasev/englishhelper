@@ -2,6 +2,34 @@
 
 Release notes for EnglishHelper, written for the people who use it.
 
+## 1.2.5 — 2026-06-07
+
+**German and Italian, everywhere.** You can now pick **German** or **Italian** as your interface
+language, your studied language, or your native language — the whole app is translated into both, and
+they work as targets for translation, phrase generation, and explanations just like the existing
+languages.
+
+**A welcome screen on first launch.** The first time you open the app it greets you and lets you
+choose your three languages — interface, studied, and native — before you start. It opens in your
+system language (or English) and switches live as you pick.
+
+**Tidier action buttons on every card.** Play, Copy, and Save (and Explain in History) now sit
+together in one row at the top of each card — on "Say it", "Get it", and in History — so the controls
+are consistent and easy to find. Tapping a phrase still starts and stops playback as before.
+
+**A slightly more compact look.** On-screen text is one point smaller across the app for a denser,
+cleaner layout. The tab bar stays as it was.
+
+**Fixes**
+
+- **"What to say" no longer fails with "Couldn't parse the response."** On broad situations the
+  service sometimes wrapped its answer in extra text; the app now reads the real result reliably.
+  (Same fix protects every other screen.)
+- **The Retry button is no longer hidden behind the tab bar** when something goes wrong on "Say it",
+  "Get it", or "See it".
+- **No more stray "Request cancelled" message** when you change mode or re-run while a request is
+  still in flight.
+
 ## 1.2.4 — 2026-06-06
 
 **"Say it" now has two modes.** A selector at the top of the screen lets you choose how it works:

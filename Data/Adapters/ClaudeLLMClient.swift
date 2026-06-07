@@ -83,7 +83,20 @@ public final class ClaudeLLMClient: LLMClient {
         let text = decoded.content.compactMap(\.text).joined()
         guard !text.isEmpty else { throw LLMError.invalidOutput("empty model response") }
 
-        return try template.decode(Self.extractJSON(from: text))
+        // The model can wrap the answer in a preamble before the real object — markdown fences, a
+        // restated copy of the schema, or a line of "thinking out loud" (seen on broad inputs). Decode
+        // every top-level JSON object found, LAST first (the real answer comes last; an echoed schema
+        // or preamble comes first), and return the first that fits the template's type.
+        let candidates = Self.jsonObjects(in: text)
+        guard !candidates.isEmpty else {
+            throw LLMError.invalidOutput("no JSON object in response")
+        }
+        var lastError: Error = LLMError.invalidOutput("no decodable JSON object in response")
+        for candidate in candidates.reversed() {
+            do { return try template.decode(candidate) }
+            catch { lastError = error }
+        }
+        throw lastError
     }
 
     /// Sends the request, retrying transient 429 / 529 / 5xx with exponential backoff.
@@ -138,18 +151,40 @@ public final class ClaudeLLMClient: LLMClient {
         }
     }
 
-    /// Strip markdown fences and isolate the outermost JSON object.
-    static func extractJSON(from text: String) -> String {
-        var t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if t.hasPrefix("```") {
-            t = t.replacingOccurrences(of: "```json", with: "")
-                 .replacingOccurrences(of: "```", with: "")
-                 .trimmingCharacters(in: .whitespacesAndNewlines)
+    /// Every top-level, brace-balanced JSON object in `text`, in order of appearance. String-aware —
+    /// braces inside string values don't affect nesting — so prose, markdown fences, or a restated
+    /// schema surrounding the real object are skipped rather than merged into one unparseable blob (the
+    /// old "first `{` … last `}`" did the latter). Returns [] if there is no complete object.
+    static func jsonObjects(in text: String) -> [String] {
+        var objects: [String] = []
+        var depth = 0
+        var start: String.Index?
+        var inString = false
+        var escaped = false
+        for i in text.indices {
+            let c = text[i]
+            if inString {
+                if escaped { escaped = false }
+                else if c == "\\" { escaped = true }
+                else if c == "\"" { inString = false }
+                continue
+            }
+            switch c {
+            case "\"": inString = true
+            case "{":
+                if depth == 0 { start = i }
+                depth += 1
+            case "}":
+                guard depth > 0 else { break }
+                depth -= 1
+                if depth == 0, let s = start {
+                    objects.append(String(text[s...i]))
+                    start = nil
+                }
+            default: break
+            }
         }
-        if let lo = t.firstIndex(of: "{"), let hi = t.lastIndex(of: "}"), lo <= hi {
-            return String(t[lo...hi])
-        }
-        return t
+        return objects
     }
 
     private static func mediaType(for data: Data) -> String {
