@@ -226,6 +226,11 @@ public final class InViewModel {
                 self.phase = .result
             } catch is CancellationError {
                 // superseded
+            } catch LLMError.cancelled {
+                // Superseded by a newer request — e.g. toggling Translate/Explain mid-generation cancels
+                // this one. The adapter maps the in-flight URLSession cancel to LLMError.cancelled, so it
+                // arrives HERE (not as CancellationError). Swallow it: never surface a self-inflicted
+                // cancel as a failure (that left the screen stuck in `.failed`).
             } catch {
                 self.handleRequestError(error)
             }
