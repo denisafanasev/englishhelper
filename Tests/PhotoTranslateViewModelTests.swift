@@ -17,6 +17,7 @@ import Presentation
         let repo = MockExpressionRepository(seed: [])
         return PhotoTranslateViewModel(
             photoTranslate: PhotoTranslateInteractor(llm: llm, history: MockHistoryRepository()),
+            photoExplain: PhotoExplainInteractor(llm: llm),
             pronounce: PlayPronunciationInteractor(synthesizer: MockSpeechSynthesizing()),
             saveExpression: SaveExpressionInteractor(
                 enrich: EnrichExpressionInteractor(llm: llm), repository: repo
@@ -35,17 +36,34 @@ import Presentation
         }
     }
 
+    /// Explain is the default mode — a photo yields a scene explanation, not text blocks.
+    @Test func explainModeIsDefaultAndProducesExplanation() async throws {
+        let vm = makeVM()
+        #expect(vm.mode == .explain)                 // default + first in the selector
+        #expect(PhotoTranslateViewModel.Mode.allCases.first == .explain)
+        vm.didPickFromLibrary(Data())
+        try await waitUntil { vm.phase == .result }
+        #expect(vm.phase == .result)
+        #expect(vm.blocks.isEmpty)                   // no translate blocks in explain mode
+        #expect(vm.explanation != nil)
+        #expect(vm.explanation?.title.isEmpty == false)
+        #expect(vm.explanation?.details.isEmpty == false)
+    }
+
     @Test func producesBlocks() async throws {
         let vm = makeVM()
+        vm.selectMode(.translate)
         vm.didPickFromLibrary(Data())
         try await waitUntil { vm.phase == .result }
         #expect(vm.phase == .result)
         #expect(vm.blocks.isEmpty == false)
         #expect(vm.blocks.allSatisfy { !$0.en.isEmpty && !$0.ru.isEmpty })
+        #expect(vm.explanation == nil)               // translate mode → no explanation
     }
 
     @Test func noTextFoundMapsToFriendlyError() async throws {
         let vm = makeVM(llm: EmptyBlocksLLM())
+        vm.selectMode(.translate)
         vm.didPickFromLibrary(Data())
         try await waitUntil { vm.phase == .failed }
         #expect(vm.phase == .failed)
@@ -55,6 +73,7 @@ import Presentation
 
     @Test func toggleSaveMarksBlockSaved() async throws {
         let vm = makeVM()
+        vm.selectMode(.translate)
         vm.didPickFromLibrary(Data())
         try await waitUntil { vm.phase == .result }
         let block = try #require(vm.blocks.first)

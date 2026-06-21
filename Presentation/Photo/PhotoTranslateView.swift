@@ -28,6 +28,7 @@ public struct PhotoTranslateView: View {
                 ScrollView {
                     VStack(spacing: Tokens.Space.s20) {
                         if model.needsAPIKey { apiKeyBanner }
+                        modeSelector
                         contentSection
                     }
                     .padding(Tokens.Space.s20)
@@ -95,21 +96,47 @@ public struct PhotoTranslateView: View {
 
     // MARK: Sections
 
+    private var modeSelector: some View {
+        SegmentedSelector(
+            PhotoTranslateViewModel.Mode.allCases,
+            selected: model.mode,
+            label: { $0.title },
+            onSelect: { model.selectMode($0) }
+        )
+        .accessibilityLabel(Loc.t("Режим", "Mode"))
+    }
+
     private var idleSection: some View {
         VStack(spacing: Tokens.Space.s20) {
-            StatusView(
-                systemImage: "camera.viewfinder",
-                title: Loc.t("Переведите текст с фото", "Translate text from a photo",
-                             "Traduire le texte d'une photo", "Traducir texto de una foto",
-                             "Text aus einem Foto übersetzen", "Traduci il testo da una foto"),
-                message: Loc.t(
-                    "Снимите вывеску, меню или страницу — распознаю текст и покажу его на изучаемом языке с переводом.",
-                    "Snap a sign, menu, or page — I'll read the text and show it in the language you're learning, with a translation.",
-                    "Photographiez un panneau, un menu ou une page — je lirai le texte et l'afficherai dans la langue que vous apprenez, avec une traduction.",
-                    "Fotografía un cartel, un menú o una página — leeré el texto y lo mostraré en el idioma que estás aprendiendo, con una traducción.",
-                    "Fotografiere ein Schild, eine Speisekarte oder eine Seite – ich erkenne den Text und zeige ihn in der Sprache, die du lernst, mit einer Übersetzung.",
-                    "Fotografa un cartello, un menu o una pagina: riconoscerò il testo e lo mostrerò nella lingua che stai imparando, con una traduzione.")
-            )
+            if model.mode == .explain {
+                StatusView(
+                    systemImage: "sparkle.magnifyingglass",
+                    title: Loc.t("Что это? Расскажу", "What is it? I'll explain",
+                                 "Qu'est-ce que c'est ? Je vous explique", "¿Qué es? Te lo explico",
+                                 "Was ist das? Ich erkläre es", "Cos'è? Te lo spiego"),
+                    message: Loc.t(
+                        "Снимите место, вывеску, знак или предмет — объясню, что это, и расскажу про местные особенности и контекст.",
+                        "Snap a place, sign, or object — I'll explain what it is and its local context and quirks.",
+                        "Photographiez un lieu, un panneau ou un objet — j'expliquerai ce que c'est, son contexte local et ses particularités.",
+                        "Fotografía un lugar, cartel u objeto — te explicaré qué es, su contexto local y sus particularidades.",
+                        "Fotografiere einen Ort, ein Schild oder ein Objekt – ich erkläre, was es ist, den lokalen Kontext und Besonderheiten.",
+                        "Fotografa un luogo, un cartello o un oggetto: spiegherò cos'è, il contesto locale e le sue particolarità.")
+                )
+            } else {
+                StatusView(
+                    systemImage: "camera.viewfinder",
+                    title: Loc.t("Переведите текст с фото", "Translate text from a photo",
+                                 "Traduire le texte d'une photo", "Traducir texto de una foto",
+                                 "Text aus einem Foto übersetzen", "Traduci il testo da una foto"),
+                    message: Loc.t(
+                        "Снимите вывеску, меню или страницу — распознаю текст и покажу его на изучаемом языке с переводом.",
+                        "Snap a sign, menu, or page — I'll read the text and show it in the language you're learning, with a translation.",
+                        "Photographiez un panneau, un menu ou une page — je lirai le texte et l'afficherai dans la langue que vous apprenez, avec une traduction.",
+                        "Fotografía un cartel, un menú o una página — leeré el texto y lo mostraré en el idioma que estás aprendiendo, con una traducción.",
+                        "Fotografiere ein Schild, eine Speisekarte oder eine Seite – ich erkenne den Text und zeige ihn in der Sprache, die du lernst, mit einer Übersetzung.",
+                        "Fotografa un cartello, un menu o una pagina: riconoscerò il testo e lo mostrerò nella lingua che stai imparando, con una traduzione.")
+                )
+            }
             sourceButtons
         }
         .padding(.top, Tokens.Space.s24)
@@ -152,9 +179,13 @@ public struct PhotoTranslateView: View {
     }
 
     private var progressCaption: String {
-        Loc.t("Распознаю и перевожу…", "Reading and translating…",
-              "Lecture et traduction…", "Leyendo y traduciendo…",
-              "Lese und übersetze…", "Lettura e traduzione…")
+        model.mode == .explain
+            ? Loc.t("Рассматриваю фото…", "Looking at the photo…",
+                    "J'observe la photo…", "Observando la foto…",
+                    "Betrachte das Foto…", "Osservo la foto…")
+            : Loc.t("Распознаю и перевожу…", "Reading and translating…",
+                    "Lecture et traduction…", "Leyendo y traduciendo…",
+                    "Lese und übersetze…", "Lettura e traduzione…")
     }
 
     private var resultSection: some View {
@@ -165,12 +196,42 @@ public struct PhotoTranslateView: View {
                     .aspectRatio(image.size.width / image.size.height, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.card, style: .continuous))
             }
-            ForEach(model.blocks) { block in
-                blockCard(block)
+            // Translate mode → per-block cards; Explain mode → the scene explanation card.
+            if !model.blocks.isEmpty {
+                ForEach(model.blocks) { block in
+                    blockCard(block)
+                }
+            } else if let explanation = model.explanation {
+                explanationCard(explanation)
             }
             // Take or pick a NEW photo directly from the result (replaces the current one).
             sourceButtons
         }
+    }
+
+    /// Explain mode: what the photo shows + its local/cultural context (read-only, copyable).
+    private func explanationCard(_ explanation: SceneExplanation) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.s12) {
+            HStack(alignment: .top) {
+                Text(explanation.title)
+                    .textStyle(Tokens.Text.title3)
+                    .foregroundStyle(Tokens.Content.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: Tokens.Space.s8)
+                CopyButton(explanation.title + "\n\n" + explanation.details, style: .icon,
+                           accessibilityLabel: Loc.t("Скопировать объяснение", "Copy explanation"))
+            }
+
+            Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)
+
+            Text(explanation.details)
+                .textStyle(Tokens.Text.body)
+                .foregroundStyle(Tokens.Content.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Tokens.Space.s16)
+        .glassPanel(cornerRadius: Tokens.Radius.card)
     }
 
     /// One recognized block: English + Russian translation, with play + save.

@@ -37,6 +37,7 @@ public final class AppContainer: Sendable {
     public let whatToSay: any WhatToSayUseCase
     public let translateText: any TranslateTextUseCase
     public let photoTranslate: any PhotoTranslateUseCase
+    public let photoExplain: any PhotoExplainUseCase
     public let enrich: any EnrichExpressionUseCase
     public let studyList: any StudyListUseCase
     public let requestHistory: any RequestHistoryUseCase
@@ -80,6 +81,7 @@ public final class AppContainer: Sendable {
         self.whatToSay = WhatToSayInteractor(llm: llm, history: history)
         self.translateText = TranslateTextInteractor(llm: llm, history: history)
         self.photoTranslate = PhotoTranslateInteractor(llm: llm, history: history)   // LLM vision (no local OCR)
+        self.photoExplain = PhotoExplainInteractor(llm: llm)                          // "See it" Explain mode
         self.enrich = EnrichExpressionInteractor(llm: llm)
         self.studyList = StudyListInteractor(repository: expressions)
         self.requestHistory = RequestHistoryInteractor(history: history)
@@ -194,6 +196,7 @@ public final class AppContainer: Sendable {
     public func makePhotoTranslateViewModel() -> PhotoTranslateViewModel {
         PhotoTranslateViewModel(
             photoTranslate: photoTranslate,
+            photoExplain: photoExplain,
             pronounce: pronounce,
             saveExpression: saveExpression,
             studyList: studyList,

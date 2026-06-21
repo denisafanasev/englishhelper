@@ -59,6 +59,8 @@ public final class MockLLMClient: LLMClient {
               {"en":"Please stand clear of the closing doors","ru":"Пожалуйста, отойдите от закрывающихся дверей"}
             ]}
             """
+        case "photoExplain":
+            return #"{"title":"Колизей","details":"Древнеримский амфитеатр в центре Рима, построен в I веке н. э. Здесь проходили гладиаторские бои. Сегодня это один из главных символов Италии и объект Всемирного наследия ЮНЕСКО."}"#
         case "healthCheck":
             return #"{"ok":true}"#
         case "enrichCard":

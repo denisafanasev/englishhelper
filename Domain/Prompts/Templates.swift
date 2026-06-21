@@ -63,6 +63,22 @@ public struct ExpressionExplanation: Codable, Sendable, Equatable {
     }
 }
 
+/// `{ title, details }` — a learner-facing explanation of WHAT a photo shows and its local/cultural
+/// context (a landmark, a road sign, a product, …), written in the NATIVE language. Used by the
+/// "See it" / Explain mode — the photo analogue of Get-it/Explain.
+public struct SceneExplanation: Codable, Sendable, Equatable {
+    /// A short name / headline for what the photo shows.
+    public let title: String
+    /// The explanation: what it is, its history / cultural / local context, any local rules or
+    /// peculiarities, and how they differ from the learner's own environment. In the native language.
+    public let details: String
+
+    public init(title: String, details: String) {
+        self.title = title
+        self.details = details
+    }
+}
+
 /// `{ "ru", "example", "synonyms": [..] }`
 public struct CardEnrichment: Codable, Sendable, Equatable {
     public let ru: String
@@ -520,6 +536,69 @@ public struct PhotoBlocksTemplate: PromptTemplate {
             .map { TranslatedBlock(en: PlainText.clean($0.en), ru: PlainText.clean($0.ru)) }
             .filter { !$0.en.isEmpty }
         return PhotoBlocksResult(blocks: cleaned)
+    }
+}
+
+// MARK: - photoExplain (multimodal: image → cultural/local explanation of what it shows)
+
+/// Image → an explanation of WHAT the photo shows in the context of the STUDIED-language place/country
+/// (a landmark + its history, a rental-car brand + its quirks, a road sign + the local rule behind it,
+/// …), written in the NATIVE language. The "See it" analogue of Get-it/Explain. Not OCR — it explains
+/// the scene/object, helping the learner understand the local/cultural context.
+public struct PhotoExplainTemplate: PromptTemplate {
+    public typealias Input = RecognizableImage
+    public typealias Output = SceneExplanation
+
+    public let id = "photoExplain"
+    public let studiedLanguage: String   // the place/country whose context to explain (the studied env)
+    public let nativeLanguage: String    // the explanation is WRITTEN in this language
+    public init(studiedLanguage: String = "English", nativeLanguage: String = "Russian") {
+        self.studiedLanguage = studiedLanguage
+        self.nativeLanguage = nativeLanguage
+    }
+
+    // Vision + a thoughtful multi-paragraph explanation: give it room and the balanced (not fast) profile.
+    public var maxOutputTokens: Int { 4096 }
+    public var prefersFastResponse: Bool { false }
+
+    public var systemPrompt: String {
+        """
+        A \(nativeLanguage) speaker who is learning \(studiedLanguage) — and is likely travelling in a
+        \(studiedLanguage)-speaking place — took or picked this photo and wants to understand WHAT it
+        shows and its LOCAL / CULTURAL context. Help them make sense of it in the \(studiedLanguage)-
+        speaking environment. This is NOT translation and NOT OCR — explain the scene / object / place.
+
+        Identify what is in the photo and explain it for someone unfamiliar with the local context:
+        - a landmark or place → what it is, briefly its history and why it matters locally;
+        - a product, brand, shop, or rental (e.g. a car-rental sign) → what the company / thing is and
+          its notable local specifics;
+        - a road sign, notice, or rule → what it means, the LOCAL rule behind it, and how it differs
+          from what a \(nativeLanguage) speaker is used to;
+        - food, a menu item, or an everyday object → what it is and its local significance.
+        Focus on cultural / local context and on differences from the learner's own country. If the
+        photo is unclear or there is nothing meaningful to explain, say so plainly in "details".
+
+        Write BOTH fields ENTIRELY in \(nativeLanguage):
+        - "title": a short name / headline for what the photo shows.
+        - "details": the explanation (a few short paragraphs) — what it is, its local / cultural context,
+          and any peculiarities or differences worth knowing.
+        \(plainTextRule)
+        """
+    }
+
+    public var outputJSONSchema: String {
+        #"{"type":"object","properties":{"title":{"type":"string"},"details":{"type":"string"}},"required":["title","details"]}"#
+    }
+
+    public func userMessage(for input: RecognizableImage) -> String {
+        "Explain what this photo shows and its local/cultural context."
+    }
+
+    public func image(for input: RecognizableImage) -> Data? { input.data }
+
+    public func decode(_ rawJSON: String) throws -> SceneExplanation {
+        let raw = try decodeJSON(SceneExplanation.self, from: rawJSON)
+        return SceneExplanation(title: PlainText.clean(raw.title), details: PlainText.clean(raw.details))
     }
 }
 

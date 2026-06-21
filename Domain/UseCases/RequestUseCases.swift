@@ -283,6 +283,26 @@ public struct PhotoTranslateInteractor: PhotoTranslateUseCase {
     }
 }
 
+// MARK: - photoExplain ("See it" / Explain — explain WHAT a photo shows in its local/cultural context)
+
+public protocol PhotoExplainUseCase: Sendable {
+    /// Image → an explanation of WHAT it shows and its local/cultural context (a place + its history, a
+    /// sign + the local rule, …), written in the native language. Not recorded in history — a reference
+    /// lookup, like text Explain.
+    func callAsFunction(_ image: RecognizableImage, studiedLanguage: String, nativeLanguage: String) async throws -> SceneExplanation
+}
+
+public struct PhotoExplainInteractor: PhotoExplainUseCase {
+    private let llm: LLMClient
+    public init(llm: LLMClient) { self.llm = llm }
+
+    public func callAsFunction(_ image: RecognizableImage, studiedLanguage: String, nativeLanguage: String) async throws -> SceneExplanation {
+        try await llm.run(
+            PhotoExplainTemplate(studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage), input: image
+        )
+    }
+}
+
 // MARK: - enrichCard
 
 public protocol EnrichExpressionUseCase: Sendable {
