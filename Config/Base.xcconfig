@@ -4,4 +4,8 @@
 // repo root. The `#include?` form is OPTIONAL: if Secrets.xcconfig is absent (fresh clone / CI),
 // generation and build still succeed — the app simply launches without a live API key and the
 // composition root stays on mocks until one is provided.
+// Default fast (plain-translation) model — Haiku, for speed. Overridable in Secrets.xcconfig.
+// Declared before the include so the Info.plist `$(CLAUDE_FAST_MODEL)` always resolves to a real value.
+CLAUDE_FAST_MODEL = claude-haiku-4-5
+
 #include? "../Secrets.xcconfig"

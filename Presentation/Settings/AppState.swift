@@ -75,6 +75,49 @@ public final class ThemeStore {
     }
 }
 
+// MARK: - Per-scenario model selection (Translate / Explain)
+
+/// The model a scenario routes to. Maps a user-facing choice to the abstract `ModelTier` the LLM
+/// adapter resolves to a concrete model string (fast = Haiku, standard = Sonnet).
+public enum LLMModelChoice: String, CaseIterable, Sendable {
+    case haiku, sonnet
+    public var tier: ModelTier { self == .haiku ? .fast : .standard }
+    public var title: String { self == .haiku ? "Haiku" : "Sonnet" }
+
+    static let translateKey = "translateModel"
+    static let explainKey = "explainModel"
+
+    /// Live reads for the routing providers the App wires into the interactors. Defaults: translate →
+    /// Haiku (speed), explain → Sonnet (quality). Read off the main actor, so kept as plain statics.
+    public static var currentTranslate: LLMModelChoice {
+        LLMModelChoice(rawValue: UserDefaults.standard.string(forKey: translateKey) ?? "") ?? .haiku
+    }
+    public static var currentExplain: LLMModelChoice {
+        LLMModelChoice(rawValue: UserDefaults.standard.string(forKey: explainKey) ?? "") ?? .sonnet
+    }
+}
+
+/// Persisted model choice for the Translate scenario (Get it → Translate). Default: Haiku.
+@MainActor
+@Observable
+public final class TranslateModelStore {
+    public var choice: LLMModelChoice {
+        didSet { UserDefaults.standard.set(choice.rawValue, forKey: LLMModelChoice.translateKey) }
+    }
+    public init() { choice = LLMModelChoice.currentTranslate }
+}
+
+/// Persisted model choice for the Explain scenario (Get it → Explain, and every "explain" affordance
+/// that routes into it). Default: Sonnet.
+@MainActor
+@Observable
+public final class ExplainModelStore {
+    public var choice: LLMModelChoice {
+        didSet { UserDefaults.standard.set(choice.rawValue, forKey: LLMModelChoice.explainKey) }
+    }
+    public init() { choice = LLMModelChoice.currentExplain }
+}
+
 /// A request to open the "Понять"/Get it screen in Explain mode for a specific phrase. Used to route
 /// the "Explain" action from See it / History straight to the real Get it screen (no extra sheet),
 /// optionally carrying a photo as visual context (from See it).
@@ -88,6 +131,13 @@ public struct ExplainRequest: Equatable, Sendable {
         self.imageData = imageData
         self.alternatives = alternatives
     }
+}
+
+/// A shared item from the iOS Share sheet, already mapped to its target scenario. The App bridges
+/// `SharedInbox`'s payload to this Presentation-visible type; RootView routes it.
+public enum SharedRoute: Equatable, Sendable {
+    case explainText(String)   // → Get it / Explain
+    case explainImage(Data)    // → See it / Explain
 }
 
 @MainActor

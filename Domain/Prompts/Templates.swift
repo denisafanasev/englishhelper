@@ -268,10 +268,16 @@ public struct ExplainExpressionTemplate: PromptTemplate {
     public let id = "explainExpression"
     public let studiedLanguage: String   // the language being learned (the "studied" headline)
     public let nativeLanguage: String    // the explanation is written in THIS language
-    public init(studiedLanguage: String = "English", nativeLanguage: String = "Russian") {
+    public let tier: ModelTier
+    public init(studiedLanguage: String = "English", nativeLanguage: String = "Russian",
+                tier: ModelTier = .standard) {
         self.studiedLanguage = studiedLanguage
         self.nativeLanguage = nativeLanguage
+        self.tier = tier
     }
+
+    /// Explanation routes to the user-selected explain model (default: the STANDARD model, Sonnet).
+    public var modelTier: ModelTier { tier }
 
     public var systemPrompt: String {
         """
@@ -363,10 +369,16 @@ public struct UnderstandTemplate: PromptTemplate {
     public let id = "understand"
     public let studiedLanguage: String
     public let nativeLanguage: String
-    public init(studiedLanguage: String = "English", nativeLanguage: String = "Russian") {
+    public let tier: ModelTier
+    public init(studiedLanguage: String = "English", nativeLanguage: String = "Russian",
+                tier: ModelTier = .fast) {
         self.studiedLanguage = studiedLanguage
         self.nativeLanguage = nativeLanguage
+        self.tier = tier
     }
+
+    /// Plain translation routes to the user-selected translate model (default: the FAST model, Haiku).
+    public var modelTier: ModelTier { tier }
 
     public var systemPrompt: String {
         """
@@ -583,7 +595,10 @@ public struct HealthCheckTemplate: PromptTemplate {
     public typealias Output = Bool
 
     public let id = "healthCheck"
-    public init() {}
+    /// Which model this ping checks — lets Settings probe both the standard and fast models.
+    public let tier: ModelTier
+    public init(tier: ModelTier = .standard) { self.tier = tier }
+    public var modelTier: ModelTier { tier }
 
     public var systemPrompt: String { "Reply ONLY with the JSON object {\"ok\": true}." }
     public var outputJSONSchema: String {

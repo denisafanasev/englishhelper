@@ -13,15 +13,19 @@ import Foundation
 
 public struct AppConfig: Sendable {
     public let claudeAPIKey: String?
-    public let claudeModel: String
+    public let claudeModel: String       // standard tier (Sonnet) — used for everything but plain translate
+    public let claudeFastModel: String   // fast tier (Haiku) — used for plain translation, for speed
     public let claudeBaseURL: URL
 
     public static let defaultModel = "claude-sonnet-4-6"
+    public static let defaultFastModel = "claude-haiku-4-5"
     public static let defaultBaseURL = URL(string: "https://api.anthropic.com")!
 
-    public init(claudeAPIKey: String?, claudeModel: String, claudeBaseURL: URL) {
+    public init(claudeAPIKey: String?, claudeModel: String,
+                claudeFastModel: String = defaultFastModel, claudeBaseURL: URL) {
         self.claudeAPIKey = claudeAPIKey
         self.claudeModel = claudeModel
+        self.claudeFastModel = claudeFastModel
         self.claudeBaseURL = claudeBaseURL
     }
 
@@ -37,6 +41,7 @@ public struct AppConfig: Sendable {
         return AppConfig(
             claudeAPIKey: string("CLAUDE_API_KEY"),
             claudeModel: string("CLAUDE_MODEL") ?? defaultModel,
+            claudeFastModel: string("CLAUDE_FAST_MODEL") ?? defaultFastModel,
             claudeBaseURL: string("CLAUDE_BASE_URL").flatMap(URL.init(string:)) ?? defaultBaseURL
         )
     }

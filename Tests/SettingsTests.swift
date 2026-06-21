@@ -17,7 +17,7 @@ import Presentation
     @Test func healthOkOnMock() async {
         let vm = SettingsViewModel(
             connectionHealth: ConnectionHealthInteractor(llm: MockLLMClient()),
-            appVersion: "1.0", modelName: "claude-sonnet-4-6"
+            appVersion: "1.0", modelName: "claude-sonnet-4-6", fastModelName: "claude-haiku-4-5"
         )
         await vm.check()
         #expect(vm.health == .ok)
@@ -28,7 +28,7 @@ import Presentation
             connectionHealth: ConnectionHealthInteractor(
                 llm: StubLLMClient(behavior: .failure(.notConfigured), latency: .milliseconds(1))
             ),
-            appVersion: "1.0", modelName: "m"
+            appVersion: "1.0", modelName: "m", fastModelName: "h"
         )
         await vm.check()
         guard case .failed = vm.health else {

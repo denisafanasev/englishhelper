@@ -20,16 +20,22 @@ public enum ConnectionHealth: Sendable, Equatable {
 }
 
 public protocol ConnectionHealthUseCase: Sendable {
-    func callAsFunction() async -> ConnectionHealth
+    /// Probe a specific model tier (standard / fast) so Settings can show both models' status.
+    func callAsFunction(_ tier: ModelTier) async -> ConnectionHealth
+}
+
+public extension ConnectionHealthUseCase {
+    /// Back-compat convenience: probe the standard model.
+    func callAsFunction() async -> ConnectionHealth { await callAsFunction(.standard) }
 }
 
 public struct ConnectionHealthInteractor: ConnectionHealthUseCase {
     private let llm: LLMClient
     public init(llm: LLMClient) { self.llm = llm }
 
-    public func callAsFunction() async -> ConnectionHealth {
+    public func callAsFunction(_ tier: ModelTier) async -> ConnectionHealth {
         do {
-            _ = try await llm.run(HealthCheckTemplate(), input: ())
+            _ = try await llm.run(HealthCheckTemplate(tier: tier), input: ())
             return .ok
         } catch let error as LLMError {
             switch error {

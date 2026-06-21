@@ -12,39 +12,54 @@ import Domain
 
 public final class ClaudeLLMClient: LLMClient {
     private let apiKey: String
-    private let model: String
+    private let model: String          // standard tier (e.g. Sonnet)
+    private let fastModel: String      // fast tier (e.g. Haiku) — for simple translation
     private let endpoint: URL
     private let session: URLSession
     private let anthropicVersion = "2023-06-01"
     /// Retries on transient 429/529/5xx with exponential backoff (Anthropic's recommendation).
     private let maxRetries: Int
     private let baseRetryDelay: Double   // seconds
+    /// Optional fast-offline probe: if it returns false, we skip the request and throw `.offline` at
+    /// once — so `waitsForConnectivity` (below) never strands a truly-offline device on a long wait.
+    /// Nil ⇒ no pre-check (the previous behaviour; used by tests). Wired to NWPathMonitor in the app.
+    private let isReachable: (@Sendable () -> Bool)?
 
     public init(
         apiKey: String,
         model: String,
+        fastModel: String? = nil,
         baseURL: URL,
         session: URLSession? = nil,
         maxRetries: Int = 3,
-        baseRetryDelay: Double = 0.5
+        baseRetryDelay: Double = 0.5,
+        isReachable: (@Sendable () -> Bool)? = nil
     ) {
         self.apiKey = apiKey
         self.model = model
+        self.fastModel = fastModel ?? model   // no fast model configured ⇒ everything on the standard one
         self.endpoint = baseURL.appending(path: "v1/messages")
-        // An instance-owned, connectivity-aware session (not the global `.shared`): fail fast when
-        // offline so it maps to LLMError.offline instead of hanging, with explicit timeouts.
+        // An instance-owned, connectivity-aware session (not the global `.shared`), with explicit
+        // timeouts and waits-for-connectivity so brief cellular blips don't kill an in-flight request.
         self.session = session ?? Self.defaultSession()
         self.maxRetries = maxRetries
         self.baseRetryDelay = baseRetryDelay
+        self.isReachable = isReachable
     }
 
     private static func defaultSession() -> URLSession {
         let config = URLSessionConfiguration.default
-        // Ceiling for the slowest case (a dense photo): the per-REQUEST timeoutInterval set in run()
-        // is the real cap (30s for text, 90s for photo), so these just need to be ≥ that.
+        // Flaky cellular (tower handoffs, tunnels, weak signal) drops the path for a second or two,
+        // then recovers. `waitsForConnectivity = true` lets URLSession quietly PAUSE and RESUME across
+        // those blips instead of failing the instant the path drops — the single biggest lever for
+        // "get a result on a bad link". The per-REQUEST `request.timeoutInterval` (30s text / 90s
+        // photo) is still the response-START deadline (fast feedback); `timeoutIntervalForResource` is
+        // just the outer ceiling for the whole transfer, raised so a long photo job that survives a few
+        // blips isn't cut off mid-recovery. A TRULY-offline device is short-circuited before we wait
+        // at all (see the `isReachable` pre-check in `send`), so waiting-for-connectivity never hangs.
         config.timeoutIntervalForRequest = 90
-        config.timeoutIntervalForResource = 120
-        config.waitsForConnectivity = false
+        config.timeoutIntervalForResource = 600
+        config.waitsForConnectivity = true
         return URLSession(configuration: config)
     }
 
@@ -74,8 +89,11 @@ public final class ClaudeLLMClient: LLMClient {
         // timeout (fast). The photo translator runs at MEDIUM effort with a larger output budget and
         // a much longer timeout, because OCR-ing + translating a dense page is genuinely a 30–60s job.
         let fast = template.prefersFastResponse
+        // Route to the model tier the template asks for: plain translation → fast model (Haiku),
+        // everything else → standard (Sonnet). Falls back to the standard model if no fast one is set.
+        let modelName = template.modelTier == .fast ? fastModel : model
         let body = RequestBody(
-            model: model,
+            model: modelName,
             max_tokens: template.maxOutputTokens,
             system: system,
             messages: [.init(role: "user", content: content)],
@@ -89,7 +107,16 @@ public final class ClaudeLLMClient: LLMClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.setValue(anthropicVersion, forHTTPHeaderField: "anthropic-version")
-        request.httpBody = try JSONEncoder().encode(body)
+        // Compress the upload when it's big enough to benefit — the photo's base64 image is the win on
+        // a slow uplink. Only swap in the gzip body if it's actually SMALLER (tiny text bodies inflate
+        // by the gzip envelope). The Anthropic API accepts `Content-Encoding: gzip` request bodies.
+        let bodyData = try JSONEncoder().encode(body)
+        if bodyData.count >= 1024, let gzipped = bodyData.gzipped(), gzipped.count < bodyData.count {
+            request.httpBody = gzipped
+            request.setValue("gzip", forHTTPHeaderField: "Content-Encoding")
+        } else {
+            request.httpBody = bodyData
+        }
 
         let data = try await send(request)
 
@@ -126,6 +153,10 @@ public final class ClaudeLLMClient: LLMClient {
     /// blip constantly (cell handoff, weak signal), so a momentary failure recovers silently instead of
     /// surfacing as a hard "Service unavailable"; only a SUSTAINED failure (retries exhausted) is shown.
     private func send(_ request: URLRequest) async throws -> Data {
+        // Fast-offline: with no network path at all, fail immediately rather than letting
+        // `waitsForConnectivity` wait (up to the resource timeout) for a connection that isn't coming.
+        // A flaky-but-present link reports reachable and is handled by waits-for-connectivity + retries.
+        if let isReachable, !isReachable() { throw LLMError.offline }
         var attempt = 0
         while true {
             // A superseded request cancels its Task; surface that as the dedicated case so callers

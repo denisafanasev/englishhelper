@@ -151,11 +151,17 @@ public extension ExplainExpressionUseCase {
 
 public struct ExplainExpressionInteractor: ExplainExpressionUseCase {
     private let llm: LLMClient
-    public init(llm: LLMClient) { self.llm = llm }
+    /// Resolves the model tier for explanation at call time (reads the user's Settings choice). Default
+    /// keeps the standard model (Sonnet); the App wires a live provider so the setting takes effect.
+    private let tier: @Sendable () -> ModelTier
+    public init(llm: LLMClient, tier: @escaping @Sendable () -> ModelTier = { .standard }) {
+        self.llm = llm
+        self.tier = tier
+    }
 
     public func callAsFunction(_ text: String, studiedLanguage: String, nativeLanguage: String, image: Data?, alternatives: [String]) async throws -> ExpressionExplanation {
         try await llm.run(
-            ExplainExpressionTemplate(studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage),
+            ExplainExpressionTemplate(studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage, tier: tier()),
             input: ExplainInput(text: text, image: image, alternatives: alternatives)
         )
     }
@@ -172,15 +178,20 @@ public protocol UnderstandUseCase: Sendable {
 public struct UnderstandInteractor: UnderstandUseCase {
     private let llm: LLMClient
     private let history: HistoryRepository
+    /// Resolves the model tier for translation at call time (reads the user's Settings choice). Default
+    /// keeps the fast model (Haiku); the App wires a live provider so the setting takes effect.
+    private let tier: @Sendable () -> ModelTier
 
-    public init(llm: LLMClient, history: HistoryRepository) {
+    public init(llm: LLMClient, history: HistoryRepository,
+                tier: @escaping @Sendable () -> ModelTier = { .fast }) {
         self.llm = llm
         self.history = history
+        self.tier = tier
     }
 
     public func callAsFunction(_ text: String, studiedLanguage: String, nativeLanguage: String) async throws -> Understanding {
         let result = try await llm.run(
-            UnderstandTemplate(studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage), input: text
+            UnderstandTemplate(studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage, tier: tier()), input: text
         )
         // History records the STUDIED rendering as the entry text (the learning artifact: what the
         // card headlines, what TTS speaks in the studied language, and what saving files as the

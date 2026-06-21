@@ -11,29 +11,45 @@ import Domain
 public final class SettingsViewModel {
     public enum Health: Equatable { case checking, ok, failed(String) }
 
+    /// Standard model (Sonnet) — used for everything but plain translation.
     public private(set) var health: Health = .checking
+    /// Fast model (Haiku) — used for plain translation. Shown alongside the standard one in Settings.
+    public private(set) var fastHealth: Health = .checking
     public let appVersion: String
     public let modelName: String
+    public let fastModelName: String
 
     private let connectionHealth: any ConnectionHealthUseCase
 
     public init(
         connectionHealth: any ConnectionHealthUseCase,
         appVersion: String,
-        modelName: String
+        modelName: String,
+        fastModelName: String
     ) {
         self.connectionHealth = connectionHealth
         self.appVersion = appVersion
         self.modelName = modelName
+        self.fastModelName = fastModelName
     }
 
+    /// Probe BOTH models concurrently and surface each status independently.
     public func check() async {
-        let previous = health
+        let prevStandard = health, prevFast = fastHealth
         health = .checking
-        switch await connectionHealth() {
-        case .ok: health = .ok
-        case .failed(let reason): health = .failed(Self.message(for: reason))
-        case .cancelled: health = previous   // check torn down — restore prior status, no false failure
+        fastHealth = .checking
+        async let standard = connectionHealth(.standard)
+        async let fast = connectionHealth(.fast)
+        let (standardResult, fastResult) = await (standard, fast)
+        health = Self.resolve(standardResult, previous: prevStandard)
+        fastHealth = Self.resolve(fastResult, previous: prevFast)
+    }
+
+    private static func resolve(_ result: ConnectionHealth, previous: Health) -> Health {
+        switch result {
+        case .ok: .ok
+        case .failed(let reason): .failed(message(for: reason))
+        case .cancelled: previous   // check torn down — restore prior status, no false failure
         }
     }
 

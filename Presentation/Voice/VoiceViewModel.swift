@@ -188,6 +188,14 @@ public final class VoiceViewModel {
 
     // MARK: Generate
 
+    /// Auto-retry after the network returns (RootView calls this on reconnect): replay the last
+    /// request, but ONLY when we're showing an offline failure — re-running any other error would just
+    /// fail the same way. The intent/mode/tone are still set, so `submit()` faithfully replays it.
+    public func retryOnReconnect() {
+        guard phase == .failed, isOffline, canSubmit else { return }
+        submit()
+    }
+
     public func submit() {
         let text = intent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }

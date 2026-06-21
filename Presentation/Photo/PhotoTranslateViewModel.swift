@@ -118,6 +118,13 @@ public final class PhotoTranslateViewModel {
         process(data)
     }
 
+    /// Auto-retry after the network returns (RootView calls this on reconnect): re-run OCR+translate on
+    /// the last image, but ONLY when we're showing an offline failure (other errors would just repeat).
+    public func retryOnReconnect() {
+        guard phase == .failed, isOffline, let data = imageData else { return }
+        process(data)
+    }
+
     /// The picked library photo couldn't be loaded/decoded — surface it instead of silently doing nothing.
     public func imageLoadFailed() {
         requestTask?.cancel()

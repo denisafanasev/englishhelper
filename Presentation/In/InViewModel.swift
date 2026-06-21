@@ -193,6 +193,14 @@ public final class InViewModel {
 
     // MARK: Translate / Explain
 
+    /// Auto-retry after the network returns (RootView calls this on reconnect): replay the last
+    /// request, but ONLY when we're showing an offline failure — re-running any other error would just
+    /// fail the same way. The source/mode are still set, so `submit()` faithfully replays it.
+    public func retryOnReconnect() {
+        guard phase == .failed, isOffline, canSubmit else { return }
+        submit()
+    }
+
     /// One button: act on fresh input, or re-run when a result is already shown. The current `mode`
     /// decides whether the LLM TRANSLATES the input into the native language or EXPLAINS its nuance.
     public func submit() {

@@ -9,6 +9,16 @@
 
 import Foundation
 
+/// Which model tier the adapter should route a template to. The Domain knows only the abstract tier
+/// (fast vs. capable); the App maps each tier to a concrete model string from config, so the Domain
+/// never hard-codes provider model names.
+public enum ModelTier: Sendable, Equatable {
+    /// The capable default — used for everything that isn't a simple translation (e.g. Sonnet).
+    case standard
+    /// A faster, cheaper model for simple latency-sensitive tasks like plain translation (e.g. Haiku).
+    case fast
+}
+
 /// A typed, self-describing LLM instruction: system prompt + output schema + decoder.
 public protocol PromptTemplate<Input, Output>: Sendable {
     associatedtype Input: Sendable
@@ -48,6 +58,11 @@ public extension PromptTemplate {
     /// speed. Vision / long-output templates set this false to trade a little latency for accuracy
     /// and headroom. This is a backend-agnostic HINT — the LLM adapter maps it to provider params.
     var prefersFastResponse: Bool { true }
+
+    /// Which model tier to route this template to. Default keeps the capable model; simple text tasks
+    /// (e.g. plain translation) override to `.fast` to cut latency. Backend-agnostic — the App maps the
+    /// tier to a concrete model string, so the Domain never names a provider model.
+    var modelTier: ModelTier { .standard }
 }
 
 public extension PromptTemplate {

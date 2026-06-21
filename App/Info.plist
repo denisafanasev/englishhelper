@@ -16,6 +16,17 @@
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>tech.10xt.englishhelper</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>englishhelper</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
@@ -24,6 +35,8 @@
 	<string>$(CLAUDE_API_KEY)</string>
 	<key>CLAUDE_MODEL</key>
 	<string>$(CLAUDE_MODEL)</string>
+	<key>CLAUDE_FAST_MODEL</key>
+	<string>$(CLAUDE_FAST_MODEL)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSRequiresIPhoneOS</key>

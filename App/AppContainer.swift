@@ -93,20 +93,27 @@ public final class AppContainer: Sendable {
         self.voiceCaptureEN = VoiceCaptureInteractor(recognizer: speechRecognizerEN)
         self.pronounce = PlayPronunciationInteractor(synthesizer: speechSynthesizer)
         self.connectionHealth = ConnectionHealthInteractor(llm: llm)
-        self.understand = UnderstandInteractor(llm: llm, history: history)
-        self.explainExpression = ExplainExpressionInteractor(llm: llm)
+        // Route translate / explain to the user-selected model (live read each request). Defaults:
+        // translate → Haiku (speed), explain → Sonnet (quality).
+        self.understand = UnderstandInteractor(llm: llm, history: history,
+                                               tier: { LLMModelChoice.currentTranslate.tier })
+        self.explainExpression = ExplainExpressionInteractor(llm: llm,
+                                                             tier: { LLMModelChoice.currentExplain.tier })
     }
 
     /// v1: the whole graph on LIVE adapters. Swapping any engine is exactly ONE line below
     /// (see README "Swapping an engine"). The Domain/Presentation never learn which one is wired.
-    public static func bootLive(config: AppConfig = .load()) throws -> AppContainer {
+    public static func bootLive(config: AppConfig = .load(),
+                                isReachable: (@Sendable () -> Bool)? = nil) throws -> AppContainer {
         let (modelContainer, usingFallbackStore) = try makePersistentContainer()
         return AppContainer(
             config: config,
             usingFallbackStore: usingFallbackStore,
             llm: ClaudeLLMClient(apiKey: config.claudeAPIKey ?? "",
                                  model: config.claudeModel,
-                                 baseURL: config.claudeBaseURL),
+                                 fastModel: config.claudeFastModel,
+                                 baseURL: config.claudeBaseURL,
+                                 isReachable: isReachable),
             // "Say it": the microphone follows the user's chosen native language (resolved per capture).
             speechRecognizer: NativeSpeechRecognizer(localeProvider: {
                 Locale(identifier: TargetLanguage.current.speechLocale)
@@ -226,7 +233,8 @@ public final class AppContainer: Sendable {
         return SettingsViewModel(
             connectionHealth: connectionHealth,
             appVersion: version,
-            modelName: config.claudeModel
+            modelName: config.claudeModel,
+            fastModelName: config.claudeFastModel
         )
     }
 }
