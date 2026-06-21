@@ -8,7 +8,10 @@
 
 import Foundation
 import SwiftData
+import OSLog
 import Domain
+
+private let persistenceLog = Logger(subsystem: "tech.10xt.englishhelper", category: "persistence")
 
 @ModelActor
 public actor SwiftDataExpressionRepository: ExpressionRepository {
@@ -42,6 +45,18 @@ public actor SwiftDataExpressionRepository: ExpressionRepository {
         try save()
     }
 
+    public func find(en: String) async throws -> Domain.Expression? {
+        // Case-insensitive/trimmed match in memory: the study list is small (single user) and
+        // SwiftData #Predicate can't express the same normalization reliably.
+        let key = SwiftDataExpressionRepository.normalizedKey(en)
+        let descriptor = FetchDescriptor<ExpressionModel>(
+            sortBy: [SortDescriptor(\.createdAt, order: .forward)]   // oldest first → return the original
+        )
+        return try modelContext.fetch(descriptor)
+            .first { SwiftDataExpressionRepository.normalizedKey($0.en) == key }?
+            .toDomain()
+    }
+
     private func fetchModel(id: UUID) throws -> ExpressionModel? {
         var descriptor = FetchDescriptor<ExpressionModel>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
@@ -56,17 +71,21 @@ public actor SwiftDataExpressionRepository: ExpressionRepository {
 
 @ModelActor
 public actor SwiftDataHistoryRepository: HistoryRepository {
-    /// Keep only the newest N requests so history doesn't grow without bound.
-    public static let maxEntries = 100
+    /// Keep only the newest N requests so history doesn't grow without bound. MUST be ≥ the History
+    /// screen's read limit (`HistoryViewModel.limit`, 200), otherwise the screen can never show its
+    /// requested capacity because the store prunes below it.
+    public static let maxEntries = 200
 
     public func append(_ entry: HistoryEntry) async throws {
         modelContext.insert(try HistoryModel(entry))
         do {
             try modelContext.save()
-            try pruneBeyondLimit()
         } catch {
             throw RepositoryError.persistenceFailed(error.localizedDescription)
         }
+        // The entry is already persisted, so pruning is best-effort: a prune failure must NOT report
+        // the append itself as failed (the caller would think nothing was saved when it actually was).
+        try? pruneBeyondLimit()
     }
 
     /// Delete everything older than the newest `maxEntries` entries.
@@ -86,11 +105,23 @@ public actor SwiftDataHistoryRepository: HistoryRepository {
             sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
         )
         descriptor.fetchLimit = limit
-        return try modelContext.fetch(descriptor).compactMap { try? $0.toDomain() }
+        return try modelContext.fetch(descriptor).compactMap { model in
+            do {
+                return try model.toDomain()
+            } catch {
+                // Don't silently vanish a corrupt row: log it (with the persisted `kindRaw`, which is
+                // otherwise unused) so a decode regression is diagnosable instead of invisible.
+                persistenceLog.error("Dropping undecodable history row kind=\(model.kindRaw, privacy: .public): \(String(describing: error), privacy: .public)")
+                return nil
+            }
+        }
     }
 }
 
 public enum PersistenceSchema {
-    /// The model types the app's ModelContainer must register.
-    public static let models: [any PersistentModel.Type] = [ExpressionModel.self, HistoryModel.self]
+    /// The model types the app's ModelContainer must register (single source of truth — `bootLive`
+    /// and migrations both read this rather than re-listing the @Model types).
+    public static let models: [any PersistentModel.Type] = AppSchemaV1.models
+    /// The current versioned schema, paired with `AppMigrationPlan` when opening the store.
+    public static let current = Schema(versionedSchema: AppSchemaV1.self)
 }

@@ -11,6 +11,7 @@ import Foundation
 public enum ConnectionHealth: Sendable, Equatable {
     case ok
     case failed(Reason)
+    case cancelled   // the check was cancelled (e.g. Settings dismissed) — caller should keep prior status
 
     /// Localizable failure reasons (the UI maps these to text).
     public enum Reason: Sendable, Equatable {
@@ -19,26 +20,33 @@ public enum ConnectionHealth: Sendable, Equatable {
 }
 
 public protocol ConnectionHealthUseCase: Sendable {
-    func callAsFunction() async -> ConnectionHealth
+    /// Probe a specific model tier (standard / fast) so Settings can show both models' status.
+    func callAsFunction(_ tier: ModelTier) async -> ConnectionHealth
+}
+
+public extension ConnectionHealthUseCase {
+    /// Back-compat convenience: probe the standard model.
+    func callAsFunction() async -> ConnectionHealth { await callAsFunction(.standard) }
 }
 
 public struct ConnectionHealthInteractor: ConnectionHealthUseCase {
     private let llm: LLMClient
     public init(llm: LLMClient) { self.llm = llm }
 
-    public func callAsFunction() async -> ConnectionHealth {
+    public func callAsFunction(_ tier: ModelTier) async -> ConnectionHealth {
         do {
-            _ = try await llm.run(HealthCheckTemplate(), input: ())
+            _ = try await llm.run(HealthCheckTemplate(tier: tier), input: ())
             return .ok
         } catch let error as LLMError {
             switch error {
             case .notConfigured: return .failed(.noKey)
             case .overloaded: return .failed(.overloaded)
-            case .requestFailed(let info) where info.contains("offline"): return .failed(.offline)
-            case .requestFailed(let info) where info.contains("timed out"): return .failed(.timeout)
+            case .offline: return .failed(.offline)
+            case .timedOut: return .failed(.timeout)
+            case .responseTooLong: return .failed(.badResponse)   // not expected for the tiny health ping
             case .requestFailed: return .failed(.unavailable)
             case .invalidOutput: return .failed(.badResponse)
-            case .cancelled: return .failed(.unknown)
+            case .cancelled: return .cancelled   // sheet dismissed mid-check — not a connectivity fault
             }
         } catch {
             return .failed(.unknown)

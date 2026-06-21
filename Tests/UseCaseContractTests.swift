@@ -22,16 +22,40 @@ import Adapters
         #expect(variants.count == 3)
     }
 
+    // MARK: Per-template model settings (output budget + speed profile)
+
+    @Test func shortTextTemplatesUseFastDefaults() {
+        // Text tasks default to the small budget + fast profile so the adapter can pick low-effort,
+        // no-extended-reasoning settings — optimizing response speed.
+        #expect(HowToSayTemplate().maxOutputTokens == 2048)
+        #expect(HowToSayTemplate().prefersFastResponse)
+        #expect(WhatToSayTemplate().prefersFastResponse)
+        #expect(UnderstandTemplate().prefersFastResponse)
+        #expect(ExplainExpressionTemplate().prefersFastResponse)
+    }
+
+    @Test func photoTemplateGetsLargerBudgetAndAccuracyProfile() {
+        // A photo can carry a LOT of text (a full menu) — it needs a bigger output budget so the JSON
+        // isn't truncated, and leans toward accuracy rather than the fast text profile.
+        #expect(PhotoBlocksTemplate().maxOutputTokens == 8192)
+        #expect(PhotoBlocksTemplate().maxOutputTokens > HowToSayTemplate().maxOutputTokens)
+        #expect(PhotoBlocksTemplate().prefersFastResponse == false)
+    }
+
     @Test func translateThrowsOnMalformedJSON() async {
-        let useCase = TranslateTextInteractor(llm: StubLLMClient(behavior: .malformedJSON, latency: .milliseconds(1)),
-                                              history: MockHistoryRepository())
-        await #expect(throws: LLMError.self) { _ = try await useCase("hello") }
+        let useCase = UnderstandInteractor(llm: StubLLMClient(behavior: .malformedJSON, latency: .milliseconds(1)),
+                                           history: MockHistoryRepository())
+        await #expect(throws: LLMError.self) {
+            _ = try await useCase("hello", studiedLanguage: "English", nativeLanguage: "Russian")
+        }
     }
 
     @Test func translateThrowsOnTimeout() async {
-        let useCase = TranslateTextInteractor(llm: StubLLMClient(behavior: .timeout, latency: .milliseconds(1)),
-                                              history: MockHistoryRepository())
-        await #expect(throws: LLMError.self) { _ = try await useCase("hello") }
+        let useCase = UnderstandInteractor(llm: StubLLMClient(behavior: .timeout, latency: .milliseconds(1)),
+                                           history: MockHistoryRepository())
+        await #expect(throws: LLMError.self) {
+            _ = try await useCase("hello", studiedLanguage: "English", nativeLanguage: "Russian")
+        }
     }
 
     // MARK: History-append contract — exactly one on success, zero on failure

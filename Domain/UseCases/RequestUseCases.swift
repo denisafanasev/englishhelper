@@ -28,16 +28,24 @@ public extension HowToSayUseCase {
 public struct HowToSayInteractor: HowToSayUseCase {
     private let llm: LLMClient
     private let history: HistoryRepository
+    /// Resolves the model tier for "Say it" generation at call time (reads the user's Settings choice).
+    private let tier: @Sendable () -> ModelTier
 
-    public init(llm: LLMClient, history: HistoryRepository) {
+    public init(llm: LLMClient, history: HistoryRepository,
+                tier: @escaping @Sendable () -> ModelTier = { .standard }) {
         self.llm = llm
         self.history = history
+        self.tier = tier
     }
 
     public func callAsFunction(_ intent: String, tone: Register, studiedLanguage: String, nativeLanguage: String) async throws -> [PhraseVariant] {
         let result = try await llm.run(
-            HowToSayTemplate(tone: tone, studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage), input: intent
+            HowToSayTemplate(tone: tone, studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage, tier: tier()), input: intent
         )
+        // History logging is INTENTIONALLY best-effort: the user already has their result, so a failed
+        // (or cancelled) append must never fail/cancel the request. `try?` is deliberate here and at
+        // every `history.append` below. (Domain is Foundation-only, so the drop can't be logged here;
+        // a corrupt READ is logged in the SwiftData repository.)
         try? await history.append(
             HistoryEntry(inputText: intent, result: .howToSay(result.variants))
         )
@@ -65,10 +73,14 @@ public extension RegenerateHowToSayUseCase {
 public struct RegenerateHowToSayInteractor: RegenerateHowToSayUseCase {
     private let llm: LLMClient
     private let history: HistoryRepository
+    /// Resolves the model tier for "Say it" generation at call time (reads the user's Settings choice).
+    private let tier: @Sendable () -> ModelTier
 
-    public init(llm: LLMClient, history: HistoryRepository) {
+    public init(llm: LLMClient, history: HistoryRepository,
+                tier: @escaping @Sendable () -> ModelTier = { .standard }) {
         self.llm = llm
         self.history = history
+        self.tier = tier
     }
 
     public func callAsFunction(_ intent: String, tone: Register, studiedLanguage: String, nativeLanguage: String) async throws -> [PhraseVariant] {
@@ -76,7 +88,7 @@ public struct RegenerateHowToSayInteractor: RegenerateHowToSayUseCase {
         // doesn't read as part of the user's intent); history records the original intent only.
         let nudged = intent + "\n\n(Offer different phrasings from the previous ones.)"
         let result = try await llm.run(
-            HowToSayTemplate(tone: tone, studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage), input: nudged
+            HowToSayTemplate(tone: tone, studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage, tier: tier()), input: nudged
         )
         try? await history.append(
             HistoryEntry(inputText: intent, result: .howToSay(result.variants))
@@ -106,10 +118,14 @@ public extension WhatToSayUseCase {
 public struct WhatToSayInteractor: WhatToSayUseCase {
     private let llm: LLMClient
     private let history: HistoryRepository
+    /// Resolves the model tier for "Say it" generation at call time (reads the user's Settings choice).
+    private let tier: @Sendable () -> ModelTier
 
-    public init(llm: LLMClient, history: HistoryRepository) {
+    public init(llm: LLMClient, history: HistoryRepository,
+                tier: @escaping @Sendable () -> ModelTier = { .standard }) {
         self.llm = llm
         self.history = history
+        self.tier = tier
     }
 
     public func callAsFunction(_ situation: String, tone: Register, studiedLanguage: String, nativeLanguage: String, regenerate: Bool) async throws -> [PhraseVariant] {
@@ -119,7 +135,7 @@ public struct WhatToSayInteractor: WhatToSayUseCase {
             ? situation + "\n\n(Suggest a different or additional set of useful phrases for this situation.)"
             : situation
         let result = try await llm.run(
-            WhatToSayTemplate(tone: tone, studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage), input: input
+            WhatToSayTemplate(tone: tone, studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage, tier: tier()), input: input
         )
         try? await history.append(
             HistoryEntry(inputText: situation, result: .whatToSay(result.variants))
@@ -128,87 +144,37 @@ public struct WhatToSayInteractor: WhatToSayUseCase {
     }
 }
 
-// MARK: - translateText
-
-public protocol TranslateTextUseCase: Sendable {
-    /// EN text → Russian translation (also appended to history).
-    func callAsFunction(_ english: String) async throws -> String
-}
-
-public struct TranslateTextInteractor: TranslateTextUseCase {
-    private let llm: LLMClient
-    private let history: HistoryRepository
-
-    public init(llm: LLMClient, history: HistoryRepository) {
-        self.llm = llm
-        self.history = history
-    }
-
-    public func callAsFunction(_ english: String) async throws -> String {
-        let result = try await llm.run(TranslateTextTemplate(), input: english)
-        try? await history.append(
-            HistoryEntry(inputText: english, result: .translate(ru: result.ru))
-        )
-        return result.ru
-    }
-}
-
-// MARK: - translateToTarget ("Понять"/In: understand OR compose, into target language)
-
-public protocol TranslateToTargetUseCase: Sendable {
-    /// Translate text into `targetLanguage` OR compose a phrase from an instruction — the model
-    /// decides which. `tone` styles the composed phrase. Source auto-detected. Appends history.
-    func callAsFunction(_ text: String, targetLanguage: String, tone: Register) async throws -> String
-}
-
-public extension TranslateToTargetUseCase {
-    func callAsFunction(_ text: String, targetLanguage: String) async throws -> String {
-        try await callAsFunction(text, targetLanguage: targetLanguage, tone: .casual)
-    }
-}
-
-public struct TranslateToTargetInteractor: TranslateToTargetUseCase {
-    private let llm: LLMClient
-    private let history: HistoryRepository
-
-    public init(llm: LLMClient, history: HistoryRepository) {
-        self.llm = llm
-        self.history = history
-    }
-
-    public func callAsFunction(_ text: String, targetLanguage: String, tone: Register) async throws -> String {
-        let result = try await llm.run(
-            TranslateToTargetTemplate(targetLanguage: targetLanguage, tone: tone), input: text
-        )
-        try? await history.append(HistoryEntry(inputText: text, result: .translate(ru: result.translation)))
-        return result.translation
-    }
-}
-
 // MARK: - explainExpression ("Понять"/Get: explain nuance in the native language)
 
 public protocol ExplainExpressionUseCase: Sendable {
     /// Render an ANY-language input in the STUDIED language and explain it in the NATIVE language:
     /// meaning, tone/register, cultural context, and a native-language analogy. An optional `image`
-    /// (e.g. the photo a block came from) is attached as visual context. Not recorded in history —
-    /// it's a reference lookup, not a produced phrase/translation.
-    func callAsFunction(_ text: String, studiedLanguage: String, nativeLanguage: String, image: Data?) async throws -> ExpressionExplanation
+    /// (e.g. the photo a block came from) is attached as visual context; optional `alternatives` are
+    /// sibling phrasings to CONTRAST this one against (per-variant "why this one?"). Not recorded in
+    /// history — it's a reference lookup, not a produced phrase/translation.
+    func callAsFunction(_ text: String, studiedLanguage: String, nativeLanguage: String, image: Data?, alternatives: [String]) async throws -> ExpressionExplanation
 }
 
 public extension ExplainExpressionUseCase {
-    func callAsFunction(_ text: String, studiedLanguage: String, nativeLanguage: String) async throws -> ExpressionExplanation {
-        try await callAsFunction(text, studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage, image: nil)
+    func callAsFunction(_ text: String, studiedLanguage: String, nativeLanguage: String, image: Data? = nil) async throws -> ExpressionExplanation {
+        try await callAsFunction(text, studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage, image: image, alternatives: [])
     }
 }
 
 public struct ExplainExpressionInteractor: ExplainExpressionUseCase {
     private let llm: LLMClient
-    public init(llm: LLMClient) { self.llm = llm }
+    /// Resolves the model tier for explanation at call time (reads the user's Settings choice). Default
+    /// keeps the standard model (Sonnet); the App wires a live provider so the setting takes effect.
+    private let tier: @Sendable () -> ModelTier
+    public init(llm: LLMClient, tier: @escaping @Sendable () -> ModelTier = { .standard }) {
+        self.llm = llm
+        self.tier = tier
+    }
 
-    public func callAsFunction(_ text: String, studiedLanguage: String, nativeLanguage: String, image: Data?) async throws -> ExpressionExplanation {
+    public func callAsFunction(_ text: String, studiedLanguage: String, nativeLanguage: String, image: Data?, alternatives: [String]) async throws -> ExpressionExplanation {
         try await llm.run(
-            ExplainExpressionTemplate(studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage),
-            input: ExplainInput(text: text, image: image)
+            ExplainExpressionTemplate(studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage, tier: tier()),
+            input: ExplainInput(text: text, image: image, alternatives: alternatives)
         )
     }
 }
@@ -224,15 +190,20 @@ public protocol UnderstandUseCase: Sendable {
 public struct UnderstandInteractor: UnderstandUseCase {
     private let llm: LLMClient
     private let history: HistoryRepository
+    /// Resolves the model tier for translation at call time (reads the user's Settings choice). Default
+    /// keeps the fast model (Haiku); the App wires a live provider so the setting takes effect.
+    private let tier: @Sendable () -> ModelTier
 
-    public init(llm: LLMClient, history: HistoryRepository) {
+    public init(llm: LLMClient, history: HistoryRepository,
+                tier: @escaping @Sendable () -> ModelTier = { .fast }) {
         self.llm = llm
         self.history = history
+        self.tier = tier
     }
 
     public func callAsFunction(_ text: String, studiedLanguage: String, nativeLanguage: String) async throws -> Understanding {
         let result = try await llm.run(
-            UnderstandTemplate(studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage), input: text
+            UnderstandTemplate(studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage, tier: tier()), input: text
         )
         // History records the STUDIED rendering as the entry text (the learning artifact: what the
         // card headlines, what TTS speaks in the studied language, and what saving files as the
@@ -276,6 +247,26 @@ public struct PhotoTranslateInteractor: PhotoTranslateUseCase {
         let ru = result.blocks.map(\.ru).joined(separator: "\n\n")
         try? await history.append(HistoryEntry(inputText: en, result: .photoTranslate(ru: ru)))
         return result.blocks
+    }
+}
+
+// MARK: - photoExplain ("See it" / Explain — explain WHAT a photo shows in its local/cultural context)
+
+public protocol PhotoExplainUseCase: Sendable {
+    /// Image → an explanation of WHAT it shows and its local/cultural context (a place + its history, a
+    /// sign + the local rule, …), written in the native language. Not recorded in history — a reference
+    /// lookup, like text Explain.
+    func callAsFunction(_ image: RecognizableImage, studiedLanguage: String, nativeLanguage: String) async throws -> SceneExplanation
+}
+
+public struct PhotoExplainInteractor: PhotoExplainUseCase {
+    private let llm: LLMClient
+    public init(llm: LLMClient) { self.llm = llm }
+
+    public func callAsFunction(_ image: RecognizableImage, studiedLanguage: String, nativeLanguage: String) async throws -> SceneExplanation {
+        try await llm.run(
+            PhotoExplainTemplate(studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage), input: image
+        )
     }
 }
 

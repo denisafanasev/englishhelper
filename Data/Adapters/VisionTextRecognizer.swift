@@ -8,6 +8,7 @@
 
 import Foundation
 import Vision
+import UIKit
 import Domain
 
 public final class VisionTextRecognizer: TextRecognizing {
@@ -29,7 +30,11 @@ public final class VisionTextRecognizer: TextRecognizing {
         } catch is CancellationError {
             throw TextRecognitionError.cancelled
         } catch {
-            throw TextRecognitionError.unsupportedImage
+            if Task.isCancelled { throw TextRecognitionError.cancelled }
+            // Only an actually-undecodable image is `.unsupportedImage`; surface anything else as
+            // `.underlying` (with detail) instead of masking every failure as "unsupported".
+            if UIImage(data: image.data) == nil { throw TextRecognitionError.unsupportedImage }
+            throw TextRecognitionError.underlying(error.localizedDescription)
         }
 
         var blocks: [RecognizedTextBlock] = []

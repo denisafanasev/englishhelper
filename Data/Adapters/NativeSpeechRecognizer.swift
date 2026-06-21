@@ -47,6 +47,9 @@ private final class RecognitionSession: @unchecked Sendable {
     private let engine = AVAudioEngine()
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
+    /// Only deactivate the shared AVAudioSession if THIS session activated it, so a late teardown
+    /// can't deactivate a session another capture/playback is currently using.
+    private var didActivateSession = false
 
     init(locale: Locale) { self.locale = locale }
 
@@ -70,11 +73,11 @@ private final class RecognitionSession: @unchecked Sendable {
 
     @MainActor
     private func begin(yielding continuation: AsyncThrowingStream<SpeechTranscript, Error>.Continuation) throws {
-        guard let recognizer = SFSpeechRecognizer(locale: locale) else {
-            throw SpeechRecognitionError.underlying("распознаватель для \(locale.identifier) не создан")
-        }
-        guard recognizer.isAvailable else {
-            throw SpeechRecognitionError.underlying("распознавание сейчас недоступно — проверьте интернет")
+        // Map to TYPED cases the Presentation layer localizes — never throw user-facing prose from an
+        // adapter (it would leak verbatim into an otherwise-localized message). `.underlying` carries
+        // only short technical detail for the rare genuinely-unknown failure.
+        guard let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable else {
+            throw SpeechRecognitionError.unavailable
         }
 
         let request = SFSpeechAudioBufferRecognitionRequest()
@@ -86,15 +89,16 @@ private final class RecognitionSession: @unchecked Sendable {
         do {
             try session.setCategory(.record, mode: .measurement, options: [.duckOthers])
             try session.setActive(true, options: .notifyOthersOnDeactivation)
+            didActivateSession = true
         } catch {
-            throw SpeechRecognitionError.underlying("аудиосессия: \(error.localizedDescription)")
+            throw SpeechRecognitionError.underlying("audio session: \(error.localizedDescription)")
         }
 
         let inputNode = engine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else {
-            try? session.setActive(false)
-            throw SpeechRecognitionError.underlying("микрофон недоступен (формат \(format.sampleRate) Гц)")
+            deactivateSessionIfNeeded()
+            throw SpeechRecognitionError.unavailable
         }
 
         // @Sendable so the closure is NOT MainActor-isolated — AVAudioEngine calls it on the
@@ -109,8 +113,8 @@ private final class RecognitionSession: @unchecked Sendable {
             try engine.start()
         } catch {
             inputNode.removeTap(onBus: 0)
-            try? session.setActive(false)
-            throw SpeechRecognitionError.underlying("аудиодвижок: \(error.localizedDescription)")
+            deactivateSessionIfNeeded()
+            throw SpeechRecognitionError.underlying("audio engine: \(error.localizedDescription)")
         }
 
         task = recognizer.recognitionTask(with: request) { @Sendable result, error in
@@ -123,9 +127,29 @@ private final class RecognitionSession: @unchecked Sendable {
             }
             if let error {
                 speechLog.error("task error: \(error.localizedDescription, privacy: .public)")
-                continuation.finish(throwing: SpeechRecognitionError.underlying(error.localizedDescription))
+                // Map known SFSpeech outcomes to typed cases: a "no speech" result is its own UX, and a
+                // cancellation (user stop / teardown) is a CLEAN finish, not a failure. (If a final
+                // result already finished the stream, these are no-ops — first terminal event wins.)
+                let ns = error as NSError
+                if Self.isCancellation(ns) {
+                    continuation.finish()
+                } else if Self.isNoSpeech(ns) {
+                    continuation.finish(throwing: SpeechRecognitionError.noSpeechDetected)
+                } else {
+                    continuation.finish(throwing: SpeechRecognitionError.underlying(error.localizedDescription))
+                }
             }
         }
+    }
+
+    /// SFSpeech "no speech detected" (kAFAssistantErrorDomain 1110, and the speech-domain no-result code).
+    private static func isNoSpeech(_ error: NSError) -> Bool {
+        (error.domain == "kAFAssistantErrorDomain" && error.code == 1110)
+    }
+
+    /// SFSpeech cancellation / "recognition request was canceled" codes — treat as a clean stop.
+    private static func isCancellation(_ error: NSError) -> Bool {
+        error.domain == "kAFAssistantErrorDomain" && [203, 216, 301].contains(error.code)
     }
 
     func stop() {
@@ -136,8 +160,15 @@ private final class RecognitionSession: @unchecked Sendable {
             request = nil
             if engine.isRunning { engine.stop() }
             engine.inputNode.removeTap(onBus: 0)
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            deactivateSessionIfNeeded()
         }
+    }
+
+    @MainActor
+    private func deactivateSessionIfNeeded() {
+        guard didActivateSession else { return }
+        didActivateSession = false
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 }
 

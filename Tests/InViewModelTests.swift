@@ -129,6 +129,32 @@ import Presentation
         #expect(vm.translation == nil)   // explain mode never leaves a stale translation
     }
 
+    /// Regression: toggling Translate/Explain WHILE a request is in flight must cancel-and-restart
+    /// cleanly — never leave the screen stuck in `.failed`. Pre-fix the in-flight URLSession cancel
+    /// surfaced as `LLMError.requestFailed("cancelled")`/`.cancelled` and InViewModel routed it to
+    /// `handleRequestError` → `.failed` + "Request cancelled", from which a further toggle couldn't
+    /// recover. (StubLLMClient maps a cancelled sleep to LLMError.cancelled, like the live adapter.)
+    @Test func switchingModeMidGenerationNeverErrors() async throws {
+        UserDefaults.standard.set("russian", forKey: "targetLanguage")
+        UserDefaults.standard.set("english", forKey: "studiedLanguage")
+        let vm = makeVM(llm: StubLLMClient(behavior: .success, latency: .milliseconds(120)))
+        vm.selectMode(.translate)
+        vm.source = "Could you give me a hand?"
+
+        vm.submit()
+        #expect(vm.phase == .processing)        // set synchronously, request in flight
+
+        vm.selectMode(.explain)                 // toggle the style mid-generation → supersede
+        #expect(vm.phase == .processing)        // restarted, NOT flipped to .failed
+        #expect(vm.errorMessage == nil)
+
+        try await waitUntil { vm.phase == .result }
+        #expect(vm.phase == .result)            // deterministic: ends generating, not erroring
+        #expect(vm.errorMessage == nil)         // the self-inflicted cancel never surfaced
+        #expect(vm.mode == .explain)            // ...in the newly chosen style
+        #expect(vm.explanation != nil)
+    }
+
     @Test func explainTemplateTargetsNativeLanguageAndNuance() {
         let prompt = ExplainExpressionTemplate(studiedLanguage: "English", nativeLanguage: "Russian").systemPrompt
         #expect(prompt.contains("Russian"))     // explanation is written in the native language

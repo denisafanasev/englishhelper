@@ -33,4 +33,14 @@ public struct TranslatedBlock: Codable, Sendable, Equatable, Identifiable, Hasha
         try c.encode(en, forKey: .en)
         try c.encode(ru, forKey: .ru)
     }
+
+    // Equality/identity are CONTENT-based: `id` is freshly synthesized on every decode, so including
+    // it would make an encode→decode round-trip non-equal (defeating diffing/dedup). `id` still serves
+    // Identifiable for SwiftUI list identity within a session.
+    public static func == (lhs: TranslatedBlock, rhs: TranslatedBlock) -> Bool {
+        lhs.en == rhs.en && lhs.ru == rhs.ru
+    }
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(en); hasher.combine(ru)
+    }
 }

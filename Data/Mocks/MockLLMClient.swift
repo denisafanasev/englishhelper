@@ -38,10 +38,6 @@ public final class MockLLMClient: LLMClient {
               {"en":"Do I need a follow-up visit?","register":"casual","context_ru":"В конце приёма."}
             ]}
             """
-        case "translateText", "photoTranslate":
-            return #"{"ru":"Это тестовый перевод."}"#
-        case "translateToTarget":
-            return #"{"translation":"Это тестовый перевод."}"#
         case "understand":
             return #"{"studied":"Could you give me a hand?","native":"Это тестовый перевод."}"#
         case "explainExpression":
@@ -59,6 +55,8 @@ public final class MockLLMClient: LLMClient {
               {"en":"Please stand clear of the closing doors","ru":"Пожалуйста, отойдите от закрывающихся дверей"}
             ]}
             """
+        case "photoExplain":
+            return #"{"title":"Колизей","details":"Древнеримский амфитеатр в центре Рима, построен в I веке н. э. Здесь проходили гладиаторские бои. Сегодня это один из главных символов Италии и объект Всемирного наследия ЮНЕСКО."}"#
         case "healthCheck":
             return #"{"ok":true}"#
         case "enrichCard":

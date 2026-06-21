@@ -29,6 +29,9 @@ public final class StudyListViewModel {
     public private(set) var exportedDeck: ExportedDeck?
     public private(set) var exportError: String?
 
+    /// A failed delete / toggle-learned, surfaced without flipping the whole list to `.failed`.
+    public private(set) var actionError: String?
+
     public enum ExportFormat: CaseIterable, Sendable {
         case algoApp, anki
         public var title: String {
@@ -90,8 +93,7 @@ public final class StudyListViewModel {
             guard let self else { return }
             do {
                 _ = try await self.saveExpression(en: english, knownRU: nil, context: context)
-                self.newEnglish = ""
-                self.newContext = ""
+                self.resetAddForm()
                 self.isAdding = false
                 self.showAddSheet = false
                 await self.load()
@@ -102,12 +104,30 @@ public final class StudyListViewModel {
         }
     }
 
+    /// Clear the add-sheet inputs + error so a Cancel (or a successful save) doesn't leave stale text
+    /// and a stale error for the next time the sheet opens.
+    public func resetAddForm() {
+        newEnglish = ""
+        newContext = ""
+        addError = nil
+    }
+
     public func delete(_ expression: Domain.Expression) {
-        expressions.removeAll { $0.id == expression.id }
+        guard let index = expressions.firstIndex(where: { $0.id == expression.id }) else { return }
+        let removed = expressions.remove(at: index)
+        let wasLoaded = phase
         if expressions.isEmpty { phase = .empty }
         Task { [weak self] in
             guard let self else { return }
-            try? await self.studyList.delete(id: expression.id)
+            do {
+                try await self.studyList.delete(id: expression.id)
+            } catch {
+                // Persisted delete failed → re-insert so the visible list can't diverge from the store.
+                self.expressions.insert(removed, at: min(index, self.expressions.count))
+                self.phase = wasLoaded
+                self.actionError = Loc.t("Не удалось удалить. Попробуйте ещё раз.",
+                                         "Couldn't delete. Try again.")
+            }
         }
     }
 
@@ -118,7 +138,16 @@ public final class StudyListViewModel {
         }
         Task { [weak self] in
             guard let self else { return }
-            try? await self.studyList.setLearned(newValue, id: expression.id)
+            do {
+                try await self.studyList.setLearned(newValue, id: expression.id)
+            } catch {
+                // Revert the optimistic flip so the toggle reflects what's actually persisted.
+                if let index = self.expressions.firstIndex(where: { $0.id == expression.id }) {
+                    self.expressions[index].learned = !newValue
+                }
+                self.actionError = Loc.t("Не удалось обновить. Попробуйте ещё раз.",
+                                         "Couldn't update. Try again.")
+            }
         }
     }
 
@@ -135,6 +164,14 @@ public final class StudyListViewModel {
                 self.exportError = Loc.t("Не удалось создать файл для экспорта.", "Couldn't create the export file.")
             }
         }
+    }
+
+    /// The export file produced fine but writing it to a temp URL for sharing failed (L20): surface it
+    /// instead of the share sheet silently never appearing.
+    public func reportExportWriteFailed() {
+        exportedDeck = nil
+        exportError = Loc.t("Не удалось подготовить файл для отправки.",
+                            "Couldn't prepare the file for sharing.")
     }
 
     // MARK: Playback
@@ -164,4 +201,5 @@ public final class StudyListViewModel {
 
     public func clearExport() { exportedDeck = nil }
     public func clearExportError() { exportError = nil }
+    public func clearActionError() { actionError = nil }
 }

@@ -25,7 +25,7 @@ public final class AnkiExporter: DeckExporting {
             "#columns:Front\tBack",
         ]
         for e in expressions {
-            let front = field(e.en)
+            let front = ankiSafeLeadingHash(field(e.en))
             let backParts = [e.ru, e.example, e.synonyms.joined(separator: ", ")]
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
@@ -42,5 +42,14 @@ public final class AnkiExporter: DeckExporting {
         s.replacingOccurrences(of: "\t", with: " ")
             .replacingOccurrences(of: "\r", with: " ")
             .replacingOccurrences(of: "\n", with: "<br>")
+    }
+
+    /// Anki treats any import line that STARTS with '#' as a directive/comment and silently drops it,
+    /// so a card whose front begins with '#' ("#1 priority", "#blessed") would vanish. With `#html:true`
+    /// already set, encoding the leading '#' as the numeric entity renders identically ('#') while the
+    /// line no longer begins with a literal '#'. Only the first character matters for the line check.
+    private func ankiSafeLeadingHash(_ s: String) -> String {
+        guard s.first == "#" else { return s }
+        return "&#35;" + s.dropFirst()
     }
 }

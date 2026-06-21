@@ -26,10 +26,15 @@ settings:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
     IPHONEOS_DEPLOYMENT_TARGET: "26.0"
-    MARKETING_VERSION: "1.2.5"
+    MARKETING_VERSION: "1.3.0"
     CURRENT_PROJECT_VERSION: "1"
     # Frameworks let Xcode synthesize their Info.plist; the app overrides with an explicit file.
     GENERATE_INFOPLIST_FILE: "YES"
+    # Device signing for every target (the app + the embedded ShareExtension both need a team for the
+    # App Group capability). Pinned here so a regenerated project keeps the team instead of dropping it.
+    # Simulator builds ignore this (ad-hoc). Override the team in Secrets.xcconfig if it ever changes.
+    DEVELOPMENT_TEAM: TQJ35ER433
+    CODE_SIGN_STYLE: Automatic
 
 # Layer the (gitignored) Secrets.xcconfig in via an optional include, so generation/build never
 # fails when secrets are absent (e.g. a fresh clone or CI).
@@ -69,17 +74,19 @@ targets:
   EnglishHelper:
     type: application
     platform: iOS
-    sources: [App]
+    sources: [App, Shared]
     dependencies:
       - target: Domain
       - target: Adapters
       - target: DesignSystem
       - target: Presentation
+      - target: ShareExtension   # embedded into the app's PlugIns (auto-embed for app-extension deps)
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tech.10xt.englishhelper
         INFOPLIST_FILE: App/Info.plist
         GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: App/EnglishHelper.entitlements
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # Supported Destinations = iPhone (iOS) only — pinned so xcodegen regeneration keeps it
@@ -91,10 +98,25 @@ targets:
         SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
         ENABLE_PREVIEWS: YES
 
+  # iOS Share-sheet target: receives images/text from the system share sheet and hands them to the
+  # app via the App Group (`Shared/SharedInbox.swift`, compiled into both targets).
+  ShareExtension:
+    type: app-extension
+    platform: iOS
+    sources: [ShareExtension, Shared]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tech.10xt.englishhelper.ShareExtension
+        INFOPLIST_FILE: ShareExtension/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: ShareExtension/ShareExtension.entitlements
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
+
   EnglishHelperTests:
     type: bundle.unit-test
     platform: iOS
-    sources: [Tests]
+    sources: [Tests, Shared]   # Shared/SharedInbox.swift is exercised by SharedInboxTests
     dependencies:
       - target: Domain
       - target: Adapters

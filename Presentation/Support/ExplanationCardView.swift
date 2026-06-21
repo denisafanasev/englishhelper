@@ -40,7 +40,7 @@ struct ExplanationCardView: View {
             // Title + icon actions (Play · Copy · Save) in the header row, like the phrase cards.
             HStack(alignment: .top) {
                 Text(studied)
-                    .textStyle(Tokens.Text.title3)
+                    .textStyle(Tokens.Text.headline)
                     .foregroundStyle(Tokens.Content.primary)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: Tokens.Space.s8)
@@ -48,7 +48,7 @@ struct ExplanationCardView: View {
                     if let onPlay, !studied.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Button { onPlay() } label: {
                             Image(systemName: isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2")
-                                .font(.system(size: 16, weight: .medium))
+                                .font(.system(size: Tokens.Icon.cardAction, weight: .medium))
                                 .symbolEffect(.variableColor.iterative, isActive: isPlaying)
                                 .foregroundStyle(isPlaying ? Tokens.Content.primary : Tokens.Content.tertiary)
                         }
@@ -62,7 +62,7 @@ struct ExplanationCardView: View {
                     if let isSaved, let onToggleSave {
                         Button { onToggleSave() } label: {
                             Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
-                                .font(.system(size: 18, weight: .medium))
+                                .font(.system(size: Tokens.Icon.cardActionProminent, weight: .medium))
                                 .foregroundStyle(isSaved ? Tokens.Content.primary : Tokens.Content.tertiary)
                         }
                         .buttonStyle(.plain)

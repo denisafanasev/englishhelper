@@ -36,7 +36,7 @@ public final class StubLLMClient: LLMClient {
         switch behavior {
         case .success:      return try template.decode(MockLLMClient.cannedJSON(for: template.id))
         case .malformedJSON: return try template.decode("{ not valid json …")
-        case .timeout:      throw LLMError.requestFailed("timed out")
+        case .timeout:      throw LLMError.timedOut
         case .failure(let error): throw error
         }
     }

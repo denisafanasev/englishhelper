@@ -75,16 +75,84 @@ public final class ThemeStore {
     }
 }
 
+// MARK: - Per-scenario model selection (Translate / Explain)
+
+/// The model a scenario routes to. Maps a user-facing choice to the abstract `ModelTier` the LLM
+/// adapter resolves to a concrete model string (fast = Haiku, standard = Sonnet).
+public enum LLMModelChoice: String, CaseIterable, Sendable {
+    case haiku, sonnet
+    public var tier: ModelTier { self == .haiku ? .fast : .standard }
+    public var title: String { self == .haiku ? "Haiku" : "Sonnet" }
+
+    static let translateKey = "translateModel"
+    static let explainKey = "explainModel"
+    static let sayItKey = "sayItModel"
+
+    /// Live reads for the routing providers the App wires into the interactors. Defaults: translate →
+    /// Haiku (speed), explain → Sonnet (quality), Say it → Sonnet. Read off the main actor, plain statics.
+    public static var currentTranslate: LLMModelChoice {
+        LLMModelChoice(rawValue: UserDefaults.standard.string(forKey: translateKey) ?? "") ?? .haiku
+    }
+    public static var currentExplain: LLMModelChoice {
+        LLMModelChoice(rawValue: UserDefaults.standard.string(forKey: explainKey) ?? "") ?? .sonnet
+    }
+    public static var currentSayIt: LLMModelChoice {
+        LLMModelChoice(rawValue: UserDefaults.standard.string(forKey: sayItKey) ?? "") ?? .sonnet
+    }
+}
+
+/// Persisted model choice for the Translate scenario (Get it → Translate). Default: Haiku.
+@MainActor
+@Observable
+public final class TranslateModelStore {
+    public var choice: LLMModelChoice {
+        didSet { UserDefaults.standard.set(choice.rawValue, forKey: LLMModelChoice.translateKey) }
+    }
+    public init() { choice = LLMModelChoice.currentTranslate }
+}
+
+/// Persisted model choice for the Explain scenario (Get it → Explain, and every "explain" affordance
+/// that routes into it). Default: Sonnet.
+@MainActor
+@Observable
+public final class ExplainModelStore {
+    public var choice: LLMModelChoice {
+        didSet { UserDefaults.standard.set(choice.rawValue, forKey: LLMModelChoice.explainKey) }
+    }
+    public init() { choice = LLMModelChoice.currentExplain }
+}
+
+/// Persisted model choice for the Say it scenario (phrase generation: how-to-say / what-to-say).
+/// Default: Sonnet.
+@MainActor
+@Observable
+public final class SayItModelStore {
+    public var choice: LLMModelChoice {
+        didSet { UserDefaults.standard.set(choice.rawValue, forKey: LLMModelChoice.sayItKey) }
+    }
+    public init() { choice = LLMModelChoice.currentSayIt }
+}
+
 /// A request to open the "Понять"/Get it screen in Explain mode for a specific phrase. Used to route
 /// the "Explain" action from See it / History straight to the real Get it screen (no extra sheet),
 /// optionally carrying a photo as visual context (from See it).
 public struct ExplainRequest: Equatable, Sendable {
     public let text: String
     public let imageData: Data?
-    public init(text: String, imageData: Data? = nil) {
+    /// Sibling phrasings to contrast against — set when routing a per-variant "why this one?" from Say it.
+    public let alternatives: [String]
+    public init(text: String, imageData: Data? = nil, alternatives: [String] = []) {
         self.text = text
         self.imageData = imageData
+        self.alternatives = alternatives
     }
+}
+
+/// A shared item from the iOS Share sheet, already mapped to its target scenario. The App bridges
+/// `SharedInbox`'s payload to this Presentation-visible type; RootView routes it.
+public enum SharedRoute: Equatable, Sendable {
+    case explainText(String)   // → Get it / Explain
+    case explainImage(Data)    // → See it / Explain
 }
 
 @MainActor
@@ -109,7 +177,7 @@ public final class OnboardingStore {
     public func complete() { isComplete = true }
 }
 
-// MARK: - Interface language (RU / EN, default: system)
+// MARK: - Interface language (RU / EN / FR / ES / DE / IT, default: system)
 
 public enum AppLanguage: String, CaseIterable, Sendable {
     case ru, en, fr, es, de, it
@@ -118,10 +186,6 @@ public enum AppLanguage: String, CaseIterable, Sendable {
 
     static let storageKey = AppLocale.storageKey
 
-    /// The user's explicit choice, or nil if they haven't picked one yet.
-    public static var stored: AppLanguage? {
-        UserDefaults.standard.string(forKey: storageKey).flatMap(AppLanguage.init(rawValue:))
-    }
     /// The language actually used: the stored choice, else the system default among the supported
     /// languages, else English. (Resolution lives in `AppLocale` so `DSLoc` agrees with us.)
     public static var effective: AppLanguage {
@@ -138,7 +202,9 @@ public final class LanguageStore {
     /// Starts from the effective language; nothing is persisted until the user actually picks one
     /// (a property's `didSet` doesn't fire for its initial value).
     public init() { language = AppLanguage.effective }
-    public var locale: Locale { Locale(identifier: AppLanguage.effective.rawValue) }
+    /// Derived from the tracked `language` property (NOT a fresh UserDefaults read) so @Observable
+    /// dependents re-evaluate when the interface language changes.
+    public var locale: Locale { Locale(identifier: language.rawValue) }
 }
 
 /// Tiny runtime localizer. Forwards to the DesignSystem resolver + catalog so Presentation and
@@ -152,7 +218,7 @@ public enum Loc {
     }
 }
 
-// MARK: - Target language for "In" translation (RU / EN, default: RU)
+// MARK: - Native language for "In" translation/explanation (RU / EN / FR / ES / DE / IT, default: RU)
 
 public enum TargetLanguage: String, CaseIterable, Sendable {
     case russian, english, french, spanish, german, italian
@@ -214,7 +280,7 @@ public final class TargetLanguageStore {
     public init() { language = TargetLanguage.current }
 }
 
-// MARK: - Studied language (the language being LEARNED; RU/EN/FR/ES, default: English)
+// MARK: - Studied language (the language being LEARNED; RU/EN/FR/ES/DE/IT, default: English)
 //
 // The card headline + all TTS are in this language across see/say/get. Mirrors TargetLanguage but
 // defaults to English (kept a distinct type so a "studied" read can never be confused with "native").

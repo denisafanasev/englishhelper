@@ -2,8 +2,9 @@
 //  PhotoTranslateViewModel.swift
 //  EnglishHelper — Presentation
 //
-//  "Фото-перевод". The LLM recognizes English text in the photo and translates it into blocks
-//  (it decides how many). Each block is shown as its own card with play + save.
+//  "See it". Two modes over a photo, mirroring Get-it: EXPLAIN (default) — explain WHAT the photo
+//  shows + its local/cultural context; TRANSLATE — recognize the text and translate it into blocks
+//  (each a card with play + save). The mode selector sits at the top, like Get-it.
 //
 
 import Foundation
@@ -14,10 +15,28 @@ import Domain
 public final class PhotoTranslateViewModel {
     public enum Phase: Equatable { case idle, processing, result, failed }
 
+    /// What pressing through a photo does: EXPLAIN its scene/context, or TRANSLATE its text. Order
+    /// drives the on-screen segment order (Explain first); Explain is the default.
+    public enum Mode: String, CaseIterable, Sendable {
+        case explain, translate
+        public var title: String {
+            switch self {
+            case .explain: Loc.t("Объяснение", "Explain")
+            case .translate: Loc.t("Перевод", "Translate")
+            }
+        }
+    }
+
     public private(set) var phase: Phase = .idle
+    /// Mutated only via `selectMode` so the re-run logic isn't bypassed.
+    public private(set) var mode: Mode = .explain
     public private(set) var imageData: Data?
-    public private(set) var blocks: [TranslatedBlock] = []
+    public private(set) var blocks: [TranslatedBlock] = []          // Translate mode result
+    public private(set) var explanation: SceneExplanation?          // Explain mode result
     public private(set) var errorMessage: String?
+    /// A SAVE failure shown independently of `phase` (the result stays on screen); `errorMessage`
+    /// only renders in `.failed`.
+    public private(set) var saveError: String?
     public private(set) var isOffline = false
 
     public var showCameraPriming = false
@@ -25,9 +44,13 @@ public final class PhotoTranslateViewModel {
 
     private var savedBlockIDs: Set<UUID> = []          // optimistic "saved" flag (instant UI)
     private var savedExpressionIDs: [UUID: UUID] = [:]  // block.id → stored Expression.id
+    /// Bumped on every new photo result so an in-flight save can tell "user un-saved" from "a new
+    /// photo replaced the result" and not silently delete a just-bookmarked expression.
+    private var resultsGeneration = 0
     private var playingBlockID: UUID?
 
     private let photoTranslate: any PhotoTranslateUseCase
+    private let photoExplain: any PhotoExplainUseCase
     private let pronounce: any PlayPronunciationUseCase
     private let saveExpression: any SaveExpressionUseCase
     private let studyList: any StudyListUseCase
@@ -39,16 +62,28 @@ public final class PhotoTranslateViewModel {
 
     public init(
         photoTranslate: any PhotoTranslateUseCase,
+        photoExplain: any PhotoExplainUseCase,
         pronounce: any PlayPronunciationUseCase,
         saveExpression: any SaveExpressionUseCase,
         studyList: any StudyListUseCase,
         isConfigured: Bool
     ) {
         self.photoTranslate = photoTranslate
+        self.photoExplain = photoExplain
         self.pronounce = pronounce
         self.saveExpression = saveExpression
         self.studyList = studyList
         self.isConfigured = isConfigured
+    }
+
+    /// Switch Explain/Translate. If a photo is already loaded, re-run it in the new mode; otherwise
+    /// just remember the choice for the next photo. Mirrors Get-it's mode switch.
+    public func selectMode(_ newMode: Mode) {
+        guard newMode != mode else { return }
+        mode = newMode
+        if let data = imageData, phase == .result || phase == .processing {
+            process(data)
+        }
     }
 
     public var needsAPIKey: Bool { !isConfigured }
@@ -83,27 +118,58 @@ public final class PhotoTranslateViewModel {
         process(data)
     }
 
+    /// Auto-retry after the network returns (RootView calls this on reconnect): re-run OCR+translate on
+    /// the last image, but ONLY when we're showing an offline failure (other errors would just repeat).
+    public func retryOnReconnect() {
+        guard phase == .failed, isOffline, let data = imageData else { return }
+        process(data)
+    }
+
+    /// The picked library photo couldn't be loaded/decoded — surface it instead of silently doing nothing.
+    public func imageLoadFailed() {
+        requestTask?.cancel()
+        isOffline = false
+        errorMessage = Loc.t("Не удалось загрузить изображение. Попробуйте другое фото.",
+                             "Couldn't load the image. Try another photo.",
+                             "Impossible de charger l'image. Essayez une autre photo.",
+                             "No se pudo cargar la imagen. Prueba con otra foto.",
+                             "Bild konnte nicht geladen werden. Versuche ein anderes Foto.",
+                             "Impossibile caricare l'immagine. Prova un'altra foto.")
+        phase = .failed
+    }
+
     // MARK: Pipeline
 
     private func process(_ data: Data) {
         requestTask?.cancel()
         imageData = data
         blocks = []
+        explanation = nil
         savedBlockIDs = []
         savedExpressionIDs = [:]
         errorMessage = nil
         isOffline = false
         phase = .processing
-        let studied = StudiedLanguage.current.promptName   // blocks rendered in studied (headline + TTS)
-        let native = TargetLanguage.current.promptName     // ...and in native (the understanding line)
+        let studied = StudiedLanguage.current.promptName   // the studied-language place/country context
+        let native = TargetLanguage.current.promptName     // explanation / translation rendered in native
+        let mode = self.mode
         requestTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let result = try await self.photoTranslate(RecognizableImage(data: data), studiedLanguage: studied, nativeLanguage: native)
-                self.blocks = result
+                let image = RecognizableImage(data: data)
+                switch mode {
+                case .translate:
+                    self.blocks = try await self.photoTranslate(image, studiedLanguage: studied, nativeLanguage: native)
+                case .explain:
+                    self.explanation = try await self.photoExplain(image, studiedLanguage: studied, nativeLanguage: native)
+                }
+                self.resultsGeneration += 1
                 self.phase = .result
             } catch is CancellationError {
                 // superseded
+            } catch LLMError.cancelled {
+                // superseded by a newer photo / a mode switch — the adapter maps task cancellation to
+                // LLMError.cancelled, so this (not CancellationError) is what surfaces. Never show it.
             } catch {
                 self.handle(error)
             }
@@ -164,26 +230,35 @@ public final class PhotoTranslateViewModel {
             }
         } else {
             savedBlockIDs.insert(id)                        // instant UI; enrich+store in background
+            let generation = resultsGeneration
             Task { [weak self] in
                 guard let self else { return }
                 do {
                     let stored = try await self.saveExpression(en: block.en, knownRU: block.ru, context: "")
-                    if self.savedBlockIDs.contains(id) { self.savedExpressionIDs[id] = stored.id }
-                    else { try? await self.studyList.delete(id: stored.id) }
+                    if self.resultsGeneration != generation {
+                        // A new photo replaced the result while saving — keep it persisted; drop the mapping.
+                    } else if self.savedBlockIDs.contains(id) {
+                        self.savedExpressionIDs[id] = stored.id
+                    } else {
+                        try? await self.studyList.delete(id: stored.id)   // user un-saved while saving
+                    }
                 } catch {
                     self.savedBlockIDs.remove(id)           // revert
-                    self.errorMessage = Loc.t("Не удалось сохранить в изучаемое.",
-                                              "Couldn't save to your study list.")
+                    self.saveError = Loc.t("Не удалось сохранить в изучаемое.",
+                                           "Couldn't save to your study list.")
                 }
             }
         }
     }
+
+    public func clearSaveError() { saveError = nil }
 
     public func reset() {
         requestTask?.cancel(); playTask?.cancel()
         phase = .idle
         imageData = nil
         blocks = []
+        explanation = nil
         savedBlockIDs = []
         savedExpressionIDs = [:]
         playingBlockID = nil

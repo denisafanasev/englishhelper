@@ -2,6 +2,35 @@
 
 Release notes for EnglishHelper, written for the people who use it.
 
+## 1.3.0 — 2026-06-21
+
+**Share straight into the app.** EnglishHelper now shows up in the iOS Share sheet, so you can send
+things to it from anywhere. **Share a photo** (from Photos, Safari, a chat…) and it opens in
+**See it → Explain** — what the picture shows and the local or cultural context behind it. **Share
+text** and it opens in **Get it → Explain** — the meaning, tone, and a familiar comparison for that
+phrase. No copy-pasting or switching apps.
+
+**Ask "why this one?" on "Say it".** Every phrasing you get now has a lightbulb. Tap it to learn why
+that particular wording works — and how it differs from the other options you were given (for
+example, "where have you been" vs. "where were you"). It opens the full Explain breakdown.
+
+**Choose the model for each scenario.** A new section in Settings lets you pick which Claude model
+powers **Say it**, **Translate**, and **Explain** separately. **Translate** now uses the faster
+**Haiku** by default, so plain translations come back quicker; **Say it** and **Explain** stay on
+**Sonnet** for depth. Settings also shows the live connection status of both models.
+
+**Steadier on a weak mobile connection.** On a flaky cellular signal the app now rides out brief
+drops (tunnels, lifts, tower hand-offs) instead of failing the instant the connection blinks. When
+you're genuinely offline you'll see a clear **"No connection — waiting for the network"** banner, and
+the moment you're back online the app **retries your last request automatically** — no tapping
+required. Photos are also compressed before upload so they go through faster on a slow link.
+
+**One consistent row of actions on every card.** Play, **Explain**, Copy, and Save now sit together
+as a single tidy row of icons on every card — across "Say it", "Get it", "See it", "Study", and
+History — so the controls are the same everywhere and the Explain shortcut is always within reach.
+The icons are a little smaller and card titles are sized to match the text below them, for a calmer,
+cleaner look.
+
 ## 1.2.5 — 2026-06-07
 
 **German and Italian, everywhere.** You can now pick **German** or **Italian** as your interface

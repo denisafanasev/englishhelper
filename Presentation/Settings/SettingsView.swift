@@ -15,6 +15,9 @@ public struct SettingsView: View {
     private let language: LanguageStore
     private let studied: StudiedLanguageStore
     private let target: TargetLanguageStore
+    private let translateModel: TranslateModelStore
+    private let explainModel: ExplainModelStore
+    private let sayItModel: SayItModelStore
     private let onClose: () -> Void
 
     public init(
@@ -23,6 +26,9 @@ public struct SettingsView: View {
         language: LanguageStore,
         studied: StudiedLanguageStore,
         target: TargetLanguageStore,
+        translateModel: TranslateModelStore,
+        explainModel: ExplainModelStore,
+        sayItModel: SayItModelStore,
         onClose: @escaping () -> Void
     ) {
         _model = State(initialValue: model)
@@ -30,6 +36,9 @@ public struct SettingsView: View {
         self.language = language
         self.studied = studied
         self.target = target
+        self.translateModel = translateModel
+        self.explainModel = explainModel
+        self.sayItModel = sayItModel
         self.onClose = onClose
     }
 
@@ -44,6 +53,7 @@ public struct SettingsView: View {
                 ScrollView {
                     VStack(spacing: Tokens.Space.s20) {
                         connectionCard
+                        modelsCard
                         languageCard(language: $language.language)
                         studiedCard(studied: $studied.language)
                         targetCard(target: $target.language)
@@ -68,21 +78,11 @@ public struct SettingsView: View {
 
     private var connectionCard: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s12) {
-            sectionTitle(Loc.t("Подключение к Claude", "Claude connection"))
-            HStack(spacing: Tokens.Space.s12) {
-                statusIndicator
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(statusTitle)
-                        .textStyle(Tokens.Text.headline)
-                        .foregroundStyle(Tokens.Content.primary)
-                    if case .failed(let reason) = model.health {
-                        Text(reason)
-                            .textStyle(Tokens.Text.footnote)
-                            .foregroundStyle(Tokens.Content.secondary)
-                    }
-                }
+            HStack {
+                sectionTitle(Loc.t("Подключение к Claude", "Claude connection"))
                 Spacer()
-                if model.health != .checking {
+                // One re-check button covers both models (only once neither is mid-check).
+                if model.health != .checking, model.fastHealth != .checking {
                     Button { Task { await model.check() } } label: {
                         Image(systemName: "arrow.clockwise")
                     }
@@ -91,14 +91,35 @@ public struct SettingsView: View {
                     .accessibilityLabel(Loc.t("Проверить снова", "Check again"))
                 }
             }
+            // Both models the app routes to: standard (Sonnet, everything) + fast (Haiku, plain translate).
+            modelStatusRow(model.modelName, health: model.health)
+            Divider().overlay(Tokens.Hairline.default)
+            modelStatusRow(model.fastModelName, health: model.fastHealth)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Tokens.Space.s16)
         .glassPanel(cornerRadius: Tokens.Radius.card)
     }
 
-    @ViewBuilder private var statusIndicator: some View {
-        switch model.health {
+    private func modelStatusRow(_ name: String, health: SettingsViewModel.Health) -> some View {
+        HStack(spacing: Tokens.Space.s12) {
+            statusIcon(health)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .textStyle(Tokens.Text.headline)
+                    .foregroundStyle(Tokens.Content.primary)
+                Text(statusLine(health))
+                    .textStyle(Tokens.Text.footnote)
+                    .foregroundStyle(Tokens.Content.secondary)
+            }
+            Spacer()
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(name): \(statusLine(health))")
+    }
+
+    @ViewBuilder private func statusIcon(_ health: SettingsViewModel.Health) -> some View {
+        switch health {
         case .checking:
             ProgressView().controlSize(.small)
         case .ok:
@@ -108,11 +129,62 @@ public struct SettingsView: View {
         }
     }
 
-    private var statusTitle: String {
-        switch model.health {
+    private func statusLine(_ health: SettingsViewModel.Health) -> String {
+        switch health {
         case .checking: Loc.t("Проверяю…", "Checking…")
         case .ok: Loc.t("Подключено", "Connected")
-        case .failed: Loc.t("Не удалось подключиться", "Couldn't connect")
+        case .failed(let reason): reason
+        }
+    }
+
+    // MARK: Models per scenario
+
+    private var modelsCard: some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.s16) {
+            sectionTitle(Loc.t("Модели по сценарию", "Models by scenario"))
+            modelPicker(
+                title: Loc.t("Фразы (Сказать)", "Phrases (Say it)"),
+                note: Loc.t("Экран «Сказать» — генерация вариантов.", "Say it — phrase generation."),
+                choice: sayItModel.choice,
+                onSelect: { sayItModel.choice = $0 }
+            )
+            Divider().overlay(Tokens.Hairline.default)
+            modelPicker(
+                title: Loc.t("Перевод", "Translate"),
+                note: Loc.t("Экран «Понять» → Перевод.", "Get it → Translate."),
+                choice: translateModel.choice,
+                onSelect: { translateModel.choice = $0 }
+            )
+            Divider().overlay(Tokens.Hairline.default)
+            modelPicker(
+                title: Loc.t("Объяснение", "Explain"),
+                note: Loc.t("Экран «Понять» → Объяснить (и все кнопки «объяснить»).",
+                            "Get it → Explain (and every \"explain\" button)."),
+                choice: explainModel.choice,
+                onSelect: { explainModel.choice = $0 }
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Tokens.Space.s16)
+        .glassPanel(cornerRadius: Tokens.Radius.card)
+    }
+
+    private func modelPicker(title: String, note: String, choice: LLMModelChoice,
+                             onSelect: @escaping (LLMModelChoice) -> Void) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.s8) {
+            Text(title)
+                .textStyle(Tokens.Text.body)
+                .foregroundStyle(Tokens.Content.primary)
+            SegmentedSelector(
+                LLMModelChoice.allCases,
+                selected: choice,
+                label: { $0.title },
+                onSelect: onSelect
+            )
+            .accessibilityLabel(title)
+            Text(note)
+                .textStyle(Tokens.Text.footnote)
+                .foregroundStyle(Tokens.Content.tertiary)
         }
     }
 

@@ -11,16 +11,6 @@ import Foundation
 
 // MARK: - Shared output payloads
 
-/// `{ "ru": "..." }` — pure translation, shared by translate + photoTranslate.
-public struct Translation: Codable, Sendable, Equatable {
-    public let ru: String
-}
-
-/// `{ "translation": "..." }` — translation into a configurable target language.
-public struct TargetTranslation: Codable, Sendable, Equatable {
-    public let translation: String
-}
-
 /// `{ "variants": [ { en, register, context_ru } ] }`
 public struct HowToSayResult: Codable, Sendable, Equatable {
     public let variants: [PhraseVariant]
@@ -63,6 +53,22 @@ public struct ExpressionExplanation: Codable, Sendable, Equatable {
     }
 }
 
+/// `{ title, details }` — a learner-facing explanation of WHAT a photo shows and its local/cultural
+/// context (a landmark, a road sign, a product, …), written in the NATIVE language. Used by the
+/// "See it" / Explain mode — the photo analogue of Get-it/Explain.
+public struct SceneExplanation: Codable, Sendable, Equatable {
+    /// A short name / headline for what the photo shows.
+    public let title: String
+    /// The explanation: what it is, its history / cultural / local context, any local rules or
+    /// peculiarities, and how they differ from the learner's own environment. In the native language.
+    public let details: String
+
+    public init(title: String, details: String) {
+        self.title = title
+        self.details = details
+    }
+}
+
 /// `{ "ru", "example", "synonyms": [..] }`
 public struct CardEnrichment: Codable, Sendable, Equatable {
     public let ru: String
@@ -98,11 +104,17 @@ public struct HowToSayTemplate: PromptTemplate {
     public let tone: Register
     public let studiedLanguage: String   // the language being learned — the variants are in THIS language
     public let nativeLanguage: String    // the learner's own language — the notes are in THIS language
-    public init(tone: Register = .casual, studiedLanguage: String = "English", nativeLanguage: String = "Russian") {
+    public let tier: ModelTier
+    public init(tone: Register = .casual, studiedLanguage: String = "English", nativeLanguage: String = "Russian",
+                tier: ModelTier = .standard) {
         self.tone = tone
         self.studiedLanguage = studiedLanguage
         self.nativeLanguage = nativeLanguage
+        self.tier = tier
     }
+
+    /// "Say it" phrase generation routes to the user-selected model (default: the STANDARD model, Sonnet).
+    public var modelTier: ModelTier { tier }
 
     public var systemPrompt: String {
         """
@@ -168,11 +180,17 @@ public struct WhatToSayTemplate: PromptTemplate {
     public let tone: Register
     public let studiedLanguage: String   // the phrases are produced in THIS language
     public let nativeLanguage: String    // the notes are written in THIS language
-    public init(tone: Register = .casual, studiedLanguage: String = "English", nativeLanguage: String = "Russian") {
+    public let tier: ModelTier
+    public init(tone: Register = .casual, studiedLanguage: String = "English", nativeLanguage: String = "Russian",
+                tier: ModelTier = .standard) {
         self.tone = tone
         self.studiedLanguage = studiedLanguage
         self.nativeLanguage = nativeLanguage
+        self.tier = tier
     }
+
+    /// "Say it" phrase generation routes to the user-selected model (default: the STANDARD model, Sonnet).
+    public var modelTier: ModelTier { tier }
 
     public var systemPrompt: String {
         """
@@ -217,7 +235,10 @@ public struct WhatToSayTemplate: PromptTemplate {
 
     public func decode(_ rawJSON: String) throws -> HowToSayResult {
         let result = try decodeJSON(HowToSayResult.self, from: rawJSON)
-        // Honor the 10-max even if the model overshoots; sanitize to plain text like every template.
+        // The schema/prompt ASK for 3–10 (a quality nudge for the model). The decoder is deliberately
+        // lenient on the low end: if the model returns just 1–2 genuinely-useful phrases, show them
+        // rather than hard-failing the whole request — only an EMPTY set is an error. The 10-max is
+        // still enforced here in case the model overshoots. Sanitize to plain text like every template.
         let clamped = result.variants.prefix(10).map {
             PhraseVariant(id: $0.id, en: PlainText.clean($0.en), register: $0.register,
                           contextRU: PlainText.clean($0.contextRU))
@@ -226,91 +247,6 @@ public struct WhatToSayTemplate: PromptTemplate {
             throw LLMError.invalidOutput("whatToSay returned no phrases")
         }
         return HowToSayResult(variants: clamped)
-    }
-}
-
-// MARK: - translateText
-
-/// EN text → pure Russian translation (no commentary).
-public struct TranslateTextTemplate: PromptTemplate {
-    public typealias Input = String
-    public typealias Output = Translation
-
-    public let id = "translateText"
-    public init() {}
-
-    public var systemPrompt: String {
-        """
-        Translate the given English text into natural Russian. Return ONLY the translation in "ru" —
-        no commentary, alternatives, transliteration, or notes. \(plainTextRule)
-        """
-    }
-
-    public var outputJSONSchema: String {
-        #"{"type":"object","properties":{"ru":{"type":"string"}},"required":["ru"]}"#
-    }
-
-    public func userMessage(for input: String) -> String { input }
-
-    public func decode(_ rawJSON: String) throws -> Translation {
-        try decodeJSON(Translation.self, from: rawJSON)
-    }
-}
-
-// MARK: - translateToTarget ("Понять"/In: understand OR compose, into target language)
-
-/// The model decides between TWO jobs and returns ONE result in `targetLanguage`:
-///  • a faithful, meaning-accurate translation of text the user wants to understand, OR
-///  • a phrase composed from an instruction ("скажи, что я занят"), styled by `tone`.
-/// Source language auto-detected.
-public struct TranslateToTargetTemplate: PromptTemplate {
-    public typealias Input = String
-    public typealias Output = TargetTranslation
-
-    public let id = "translateToTarget"
-    public let targetLanguage: String   // e.g. "Russian", "English"
-    public let tone: Register
-    public init(targetLanguage: String, tone: Register = .casual) {
-        self.targetLanguage = targetLanguage
-        self.tone = tone
-    }
-
-    public var systemPrompt: String {
-        """
-        You produce ONE result in \(targetLanguage) for someone learning a language.
-        Detect the source language automatically and decide what the user's input is:
-
-        1. A word, phrase, sentence, or passage to UNDERSTAND (something they read or heard).
-           Translate it into \(targetLanguage), preserving the exact meaning. Do not embellish or
-           change the register.
-
-        2. An INSTRUCTION describing what they want to say, e.g. "say that I have no time",
-           "tell him I'll be late", "вежливо откажись от встречи". Compose ONE natural
-           \(targetLanguage) phrase that expresses it in a \(toneHint) register, worded as if the
-           user is saying it themselves — not a description of the request.
-
-        If the input could be read either way, prefer a faithful translation.
-        Return ONLY the result in "translation" — no commentary, labels, quotes, transliteration,
-        or alternatives. \(plainTextRule)
-        """
-    }
-
-    private var toneHint: String {
-        switch tone {
-        case .formal: "formal and polite"
-        case .neutral, .casual: "everyday conversational"
-        case .slang: "informal and slangy"
-        }
-    }
-
-    public var outputJSONSchema: String {
-        #"{"type":"object","properties":{"translation":{"type":"string"}},"required":["translation"]}"#
-    }
-
-    public func userMessage(for input: String) -> String { input }
-
-    public func decode(_ rawJSON: String) throws -> TargetTranslation {
-        try decodeJSON(TargetTranslation.self, from: rawJSON)
     }
 }
 
@@ -327,9 +263,13 @@ public struct TranslateToTargetTemplate: PromptTemplate {
 public struct ExplainInput: Sendable, Equatable {
     public let text: String
     public let image: Data?
-    public init(text: String, image: Data? = nil) {
+    /// Other phrasings the expression is being chosen AMONG (the sibling "Say it" variants). When
+    /// present, the explanation contrasts THIS phrasing against them — why this one, not those.
+    public let alternatives: [String]
+    public init(text: String, image: Data? = nil, alternatives: [String] = []) {
         self.text = text
         self.image = image
+        self.alternatives = alternatives
     }
 }
 
@@ -340,10 +280,16 @@ public struct ExplainExpressionTemplate: PromptTemplate {
     public let id = "explainExpression"
     public let studiedLanguage: String   // the language being learned (the "studied" headline)
     public let nativeLanguage: String    // the explanation is written in THIS language
-    public init(studiedLanguage: String = "English", nativeLanguage: String = "Russian") {
+    public let tier: ModelTier
+    public init(studiedLanguage: String = "English", nativeLanguage: String = "Russian",
+                tier: ModelTier = .standard) {
         self.studiedLanguage = studiedLanguage
         self.nativeLanguage = nativeLanguage
+        self.tier = tier
     }
+
+    /// Explanation routes to the user-selected explain model (default: the STANDARD model, Sonnet).
+    public var modelTier: ModelTier { tier }
 
     public var systemPrompt: String {
         """
@@ -381,6 +327,10 @@ public struct ExplainExpressionTemplate: PromptTemplate {
           \(nativeLanguage)-speaking culture, so the learner can map it onto something familiar.
 
         If the input is a single neutral word, still describe its connotations and typical usage.
+
+        If the user message lists ALTERNATIVE phrasings (under "Other phrasings…"), the user is choosing
+        between them: make "meaning" and especially "register" explain WHY this exact phrasing rather
+        than those — the distinguishing nuance (tense/aspect, formality, connotation, when each fits).
         \(plainTextRule)
         """
     }
@@ -393,7 +343,16 @@ public struct ExplainExpressionTemplate: PromptTemplate {
         """
     }
 
-    public func userMessage(for input: ExplainInput) -> String { input.text }
+    public func userMessage(for input: ExplainInput) -> String {
+        guard !input.alternatives.isEmpty else { return input.text }
+        let others = input.alternatives.map { "- \($0)" }.joined(separator: "\n")
+        return """
+        \(input.text)
+
+        Other phrasings the user is choosing between (contrast this one against them):
+        \(others)
+        """
+    }
 
     public func image(for input: ExplainInput) -> Data? { input.image }
 
@@ -422,10 +381,16 @@ public struct UnderstandTemplate: PromptTemplate {
     public let id = "understand"
     public let studiedLanguage: String
     public let nativeLanguage: String
-    public init(studiedLanguage: String = "English", nativeLanguage: String = "Russian") {
+    public let tier: ModelTier
+    public init(studiedLanguage: String = "English", nativeLanguage: String = "Russian",
+                tier: ModelTier = .fast) {
         self.studiedLanguage = studiedLanguage
         self.nativeLanguage = nativeLanguage
+        self.tier = tier
     }
+
+    /// Plain translation routes to the user-selected translate model (default: the FAST model, Haiku).
+    public var modelTier: ModelTier { tier }
 
     public var systemPrompt: String {
         """
@@ -476,6 +441,12 @@ public struct PhotoBlocksTemplate: PromptTemplate {
         self.nativeLanguage = nativeLanguage
     }
 
+    // A photo can contain a LOT of text (a full menu, a page) — each block emits en + ru, so the
+    // response is far larger than the short text tasks. 2048 truncates it mid-JSON; give it room.
+    public var maxOutputTokens: Int { 8192 }
+    // Vision OCR + translation of dense text: lean toward accuracy/headroom over raw speed.
+    public var prefersFastResponse: Bool { false }
+
     public var systemPrompt: String {
         """
         You read text from a photo. The text may be in ANY language. Group it into BLOCKS of connected
@@ -514,31 +485,66 @@ public struct PhotoBlocksTemplate: PromptTemplate {
     }
 }
 
-// MARK: - photoTranslate (legacy text-translate; kept for the port/history shape)
+// MARK: - photoExplain (multimodal: image → cultural/local explanation of what it shows)
 
-/// OCR'd EN text → pure Russian translation (same schema as translateText).
-public struct PhotoTranslateTemplate: PromptTemplate {
-    public typealias Input = String
-    public typealias Output = Translation
+/// Image → an explanation of WHAT the photo shows in the context of the STUDIED-language place/country
+/// (a landmark + its history, a rental-car brand + its quirks, a road sign + the local rule behind it,
+/// …), written in the NATIVE language. The "See it" analogue of Get-it/Explain. Not OCR — it explains
+/// the scene/object, helping the learner understand the local/cultural context.
+public struct PhotoExplainTemplate: PromptTemplate {
+    public typealias Input = RecognizableImage
+    public typealias Output = SceneExplanation
 
-    public let id = "photoTranslate"
-    public init() {}
+    public let id = "photoExplain"
+    public let studiedLanguage: String   // the place/country whose context to explain (the studied env)
+    public let nativeLanguage: String    // the explanation is WRITTEN in this language
+    public init(studiedLanguage: String = "English", nativeLanguage: String = "Russian") {
+        self.studiedLanguage = studiedLanguage
+        self.nativeLanguage = nativeLanguage
+    }
+
+    // Vision + a thoughtful multi-paragraph explanation: give it room and the balanced (not fast) profile.
+    public var maxOutputTokens: Int { 4096 }
+    public var prefersFastResponse: Bool { false }
 
     public var systemPrompt: String {
         """
-        The input is English text recognized from a photo (it may contain OCR noise).
-        Translate it into natural Russian. Return ONLY the translation in "ru" — no commentary. \(plainTextRule)
+        A \(nativeLanguage) speaker who is learning \(studiedLanguage) — and is likely travelling in a
+        \(studiedLanguage)-speaking place — took or picked this photo and wants to understand WHAT it
+        shows and its LOCAL / CULTURAL context. Help them make sense of it in the \(studiedLanguage)-
+        speaking environment. This is NOT translation and NOT OCR — explain the scene / object / place.
+
+        Identify what is in the photo and explain it for someone unfamiliar with the local context:
+        - a landmark or place → what it is, briefly its history and why it matters locally;
+        - a product, brand, shop, or rental (e.g. a car-rental sign) → what the company / thing is and
+          its notable local specifics;
+        - a road sign, notice, or rule → what it means, the LOCAL rule behind it, and how it differs
+          from what a \(nativeLanguage) speaker is used to;
+        - food, a menu item, or an everyday object → what it is and its local significance.
+        Focus on cultural / local context and on differences from the learner's own country. If the
+        photo is unclear or there is nothing meaningful to explain, say so plainly in "details".
+
+        Write BOTH fields ENTIRELY in \(nativeLanguage):
+        - "title": a short name / headline for what the photo shows.
+        - "details": the explanation (a few short paragraphs) — what it is, its local / cultural context,
+          and any peculiarities or differences worth knowing.
+        \(plainTextRule)
         """
     }
 
     public var outputJSONSchema: String {
-        #"{"type":"object","properties":{"ru":{"type":"string"}},"required":["ru"]}"#
+        #"{"type":"object","properties":{"title":{"type":"string"},"details":{"type":"string"}},"required":["title","details"]}"#
     }
 
-    public func userMessage(for input: String) -> String { input }
+    public func userMessage(for input: RecognizableImage) -> String {
+        "Explain what this photo shows and its local/cultural context."
+    }
 
-    public func decode(_ rawJSON: String) throws -> Translation {
-        try decodeJSON(Translation.self, from: rawJSON)
+    public func image(for input: RecognizableImage) -> Data? { input.data }
+
+    public func decode(_ rawJSON: String) throws -> SceneExplanation {
+        let raw = try decodeJSON(SceneExplanation.self, from: rawJSON)
+        return SceneExplanation(title: PlainText.clean(raw.title), details: PlainText.clean(raw.details))
     }
 }
 
@@ -601,7 +607,10 @@ public struct HealthCheckTemplate: PromptTemplate {
     public typealias Output = Bool
 
     public let id = "healthCheck"
-    public init() {}
+    /// Which model this ping checks — lets Settings probe both the standard and fast models.
+    public let tier: ModelTier
+    public init(tier: ModelTier = .standard) { self.tier = tier }
+    public var modelTier: ModelTier { tier }
 
     public var systemPrompt: String { "Reply ONLY with the JSON object {\"ok\": true}." }
     public var outputJSONSchema: String {

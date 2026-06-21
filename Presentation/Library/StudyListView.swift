@@ -12,6 +12,7 @@ import DesignSystem
 public struct StudyListView: View {
     @State private var model: StudyListViewModel
     @State private var shareItem: ShareItem?
+    @Environment(AppUIState.self) private var ui
 
     public init(model: StudyListViewModel) {
         _model = State(initialValue: model)
@@ -46,15 +47,26 @@ public struct StudyListView: View {
             .sheet(isPresented: $model.showAddSheet) { addSheet }
             .sheet(item: $shareItem) { item in ShareSheet(items: [item.url]) }
             .onChange(of: model.exportedDeck) { _, deck in
-                if let deck, let url = writeTemp(deck) {
+                guard let deck else { return }
+                if let url = writeTemp(deck) {
                     shareItem = ShareItem(url: url)
                     model.clearExport()
+                } else {
+                    model.reportExportWriteFailed()   // don't silently swallow the temp-write failure
                 }
+            }
+            .onChange(of: model.showAddSheet) { _, shown in
+                if !shown { model.resetAddForm() }    // clear stale text/error on Cancel or swipe-dismiss
             }
             .alert(Loc.t("Экспорт", "Export"), isPresented: exportErrorBinding) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(model.exportError ?? "")
+            }
+            .alert(Loc.t("Список", "List"), isPresented: actionErrorBinding) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(model.actionError ?? "")
             }
         }
     }
@@ -72,7 +84,7 @@ public struct StudyListView: View {
         case .empty:
             StatusView(systemImage: "rectangle.stack", title: Loc.t("Пока пусто", "Nothing yet"),
                        message: Loc.t("Сохраняйте фразы из «Сказать», «Понять» или «Смотреть» — или добавьте вручную.",
-                                      "Save phrases from “Say”, “Understand”, or “Look” — or add them manually."),
+                                      "Save phrases from “Say it”, “Get it”, or “See it” — or add them manually."),
                        actionTitle: Loc.t("Добавить", "Add"), action: { model.showAddSheet = true })
         case .loaded:
             list
@@ -84,7 +96,8 @@ public struct StudyListView: View {
             ForEach(model.expressions) { expression in
                 StudyRow(expression: expression,
                          isPlaying: model.isPlaying(expression),
-                         onPlay: { model.play(expression) })
+                         onPlay: { model.play(expression) },
+                         onExplain: { ui.pendingExplain = ExplainRequest(text: expression.en) })
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                     .listRowInsets(EdgeInsets(top: Tokens.Space.s4, leading: Tokens.Space.s16,
@@ -139,8 +152,7 @@ public struct StudyListView: View {
                         EHButton(Loc.t("Сохранить", "Save"), icon: "sparkles", kind: .primary, fillWidth: true) {
                             model.add()
                         }
-                        .disabled(!model.canAdd)
-                        .opacity(model.canAdd ? 1 : 0.5)
+                        .disabled(!model.canAdd)   // EHButton dims itself when disabled
                     }
                 }
                 .padding(Tokens.Space.s20)
@@ -163,6 +175,10 @@ public struct StudyListView: View {
         Binding(get: { model.exportError != nil }, set: { if !$0 { model.clearExportError() } })
     }
 
+    private var actionErrorBinding: Binding<Bool> {
+        Binding(get: { model.actionError != nil }, set: { if !$0 { model.clearActionError() } })
+    }
+
     private func writeTemp(_ deck: ExportedDeck) -> URL? {
         let url = FileManager.default.temporaryDirectory.appending(path: deck.filename)
         do {
@@ -178,6 +194,8 @@ private struct StudyRow: View {
     let expression: Domain.Expression
     let isPlaying: Bool
     let onPlay: () -> Void
+    let onExplain: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(alignment: .top, spacing: Tokens.Space.s12) {
@@ -199,14 +217,25 @@ private struct StudyRow: View {
             }
             Spacer(minLength: Tokens.Space.s8)
             VStack(alignment: .trailing, spacing: Tokens.Space.s8) {
-                Button(action: onPlay) {
-                    Image(systemName: isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2")
-                        .symbolEffect(.variableColor.iterative, isActive: isPlaying)
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(Tokens.Content.secondary)
+                // Play · Explain in one icon row — same order/look as the result cards.
+                HStack(spacing: Tokens.Space.s16) {
+                    Button(action: onPlay) {
+                        Image(systemName: isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2")
+                            .symbolEffect(.variableColor.iterative, isActive: isPlaying && !reduceMotion)
+                            .font(.system(size: Tokens.Icon.cardAction, weight: .medium))
+                            .foregroundStyle(isPlaying ? Tokens.Content.primary : Tokens.Content.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Loc.t("Озвучить", "Play"))
+
+                    Button(action: onExplain) {
+                        Image(systemName: "lightbulb")
+                            .font(.system(size: Tokens.Icon.cardAction, weight: .medium))
+                            .foregroundStyle(Tokens.Content.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Loc.t("Объяснить", "Explain"))
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Loc.t("Озвучить", "Play"))
                 if expression.learned {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(Tokens.Signal.success)
@@ -219,5 +248,6 @@ private struct StudyRow: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(expression.en). \(expression.ru). \(expression.learned ? Loc.t("Выучено", "Learned") : Loc.t("Не выучено", "Not learned"))")
         .accessibilityAction(named: Loc.t("Озвучить", "Play")) { onPlay() }
+        .accessibilityAction(named: Loc.t("Объяснить", "Explain")) { onExplain() }
     }
 }

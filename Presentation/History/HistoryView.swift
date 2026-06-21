@@ -155,7 +155,10 @@ private struct HistoryDetailView: View {
                         isSaved: model.isSaved(HistoryDetailViewModel.variantKey(variant)),
                         isPlaying: model.isPlaying(HistoryDetailViewModel.variantKey(variant)),
                         onPlay: { model.playVariant(variant) },
-                        onToggleSave: { model.toggleSaveVariant(variant) }
+                        onToggleSave: { model.toggleSaveVariant(variant) },
+                        onExplain: { ui.pendingExplain = ExplainRequest(
+                            text: variant.en,
+                            alternatives: variants.filter { $0.id != variant.id }.map(\.en)) }
                     )
                 }
             }
@@ -192,36 +195,36 @@ private struct HistoryDetailView: View {
         }
     }
 
-    /// Play · Copy · Explain on the studied-language request — icon-only, matching the phrase cards.
+    /// Play · Explain · Copy on the studied-language request — icon-only, matching the phrase cards.
     private var requestActions: some View {
         let playing = model.isPlaying(HistoryDetailViewModel.translationKey)
         return HStack(spacing: Tokens.Space.s16) {
             Button { model.playTranslationSource() } label: {
                 Image(systemName: playing ? "speaker.wave.2.fill" : "speaker.wave.2")
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.system(size: Tokens.Icon.cardAction, weight: .medium))
                     .symbolEffect(.variableColor.iterative, isActive: playing)
                     .foregroundStyle(playing ? Tokens.Content.primary : Tokens.Content.tertiary)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Loc.t("Озвучить", "Play"))
 
-            CopyButton(entry.inputText, style: .icon,
-                       accessibilityLabel: Loc.t("Скопировать выражение", "Copy expression"))
-
             Button { ui.pendingExplain = ExplainRequest(text: entry.inputText) } label: {
                 Image(systemName: "lightbulb")
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.system(size: Tokens.Icon.cardAction, weight: .medium))
                     .foregroundStyle(Tokens.Content.tertiary)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Loc.t("Объяснить", "Explain"))
+
+            CopyButton(entry.inputText, style: .icon,
+                       accessibilityLabel: Loc.t("Скопировать выражение", "Copy expression"))
         }
     }
 
     private func bookmark(isSaved: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
-                .font(.system(size: 18, weight: .medium))
+                .font(.system(size: Tokens.Icon.cardActionProminent, weight: .medium))
                 .foregroundStyle(isSaved ? Tokens.Content.primary : Tokens.Content.tertiary)
         }
         .buttonStyle(.plain)

@@ -28,8 +28,8 @@ import Adapters
 
     @Test func requestUseCaseAppendsHistory() async throws {
         let history = MockHistoryRepository()
-        let translate = TranslateTextInteractor(llm: MockLLMClient(), history: history)
-        _ = try await translate("I appreciate it")
+        let understand = UnderstandInteractor(llm: MockLLMClient(), history: history)
+        _ = try await understand("I appreciate it", studiedLanguage: "English", nativeLanguage: "Russian")
         let recent = try await history.recent(limit: 10)
         #expect(recent.count == 1)
         #expect(recent.first?.kind == .translate)

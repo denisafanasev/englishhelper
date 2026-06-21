@@ -93,12 +93,26 @@ struct XMLWriter {
             .joined()
     }
 
-    /// Escapes &, <, >, ", ' in every value.
+    /// Escapes &, <, >, ", ' in every value — AFTER dropping characters that are illegal in XML 1.0
+    /// even when numeric-escaped (C0 controls except tab/LF/CR, and other non-characters). OCR output
+    /// and pasted clipboard text routinely contain control chars; without this a single one in any
+    /// field makes `XMLParser` reject the WHOLE deck, so the user can't export at all.
     static func escape(_ s: String) -> String {
-        s.replacingOccurrences(of: "&", with: "&amp;")
+        let legal = String(String.UnicodeScalarView(s.unicodeScalars.filter(isXMLLegal)))
+        return legal.replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
             .replacingOccurrences(of: "\"", with: "&quot;")
             .replacingOccurrences(of: "'", with: "&apos;")
+    }
+
+    /// XML 1.0 legal character range: tab, LF, CR, and the normal Unicode ranges (excluding surrogates
+    /// and U+FFFE/U+FFFF non-characters).
+    private static func isXMLLegal(_ scalar: Unicode.Scalar) -> Bool {
+        let v = scalar.value
+        return v == 0x9 || v == 0xA || v == 0xD
+            || (0x20...0xD7FF).contains(v)
+            || (0xE000...0xFFFD).contains(v)
+            || (0x10000...0x10FFFF).contains(v)
     }
 }

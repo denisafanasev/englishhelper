@@ -28,16 +28,22 @@ public struct PhotoTranslateView: View {
                 ScrollView {
                     VStack(spacing: Tokens.Space.s20) {
                         if model.needsAPIKey { apiKeyBanner }
+                        modeSelector
                         contentSection
                     }
                     .padding(Tokens.Space.s20)
                 }
             }
-            .navigationTitle(Loc.t("Фото-перевод", "See it"))
+            // Screen TITLE key is "Photo translation" — distinct from the camera TAB key "See it", so
+            // FR/ES/DE/IT don't render the tab verb ("Voir"/"Ver"/…) as the title.
+            .navigationTitle(Loc.t("Фото-перевод", "Photo translation"))
             .settingsTrigger()
             .sheet(isPresented: $model.showCameraPriming) { primingSheet }
             .fullScreenCover(isPresented: $model.presentCamera) {
-                CameraPicker(onImage: { model.didCapture(prepareImageData($0) ?? $0) },
+                CameraPicker(onImage: { data in
+                                 // Downscale/encode OFF the main actor, then hand back to the @MainActor VM.
+                                 Task { model.didCapture(await Self.prepareDetached(data) ?? data) }
+                             },
                              onCancel: { model.cameraCancelled() })
                     .ignoresSafeArea()
             }
@@ -45,13 +51,25 @@ public struct PhotoTranslateView: View {
                 guard let item else { return }
                 Task {
                     if let data = try? await item.loadTransferable(type: Data.self),
-                       let prepared = prepareImageData(data) {
+                       let prepared = await Self.prepareDetached(data) {
                         model.didPickFromLibrary(prepared)
+                    } else {
+                        model.imageLoadFailed()
                     }
                     libraryItem = nil
                 }
             }
+            .alert(Loc.t("Сохранение", "Saving"), isPresented: saveErrorBinding) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(model.saveError ?? "")
+            }
         }
+    }
+
+    /// Surface a background save failure regardless of `phase` (inline error UI is only in `.failed`).
+    private var saveErrorBinding: Binding<Bool> {
+        Binding(get: { model.saveError != nil }, set: { if !$0 { model.clearSaveError() } })
     }
 
     @ViewBuilder private var contentSection: some View {
@@ -78,21 +96,47 @@ public struct PhotoTranslateView: View {
 
     // MARK: Sections
 
+    private var modeSelector: some View {
+        SegmentedSelector(
+            PhotoTranslateViewModel.Mode.allCases,
+            selected: model.mode,
+            label: { $0.title },
+            onSelect: { model.selectMode($0) }
+        )
+        .accessibilityLabel(Loc.t("Режим", "Mode"))
+    }
+
     private var idleSection: some View {
         VStack(spacing: Tokens.Space.s20) {
-            StatusView(
-                systemImage: "camera.viewfinder",
-                title: Loc.t("Переведите текст с фото", "Translate text from a photo",
-                             "Traduire le texte d'une photo", "Traducir texto de una foto",
-                             "Text aus einem Foto übersetzen", "Traduci il testo da una foto"),
-                message: Loc.t(
-                    "Снимите вывеску, меню или страницу — распознаю текст и покажу его на изучаемом языке с переводом.",
-                    "Snap a sign, menu, or page — I'll read the text and show it in the language you're learning, with a translation.",
-                    "Photographiez un panneau, un menu ou une page — je lirai le texte et l'afficherai dans la langue que vous apprenez, avec une traduction.",
-                    "Fotografía un cartel, un menú o una página — leeré el texto y lo mostraré en el idioma que estás aprendiendo, con una traducción.",
-                    "Fotografiere ein Schild, eine Speisekarte oder eine Seite – ich erkenne den Text und zeige ihn in der Sprache, die du lernst, mit einer Übersetzung.",
-                    "Fotografa un cartello, un menu o una pagina: riconoscerò il testo e lo mostrerò nella lingua che stai imparando, con una traduzione.")
-            )
+            if model.mode == .explain {
+                StatusView(
+                    systemImage: "sparkle.magnifyingglass",
+                    title: Loc.t("Что это? Расскажу", "What is it? I'll explain",
+                                 "Qu'est-ce que c'est ? Je vous explique", "¿Qué es? Te lo explico",
+                                 "Was ist das? Ich erkläre es", "Cos'è? Te lo spiego"),
+                    message: Loc.t(
+                        "Снимите место, вывеску, знак или предмет — объясню, что это, и расскажу про местные особенности и контекст.",
+                        "Snap a place, sign, or object — I'll explain what it is and its local context and quirks.",
+                        "Photographiez un lieu, un panneau ou un objet — j'expliquerai ce que c'est, son contexte local et ses particularités.",
+                        "Fotografía un lugar, cartel u objeto — te explicaré qué es, su contexto local y sus particularidades.",
+                        "Fotografiere einen Ort, ein Schild oder ein Objekt – ich erkläre, was es ist, den lokalen Kontext und Besonderheiten.",
+                        "Fotografa un luogo, un cartello o un oggetto: spiegherò cos'è, il contesto locale e le sue particolarità.")
+                )
+            } else {
+                StatusView(
+                    systemImage: "camera.viewfinder",
+                    title: Loc.t("Переведите текст с фото", "Translate text from a photo",
+                                 "Traduire le texte d'une photo", "Traducir texto de una foto",
+                                 "Text aus einem Foto übersetzen", "Traduci il testo da una foto"),
+                    message: Loc.t(
+                        "Снимите вывеску, меню или страницу — распознаю текст и покажу его на изучаемом языке с переводом.",
+                        "Snap a sign, menu, or page — I'll read the text and show it in the language you're learning, with a translation.",
+                        "Photographiez un panneau, un menu ou une page — je lirai le texte et l'afficherai dans la langue que vous apprenez, avec une traduction.",
+                        "Fotografía un cartel, un menú o una página — leeré el texto y lo mostraré en el idioma que estás aprendiendo, con una traducción.",
+                        "Fotografiere ein Schild, eine Speisekarte oder eine Seite – ich erkenne den Text und zeige ihn in der Sprache, die du lernst, mit einer Übersetzung.",
+                        "Fotografa un cartello, un menu o una pagina: riconoscerò il testo e lo mostrerò nella lingua che stai imparando, con una traduzione.")
+                )
+            }
             sourceButtons
         }
         .padding(.top, Tokens.Space.s24)
@@ -122,14 +166,26 @@ public struct PhotoTranslateView: View {
                     .overlay {
                         ZStack {
                             Tokens.Scrim.solid
-                            LoadingView(Loc.t("Распознаю и перевожу…", "Reading and translating…"))
+                            // A moving bar (not just a spinner) — recognizing + translating a dense
+                            // photo can take ~30s, so show visible forward progress while it works.
+                            TimedProgressView(progressCaption, expectedDuration: 30)
                         }
                         .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.card, style: .continuous))
                     }
             } else {
-                LoadingView(Loc.t("Распознаю и перевожу…", "Reading and translating…"))
+                TimedProgressView(progressCaption, expectedDuration: 30)
             }
         }
+    }
+
+    private var progressCaption: String {
+        model.mode == .explain
+            ? Loc.t("Рассматриваю фото…", "Looking at the photo…",
+                    "J'observe la photo…", "Observando la foto…",
+                    "Betrachte das Foto…", "Osservo la foto…")
+            : Loc.t("Распознаю и перевожу…", "Reading and translating…",
+                    "Lecture et traduction…", "Leyendo y traduciendo…",
+                    "Lese und übersetze…", "Lettura e traduzione…")
     }
 
     private var resultSection: some View {
@@ -140,61 +196,86 @@ public struct PhotoTranslateView: View {
                     .aspectRatio(image.size.width / image.size.height, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.card, style: .continuous))
             }
-            ForEach(model.blocks) { block in
-                blockCard(block)
+            // Translate mode → per-block cards; Explain mode → the scene explanation card.
+            if !model.blocks.isEmpty {
+                ForEach(model.blocks) { block in
+                    blockCard(block)
+                }
+            } else if let explanation = model.explanation {
+                explanationCard(explanation)
             }
             // Take or pick a NEW photo directly from the result (replaces the current one).
             sourceButtons
         }
     }
 
-    /// One recognized block: English + Russian translation, with play + save.
-    private func blockCard(_ block: TranslatedBlock) -> some View {
+    /// Explain mode: what the photo shows + its local/cultural context (read-only, copyable).
+    private func explanationCard(_ explanation: SceneExplanation) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s12) {
             HStack(alignment: .top) {
-                Text(block.en)
-                    .textStyle(Tokens.Text.title3)
+                Text(explanation.title)
+                    .textStyle(Tokens.Text.headline)
                     .foregroundStyle(Tokens.Content.primary)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: Tokens.Space.s8)
-                Button { model.toggleSave(block) } label: {
-                    Image(systemName: model.isSaved(block) ? "bookmark.fill" : "bookmark")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(model.isSaved(block) ? Tokens.Content.primary : Tokens.Content.tertiary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(model.isSaved(block)
-                    ? Loc.t("Убрать из изучаемого", "Remove from study list")
-                    : Loc.t("Сохранить в изучаемое", "Save to study list"))
+                CopyButton(explanation.title + "\n\n" + explanation.details, style: .icon,
+                           accessibilityLabel: Loc.t("Скопировать объяснение", "Copy explanation"))
             }
 
-            // Actions on the studied-language text, directly under it. Play / Explain as labels; the
-            // copy is an ICON at the trailing edge — same look as the translation's copy below it (so
-            // the two copy icons line up). Explain opens Get it (Explain mode) with the block + photo.
-            HStack(spacing: Tokens.Space.s16) {
-                Button { model.play(block) } label: {
-                    Label(Loc.t("Озвучить", "Play"),
-                          systemImage: model.isPlaying(block) ? "speaker.wave.2.fill" : "speaker.wave.2")
-                        .font(.system(size: 12, weight: .semibold))
-                        .lineLimit(1)
-                        .foregroundStyle(Tokens.Content.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Loc.t("Озвучить", "Play"))
+            Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)
 
-                Button { ui.pendingExplain = ExplainRequest(text: block.en, imageData: model.imageData) } label: {
-                    Label(Loc.t("Объяснить", "Explain"), systemImage: "lightbulb")
-                        .font(.system(size: 12, weight: .semibold))
-                        .lineLimit(1)
-                        .foregroundStyle(Tokens.Content.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Loc.t("Объяснить", "Explain"))
+            Text(explanation.details)
+                .textStyle(Tokens.Text.body)
+                .foregroundStyle(Tokens.Content.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Tokens.Space.s16)
+        .glassPanel(cornerRadius: Tokens.Radius.card)
+    }
 
+    /// One recognized block: English + Russian translation, with the full action row.
+    private func blockCard(_ block: TranslatedBlock) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.s12) {
+            // Studied text + icon actions (Play · Explain · Copy · Save) in the header row — same
+            // order/look as the phrase cards, so every card's action row is identical.
+            HStack(alignment: .top) {
+                Text(block.en)
+                    .textStyle(Tokens.Text.headline)
+                    .foregroundStyle(Tokens.Content.primary)
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: Tokens.Space.s8)
+                HStack(spacing: Tokens.Space.s16) {
+                    Button { model.play(block) } label: {
+                        Image(systemName: model.isPlaying(block) ? "speaker.wave.2.fill" : "speaker.wave.2")
+                            .font(.system(size: Tokens.Icon.cardAction, weight: .medium))
+                            .symbolEffect(.variableColor.iterative, isActive: model.isPlaying(block))
+                            .foregroundStyle(model.isPlaying(block) ? Tokens.Content.primary : Tokens.Content.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Loc.t("Озвучить", "Play"))
 
-                CopyButton(block.en, style: .icon,
-                           accessibilityLabel: Loc.t("Скопировать выражение", "Copy expression"))
+                    Button { ui.pendingExplain = ExplainRequest(text: block.en, imageData: model.imageData) } label: {
+                        Image(systemName: "lightbulb")
+                            .font(.system(size: Tokens.Icon.cardAction, weight: .medium))
+                            .foregroundStyle(Tokens.Content.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Loc.t("Объяснить", "Explain"))
+
+                    CopyButton(block.en, style: .icon,
+                               accessibilityLabel: Loc.t("Скопировать выражение", "Copy expression"))
+
+                    Button { model.toggleSave(block) } label: {
+                        Image(systemName: model.isSaved(block) ? "bookmark.fill" : "bookmark")
+                            .font(.system(size: Tokens.Icon.cardActionProminent, weight: .medium))
+                            .foregroundStyle(model.isSaved(block) ? Tokens.Content.primary : Tokens.Content.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(model.isSaved(block)
+                        ? Loc.t("Убрать из изучаемого", "Remove from study list")
+                        : Loc.t("Сохранить в изучаемое", "Save to study list"))
+                }
             }
 
             Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)
@@ -260,8 +341,16 @@ public struct PhotoTranslateView: View {
         model.imageData.flatMap(UIImage.init(data:))
     }
 
+    /// Run the CPU-heavy downscale/JPEG-encode on a background task so it never hitches the main
+    /// thread (it was previously synchronous on the @MainActor View, stalling the UI as the camera
+    /// sheet dismissed). Returns nil if the data isn't a decodable image.
+    private static func prepareDetached(_ data: Data) async -> Data? {
+        await Task.detached { prepareImageData(data) }.value
+    }
+
     /// Downscale (max 1536px) and re-encode to JPEG: keeps the upload small and a format Claude accepts.
-    private func prepareImageData(_ data: Data) -> Data? {
+    /// `nonisolated static` so it can run off the main actor.
+    nonisolated private static func prepareImageData(_ data: Data) -> Data? {
         guard let image = UIImage(data: data) else { return nil }
         let maxDimension: CGFloat = 1536
         let longest = max(image.size.width, image.size.height)

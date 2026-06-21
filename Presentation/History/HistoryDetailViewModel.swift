@@ -19,6 +19,9 @@ public final class HistoryDetailViewModel {
 
     private var savedKeys: Set<String> = []       // optimistic "saved" flag (instant UI)
     private var savedIDs: [String: UUID] = [:]    // item key → stored Expression.id
+    /// Keys the user has explicitly toggled. `loadSavedState` must NOT seed these — its `studyList.list()`
+    /// await can resume AFTER a user tap and would otherwise clobber the user's just-made choice.
+    private var userToggledKeys: Set<String> = []
     private let saveExpression: any SaveExpressionUseCase
     private let studyList: any StudyListUseCase
     private let pronounce: any PlayPronunciationUseCase
@@ -58,16 +61,19 @@ public final class HistoryDetailViewModel {
         switch entry.result {
         case .howToSay(let variants), .whatToSay(let variants):
             for variant in variants {
+                let key = Self.variantKey(variant)
+                guard !userToggledKeys.contains(key) else { continue }   // user already decided this one
                 if let id = storedID(for: variant.en) {
-                    let key = Self.variantKey(variant)
                     savedKeys.insert(key)
                     savedIDs[key] = id
                 }
             }
         case .translate, .photoTranslate:
+            let key = Self.translationKey
+            guard !userToggledKeys.contains(key) else { return }
             if let id = storedID(for: entry.inputText) {
-                savedKeys.insert(Self.translationKey)
-                savedIDs[Self.translationKey] = id
+                savedKeys.insert(key)
+                savedIDs[key] = id
             }
         }
     }
@@ -119,6 +125,7 @@ public final class HistoryDetailViewModel {
     }
 
     private func toggle(key: String, en: String, knownRU: String?, context: String) {
+        userToggledKeys.insert(key)   // user owns this key now; loadSavedState must not re-seed it
         if savedKeys.contains(key) {
             savedKeys.remove(key)                        // instant UI
             let storedID = savedIDs[key]
