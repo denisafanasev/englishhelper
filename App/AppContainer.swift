@@ -75,8 +75,11 @@ public final class AppContainer: Sendable {
         self.exporter = exporter
 
         // Wire use cases onto the ports.
-        self.howToSay = HowToSayInteractor(llm: llm, history: history)
-        self.whatToSay = WhatToSayInteractor(llm: llm, history: history)
+        // "Say it" phrase generation routes to the user-selected model (default Sonnet).
+        self.howToSay = HowToSayInteractor(llm: llm, history: history,
+                                           tier: { LLMModelChoice.currentSayIt.tier })
+        self.whatToSay = WhatToSayInteractor(llm: llm, history: history,
+                                             tier: { LLMModelChoice.currentSayIt.tier })
         self.photoTranslate = PhotoTranslateInteractor(llm: llm, history: history)   // LLM vision (no local OCR)
         self.photoExplain = PhotoExplainInteractor(llm: llm)                          // "See it" Explain mode
         self.enrich = EnrichExpressionInteractor(llm: llm)
@@ -85,7 +88,8 @@ public final class AppContainer: Sendable {
         self.exportDeck = ExportDeckInteractor(repository: expressions, exporter: exporter)
         // Anki exporter is pure (no deps), built here at the composition root.
         self.exportAnkiDeck = ExportDeckInteractor(repository: expressions, exporter: AnkiExporter())
-        self.regenerateHowToSay = RegenerateHowToSayInteractor(llm: llm, history: history)
+        self.regenerateHowToSay = RegenerateHowToSayInteractor(llm: llm, history: history,
+                                                               tier: { LLMModelChoice.currentSayIt.tier })
         self.saveExpression = SaveExpressionInteractor(
             enrich: EnrichExpressionInteractor(llm: llm), repository: expressions
         )

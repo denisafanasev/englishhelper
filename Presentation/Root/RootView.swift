@@ -25,6 +25,7 @@ public struct RootView: View {
     @State private var target = TargetLanguageStore()
     @State private var translateModel = TranslateModelStore()
     @State private var explainModel = ExplainModelStore()
+    @State private var sayItModel = SayItModelStore()
     @State private var ui = AppUIState()
     @State private var onboarding = OnboardingStore()
     @State private var network: NetworkMonitor
@@ -120,7 +121,8 @@ public struct RootView: View {
                 }
                 .sheet(isPresented: $ui.showSettings) {
                     SettingsView(model: settings, theme: theme, language: language, studied: studied,
-                                 target: target, translateModel: translateModel, explainModel: explainModel) {
+                                 target: target, translateModel: translateModel, explainModel: explainModel,
+                                 sayItModel: sayItModel) {
                         ui.showSettings = false
                     }
                     .environment(\.locale, language.locale)

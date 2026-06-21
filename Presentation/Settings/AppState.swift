@@ -86,14 +86,18 @@ public enum LLMModelChoice: String, CaseIterable, Sendable {
 
     static let translateKey = "translateModel"
     static let explainKey = "explainModel"
+    static let sayItKey = "sayItModel"
 
     /// Live reads for the routing providers the App wires into the interactors. Defaults: translate →
-    /// Haiku (speed), explain → Sonnet (quality). Read off the main actor, so kept as plain statics.
+    /// Haiku (speed), explain → Sonnet (quality), Say it → Sonnet. Read off the main actor, plain statics.
     public static var currentTranslate: LLMModelChoice {
         LLMModelChoice(rawValue: UserDefaults.standard.string(forKey: translateKey) ?? "") ?? .haiku
     }
     public static var currentExplain: LLMModelChoice {
         LLMModelChoice(rawValue: UserDefaults.standard.string(forKey: explainKey) ?? "") ?? .sonnet
+    }
+    public static var currentSayIt: LLMModelChoice {
+        LLMModelChoice(rawValue: UserDefaults.standard.string(forKey: sayItKey) ?? "") ?? .sonnet
     }
 }
 
@@ -116,6 +120,17 @@ public final class ExplainModelStore {
         didSet { UserDefaults.standard.set(choice.rawValue, forKey: LLMModelChoice.explainKey) }
     }
     public init() { choice = LLMModelChoice.currentExplain }
+}
+
+/// Persisted model choice for the Say it scenario (phrase generation: how-to-say / what-to-say).
+/// Default: Sonnet.
+@MainActor
+@Observable
+public final class SayItModelStore {
+    public var choice: LLMModelChoice {
+        didSet { UserDefaults.standard.set(choice.rawValue, forKey: LLMModelChoice.sayItKey) }
+    }
+    public init() { choice = LLMModelChoice.currentSayIt }
 }
 
 /// A request to open the "Понять"/Get it screen in Explain mode for a specific phrase. Used to route

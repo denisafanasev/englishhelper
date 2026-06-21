@@ -28,15 +28,19 @@ public extension HowToSayUseCase {
 public struct HowToSayInteractor: HowToSayUseCase {
     private let llm: LLMClient
     private let history: HistoryRepository
+    /// Resolves the model tier for "Say it" generation at call time (reads the user's Settings choice).
+    private let tier: @Sendable () -> ModelTier
 
-    public init(llm: LLMClient, history: HistoryRepository) {
+    public init(llm: LLMClient, history: HistoryRepository,
+                tier: @escaping @Sendable () -> ModelTier = { .standard }) {
         self.llm = llm
         self.history = history
+        self.tier = tier
     }
 
     public func callAsFunction(_ intent: String, tone: Register, studiedLanguage: String, nativeLanguage: String) async throws -> [PhraseVariant] {
         let result = try await llm.run(
-            HowToSayTemplate(tone: tone, studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage), input: intent
+            HowToSayTemplate(tone: tone, studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage, tier: tier()), input: intent
         )
         // History logging is INTENTIONALLY best-effort: the user already has their result, so a failed
         // (or cancelled) append must never fail/cancel the request. `try?` is deliberate here and at
@@ -69,10 +73,14 @@ public extension RegenerateHowToSayUseCase {
 public struct RegenerateHowToSayInteractor: RegenerateHowToSayUseCase {
     private let llm: LLMClient
     private let history: HistoryRepository
+    /// Resolves the model tier for "Say it" generation at call time (reads the user's Settings choice).
+    private let tier: @Sendable () -> ModelTier
 
-    public init(llm: LLMClient, history: HistoryRepository) {
+    public init(llm: LLMClient, history: HistoryRepository,
+                tier: @escaping @Sendable () -> ModelTier = { .standard }) {
         self.llm = llm
         self.history = history
+        self.tier = tier
     }
 
     public func callAsFunction(_ intent: String, tone: Register, studiedLanguage: String, nativeLanguage: String) async throws -> [PhraseVariant] {
@@ -80,7 +88,7 @@ public struct RegenerateHowToSayInteractor: RegenerateHowToSayUseCase {
         // doesn't read as part of the user's intent); history records the original intent only.
         let nudged = intent + "\n\n(Offer different phrasings from the previous ones.)"
         let result = try await llm.run(
-            HowToSayTemplate(tone: tone, studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage), input: nudged
+            HowToSayTemplate(tone: tone, studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage, tier: tier()), input: nudged
         )
         try? await history.append(
             HistoryEntry(inputText: intent, result: .howToSay(result.variants))
@@ -110,10 +118,14 @@ public extension WhatToSayUseCase {
 public struct WhatToSayInteractor: WhatToSayUseCase {
     private let llm: LLMClient
     private let history: HistoryRepository
+    /// Resolves the model tier for "Say it" generation at call time (reads the user's Settings choice).
+    private let tier: @Sendable () -> ModelTier
 
-    public init(llm: LLMClient, history: HistoryRepository) {
+    public init(llm: LLMClient, history: HistoryRepository,
+                tier: @escaping @Sendable () -> ModelTier = { .standard }) {
         self.llm = llm
         self.history = history
+        self.tier = tier
     }
 
     public func callAsFunction(_ situation: String, tone: Register, studiedLanguage: String, nativeLanguage: String, regenerate: Bool) async throws -> [PhraseVariant] {
@@ -123,7 +135,7 @@ public struct WhatToSayInteractor: WhatToSayUseCase {
             ? situation + "\n\n(Suggest a different or additional set of useful phrases for this situation.)"
             : situation
         let result = try await llm.run(
-            WhatToSayTemplate(tone: tone, studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage), input: input
+            WhatToSayTemplate(tone: tone, studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage, tier: tier()), input: input
         )
         try? await history.append(
             HistoryEntry(inputText: situation, result: .whatToSay(result.variants))

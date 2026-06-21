@@ -19,11 +19,13 @@ import Presentation
         #expect(LLMModelChoice.sonnet.tier == .standard)
     }
 
-    @Test func defaultsAreHaikuTranslateSonnetExplain() {
+    @Test func defaultsAreHaikuTranslateSonnetExplainAndSayIt() {
         UserDefaults.standard.removeObject(forKey: "translateModel")
         UserDefaults.standard.removeObject(forKey: "explainModel")
+        UserDefaults.standard.removeObject(forKey: "sayItModel")
         #expect(LLMModelChoice.currentTranslate == .haiku)
         #expect(LLMModelChoice.currentExplain == .sonnet)
+        #expect(LLMModelChoice.currentSayIt == .sonnet)
     }
 
     @Test func templatesRouteToTheirTier() {
@@ -31,6 +33,9 @@ import Presentation
         #expect(UnderstandTemplate(tier: .fast).modelTier == .fast)
         #expect(ExplainExpressionTemplate(tier: .fast).modelTier == .fast)
         #expect(ExplainExpressionTemplate(tier: .standard).modelTier == .standard)
+        #expect(HowToSayTemplate(tier: .fast).modelTier == .fast)
+        #expect(HowToSayTemplate(tier: .standard).modelTier == .standard)
+        #expect(WhatToSayTemplate(tier: .standard).modelTier == .standard)
     }
 
     @Test func interactorPassesProviderTierToTemplate() async throws {

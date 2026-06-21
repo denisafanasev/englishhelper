@@ -17,6 +17,7 @@ public struct SettingsView: View {
     private let target: TargetLanguageStore
     private let translateModel: TranslateModelStore
     private let explainModel: ExplainModelStore
+    private let sayItModel: SayItModelStore
     private let onClose: () -> Void
 
     public init(
@@ -27,6 +28,7 @@ public struct SettingsView: View {
         target: TargetLanguageStore,
         translateModel: TranslateModelStore,
         explainModel: ExplainModelStore,
+        sayItModel: SayItModelStore,
         onClose: @escaping () -> Void
     ) {
         _model = State(initialValue: model)
@@ -36,6 +38,7 @@ public struct SettingsView: View {
         self.target = target
         self.translateModel = translateModel
         self.explainModel = explainModel
+        self.sayItModel = sayItModel
         self.onClose = onClose
     }
 
@@ -139,6 +142,13 @@ public struct SettingsView: View {
     private var modelsCard: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s16) {
             sectionTitle(Loc.t("Модели по сценарию", "Models by scenario"))
+            modelPicker(
+                title: Loc.t("Фразы (Сказать)", "Phrases (Say it)"),
+                note: Loc.t("Экран «Сказать» — генерация вариантов.", "Say it — phrase generation."),
+                choice: sayItModel.choice,
+                onSelect: { sayItModel.choice = $0 }
+            )
+            Divider().overlay(Tokens.Hairline.default)
             modelPicker(
                 title: Loc.t("Перевод", "Translate"),
                 note: Loc.t("Экран «Понять» → Перевод.", "Get it → Translate."),

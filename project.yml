@@ -30,6 +30,11 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     # Frameworks let Xcode synthesize their Info.plist; the app overrides with an explicit file.
     GENERATE_INFOPLIST_FILE: "YES"
+    # Device signing for every target (the app + the embedded ShareExtension both need a team for the
+    # App Group capability). Pinned here so a regenerated project keeps the team instead of dropping it.
+    # Simulator builds ignore this (ad-hoc). Override the team in Secrets.xcconfig if it ever changes.
+    DEVELOPMENT_TEAM: TQJ35ER433
+    CODE_SIGN_STYLE: Automatic
 
 # Layer the (gitignored) Secrets.xcconfig in via an optional include, so generation/build never
 # fails when secrets are absent (e.g. a fresh clone or CI).

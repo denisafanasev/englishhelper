@@ -104,11 +104,17 @@ public struct HowToSayTemplate: PromptTemplate {
     public let tone: Register
     public let studiedLanguage: String   // the language being learned — the variants are in THIS language
     public let nativeLanguage: String    // the learner's own language — the notes are in THIS language
-    public init(tone: Register = .casual, studiedLanguage: String = "English", nativeLanguage: String = "Russian") {
+    public let tier: ModelTier
+    public init(tone: Register = .casual, studiedLanguage: String = "English", nativeLanguage: String = "Russian",
+                tier: ModelTier = .standard) {
         self.tone = tone
         self.studiedLanguage = studiedLanguage
         self.nativeLanguage = nativeLanguage
+        self.tier = tier
     }
+
+    /// "Say it" phrase generation routes to the user-selected model (default: the STANDARD model, Sonnet).
+    public var modelTier: ModelTier { tier }
 
     public var systemPrompt: String {
         """
@@ -174,11 +180,17 @@ public struct WhatToSayTemplate: PromptTemplate {
     public let tone: Register
     public let studiedLanguage: String   // the phrases are produced in THIS language
     public let nativeLanguage: String    // the notes are written in THIS language
-    public init(tone: Register = .casual, studiedLanguage: String = "English", nativeLanguage: String = "Russian") {
+    public let tier: ModelTier
+    public init(tone: Register = .casual, studiedLanguage: String = "English", nativeLanguage: String = "Russian",
+                tier: ModelTier = .standard) {
         self.tone = tone
         self.studiedLanguage = studiedLanguage
         self.nativeLanguage = nativeLanguage
+        self.tier = tier
     }
+
+    /// "Say it" phrase generation routes to the user-selected model (default: the STANDARD model, Sonnet).
+    public var modelTier: ModelTier { tier }
 
     public var systemPrompt: String {
         """
