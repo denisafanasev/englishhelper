@@ -51,7 +51,19 @@ public struct InView: View {
     // MARK: Input
 
     private var inputSection: some View {
-        VStack(spacing: Tokens.Space.s16) {
+        // s12 spacing MUST match VoiceView's inputSection so the mode selector, field, mic, and caption
+        // land at IDENTICAL positions on both screens — no jump when switching Say it ↔ Get it.
+        VStack(spacing: Tokens.Space.s12) {
+            // Mode at the TOP (mirrors "Say it": the Explain/Translate choice frames the interaction,
+            // same as How-to-say/What-to-say there).
+            SegmentedSelector(
+                InViewModel.Mode.allCases,
+                selected: model.mode,
+                label: { $0.title },
+                onSelect: { model.selectMode($0) }
+            )
+            .accessibilityLabel(Loc.t("Режим", "Mode"))
+
             GlassField(Loc.t("Текст на изучаемом языке", "Text in the language you're learning"), text: $model.source) {
                 fieldFocused = false
                 model.submit()
@@ -79,14 +91,6 @@ public struct InView: View {
                 model.submit()
             }
             .disabled(!canTranslate)   // EHButton dims itself when disabled
-
-            SegmentedSelector(
-                InViewModel.Mode.allCases,
-                selected: model.mode,
-                label: { $0.title },
-                onSelect: { model.selectMode($0) }
-            )
-            .accessibilityLabel(Loc.t("Режим", "Mode"))
         }
     }
 
