@@ -109,7 +109,7 @@ public final class OnboardingStore {
     public func complete() { isComplete = true }
 }
 
-// MARK: - Interface language (RU / EN, default: system)
+// MARK: - Interface language (RU / EN / FR / ES / DE / IT, default: system)
 
 public enum AppLanguage: String, CaseIterable, Sendable {
     case ru, en, fr, es, de, it
@@ -118,10 +118,6 @@ public enum AppLanguage: String, CaseIterable, Sendable {
 
     static let storageKey = AppLocale.storageKey
 
-    /// The user's explicit choice, or nil if they haven't picked one yet.
-    public static var stored: AppLanguage? {
-        UserDefaults.standard.string(forKey: storageKey).flatMap(AppLanguage.init(rawValue:))
-    }
     /// The language actually used: the stored choice, else the system default among the supported
     /// languages, else English. (Resolution lives in `AppLocale` so `DSLoc` agrees with us.)
     public static var effective: AppLanguage {
@@ -138,7 +134,9 @@ public final class LanguageStore {
     /// Starts from the effective language; nothing is persisted until the user actually picks one
     /// (a property's `didSet` doesn't fire for its initial value).
     public init() { language = AppLanguage.effective }
-    public var locale: Locale { Locale(identifier: AppLanguage.effective.rawValue) }
+    /// Derived from the tracked `language` property (NOT a fresh UserDefaults read) so @Observable
+    /// dependents re-evaluate when the interface language changes.
+    public var locale: Locale { Locale(identifier: language.rawValue) }
 }
 
 /// Tiny runtime localizer. Forwards to the DesignSystem resolver + catalog so Presentation and
@@ -152,7 +150,7 @@ public enum Loc {
     }
 }
 
-// MARK: - Target language for "In" translation (RU / EN, default: RU)
+// MARK: - Native language for "In" translation/explanation (RU / EN / FR / ES / DE / IT, default: RU)
 
 public enum TargetLanguage: String, CaseIterable, Sendable {
     case russian, english, french, spanish, german, italian
@@ -214,7 +212,7 @@ public final class TargetLanguageStore {
     public init() { language = TargetLanguage.current }
 }
 
-// MARK: - Studied language (the language being LEARNED; RU/EN/FR/ES, default: English)
+// MARK: - Studied language (the language being LEARNED; RU/EN/FR/ES/DE/IT, default: English)
 //
 // The card headline + all TTS are in this language across see/say/get. Mirrors TargetLanguage but
 // defaults to English (kept a distinct type so a "studied" read can never be confused with "native").

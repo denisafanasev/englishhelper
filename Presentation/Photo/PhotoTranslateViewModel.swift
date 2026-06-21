@@ -18,6 +18,9 @@ public final class PhotoTranslateViewModel {
     public private(set) var imageData: Data?
     public private(set) var blocks: [TranslatedBlock] = []
     public private(set) var errorMessage: String?
+    /// A SAVE failure shown independently of `phase` (the result stays on screen); `errorMessage`
+    /// only renders in `.failed`.
+    public private(set) var saveError: String?
     public private(set) var isOffline = false
 
     public var showCameraPriming = false
@@ -25,6 +28,9 @@ public final class PhotoTranslateViewModel {
 
     private var savedBlockIDs: Set<UUID> = []          // optimistic "saved" flag (instant UI)
     private var savedExpressionIDs: [UUID: UUID] = [:]  // block.id → stored Expression.id
+    /// Bumped on every new photo result so an in-flight save can tell "user un-saved" from "a new
+    /// photo replaced the result" and not silently delete a just-bookmarked expression.
+    private var resultsGeneration = 0
     private var playingBlockID: UUID?
 
     private let photoTranslate: any PhotoTranslateUseCase
@@ -83,6 +89,19 @@ public final class PhotoTranslateViewModel {
         process(data)
     }
 
+    /// The picked library photo couldn't be loaded/decoded — surface it instead of silently doing nothing.
+    public func imageLoadFailed() {
+        requestTask?.cancel()
+        isOffline = false
+        errorMessage = Loc.t("Не удалось загрузить изображение. Попробуйте другое фото.",
+                             "Couldn't load the image. Try another photo.",
+                             "Impossible de charger l'image. Essayez une autre photo.",
+                             "No se pudo cargar la imagen. Prueba con otra foto.",
+                             "Bild konnte nicht geladen werden. Versuche ein anderes Foto.",
+                             "Impossibile caricare l'immagine. Prova un'altra foto.")
+        phase = .failed
+    }
+
     // MARK: Pipeline
 
     private func process(_ data: Data) {
@@ -101,9 +120,13 @@ public final class PhotoTranslateViewModel {
             do {
                 let result = try await self.photoTranslate(RecognizableImage(data: data), studiedLanguage: studied, nativeLanguage: native)
                 self.blocks = result
+                self.resultsGeneration += 1
                 self.phase = .result
             } catch is CancellationError {
                 // superseded
+            } catch LLMError.cancelled {
+                // superseded by a newer photo — the adapter maps task cancellation to LLMError.cancelled,
+                // so this (not CancellationError) is what surfaces. Never show it as a failure.
             } catch {
                 self.handle(error)
             }
@@ -164,20 +187,28 @@ public final class PhotoTranslateViewModel {
             }
         } else {
             savedBlockIDs.insert(id)                        // instant UI; enrich+store in background
+            let generation = resultsGeneration
             Task { [weak self] in
                 guard let self else { return }
                 do {
                     let stored = try await self.saveExpression(en: block.en, knownRU: block.ru, context: "")
-                    if self.savedBlockIDs.contains(id) { self.savedExpressionIDs[id] = stored.id }
-                    else { try? await self.studyList.delete(id: stored.id) }
+                    if self.resultsGeneration != generation {
+                        // A new photo replaced the result while saving — keep it persisted; drop the mapping.
+                    } else if self.savedBlockIDs.contains(id) {
+                        self.savedExpressionIDs[id] = stored.id
+                    } else {
+                        try? await self.studyList.delete(id: stored.id)   // user un-saved while saving
+                    }
                 } catch {
                     self.savedBlockIDs.remove(id)           // revert
-                    self.errorMessage = Loc.t("Не удалось сохранить в изучаемое.",
-                                              "Couldn't save to your study list.")
+                    self.saveError = Loc.t("Не удалось сохранить в изучаемое.",
+                                           "Couldn't save to your study list.")
                 }
             }
         }
     }
+
+    public func clearSaveError() { saveError = nil }
 
     public func reset() {
         requestTask?.cancel(); playTask?.cancel()

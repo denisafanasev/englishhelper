@@ -30,18 +30,25 @@ public final class InViewModel {
 
     // UI state
     public private(set) var phase: Phase = .idle
-    public var mode: Mode = .explain
+    /// Mutated only via `selectMode`/`startExplain` so the re-run/reset logic isn't bypassed.
+    public private(set) var mode: Mode = .explain
     public var source: String = ""                       // editable transcript / typed input
     public private(set) var studied: String?             // input rendered in the studied language (headline + TTS)
     public private(set) var translation: String?         // Translate mode: native rendering (the line below)
     public private(set) var explanation: ExpressionExplanation?   // Explain mode result (native)
     public private(set) var errorMessage: String?
+    /// A SAVE failure shown independently of `phase` (the result stays on screen); `errorMessage`
+    /// only renders in `.failed`.
+    public private(set) var saveError: String?
     public private(set) var isOffline = false
     public private(set) var isPlaying = false
     public private(set) var isSaved = false
     public var showMicPriming = false
 
     private var savedExpressionID: UUID?
+    /// Bumped on every new result so an in-flight save can tell "user un-saved" from "result was
+    /// regenerated" and not silently delete a just-bookmarked expression.
+    private var resultsGeneration = 0
     private var explainImage: Data?          // photo context for an Explain routed from See it
     private var explainImageText: String?    // the source text that photo context belongs to
 
@@ -132,6 +139,7 @@ public final class InViewModel {
             guard let self else { return }
             do {
                 for try await transcript in self.voiceCapture() {
+                    guard self.phase == .listening else { break }   // a late value mustn't overwrite after stop
                     self.source = transcript.text
                 }
                 self.captureEndedNaturally()
@@ -214,6 +222,7 @@ public final class InViewModel {
                 }
                 self.isSaved = false
                 self.savedExpressionID = nil
+                self.resultsGeneration += 1
                 self.phase = .result
             } catch is CancellationError {
                 // superseded
@@ -244,7 +253,13 @@ public final class InViewModel {
             studied = nil
             translation = nil
             explanation = nil
-            if phase == .result { phase = .idle }
+            // Leaving results OR a failure: don't keep a stale result/error (whose Retry would re-run
+            // the NEW mode) on screen — drop back to idle.
+            if phase == .result || phase == .failed {
+                phase = .idle
+                errorMessage = nil
+                isOffline = false
+            }
         }
     }
 
@@ -261,11 +276,11 @@ public final class InViewModel {
                                  "No Claude API key. Add one to translate.")
         case .overloaded:
             errorMessage = Loc.t("Сервис перегружен, попробуйте позже.", "Service is overloaded — try later.")
-        case .requestFailed(let info) where info.contains("offline"):
+        case .offline:
             isOffline = true
             errorMessage = Loc.t("Нет соединения. Проверьте интернет и попробуйте снова.",
                                  "No connection. Check the internet and try again.")
-        case .requestFailed(let info) where info.contains("timed out"):
+        case .timedOut:
             errorMessage = Loc.t("Сервис не ответил вовремя. Попробуйте ещё раз.",
                                  "The service didn't respond in time. Try again.")
         case .invalidOutput:
@@ -320,23 +335,28 @@ public final class InViewModel {
             // its gloss. In Explain mode there's no direct gloss, so enrich derives it.
             let en = studied
             let knownRU = translation
+            let generation = resultsGeneration
             Task { [weak self] in
                 guard let self else { return }
                 do {
                     let stored = try await self.saveExpression(en: en, knownRU: knownRU, context: "")
-                    if self.isSaved {
+                    if self.resultsGeneration != generation {
+                        // Regenerated while saving — keep it persisted; drop the optimistic mapping only.
+                    } else if self.isSaved {
                         self.savedExpressionID = stored.id
                     } else {
-                        try? await self.studyList.delete(id: stored.id)   // unsaved while saving
+                        try? await self.studyList.delete(id: stored.id)   // user un-saved while saving
                     }
                 } catch {
                     self.isSaved = false                     // revert on failure
-                    self.errorMessage = Loc.t("Не удалось сохранить в изучаемое.",
-                                              "Couldn't save to your study list.")
+                    self.saveError = Loc.t("Не удалось сохранить в изучаемое.",
+                                           "Couldn't save to your study list.")
                 }
             }
         }
     }
+
+    public func clearSaveError() { saveError = nil }
 
     public func reset() {
         captureTask?.cancel(); requestTask?.cancel(); playTask?.cancel()

@@ -40,6 +40,13 @@ public actor MockExpressionRepository: ExpressionRepository {
         items[idx].learned = learned
     }
 
+    public func find(en: String) async throws -> Expression? {
+        let key = MockExpressionRepository.normalizedKey(en)
+        return items
+            .sorted { $0.createdAt < $1.createdAt }
+            .first { MockExpressionRepository.normalizedKey($0.en) == key }
+    }
+
     public static let defaultSeed: [Expression] = [
         Expression(en: "I appreciate it", ru: "Я ценю это",
                    example: "Thanks for covering my shift — I really appreciate it.",

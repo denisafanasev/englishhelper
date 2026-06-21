@@ -30,8 +30,8 @@ public final class NativeSpeechSynthesizer: SpeechSynthesizing, @unchecked Senda
             )
             synthesizer.delegate = delegate   // delegate is weak; retained via onTermination below
 
+            let session = AVAudioSession.sharedInstance()
             do {
-                let session = AVAudioSession.sharedInstance()
                 try session.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
                 try session.setActive(true)
             } catch {
@@ -39,13 +39,24 @@ public final class NativeSpeechSynthesizer: SpeechSynthesizing, @unchecked Senda
                 return
             }
 
+            // No installed voice for either the studied language or the en-US fallback: speak() could
+            // silently do nothing and never fire a delegate callback, hanging the stream in .preparing
+            // forever. Fail fast (and un-duck) instead.
+            guard let voice = AVSpeechSynthesisVoice(language: language)
+                ?? AVSpeechSynthesisVoice(language: "en-US") else {
+                try? session.setActive(false, options: .notifyOthersOnDeactivation)
+                continuation.finish(throwing: SpeechSynthesisError.unavailable)
+                return
+            }
             let utterance = AVSpeechUtterance(string: text)
-            utterance.voice = AVSpeechSynthesisVoice(language: language)
-                ?? AVSpeechSynthesisVoice(language: "en-US")
+            utterance.voice = voice
 
             continuation.yield(.preparing)
             continuation.onTermination = { @Sendable _ in
                 synthesizer.stopSpeaking(at: .immediate)
+                // Deactivate the shared session on EVERY end (finish, cancel, error) so `.duckOthers`
+                // doesn't keep background audio ducked after playback — single chokepoint for all paths.
+                try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
                 _ = delegate   // keep synthesizer + delegate alive until the stream ends
             }
             synthesizer.speak(utterance)

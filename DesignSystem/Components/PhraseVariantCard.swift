@@ -19,6 +19,7 @@ public struct PhraseVariantCard: View {
     private let onToggleSave: () -> Void
 
     @State private var copied = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(english: String, register: RegisterLevel, contextRU: String,
                 isSaved: Bool, isPlaying: Bool,
@@ -43,7 +44,7 @@ public struct PhraseVariantCard: View {
                     Button(action: onPlay) {
                         Image(systemName: isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2")
                             .font(.system(size: 16, weight: .medium))
-                            .symbolEffect(.variableColor.iterative, isActive: isPlaying)
+                            .symbolEffect(.variableColor.iterative, isActive: isPlaying && !reduceMotion)
                             .foregroundStyle(isPlaying ? Tokens.Content.primary : Tokens.Content.tertiary)
                     }
                     .buttonStyle(.plain)
@@ -84,20 +85,22 @@ public struct PhraseVariantCard: View {
         .contentShape(Rectangle())
         .onTapGesture(perform: onPlay)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(english). \(register.rawValue). \(contextRU)")
+        .accessibilityLabel("\(english). \(register.localizedName). \(contextRU)")
         .accessibilityHint(DSLoc.t("Дважды коснитесь, чтобы озвучить", "Double-tap to play"))
         .accessibilityAddTraits(.isButton)
         .accessibilityAction(named: DSLoc.t("Скопировать", "Copy")) { copyToClipboard() }
         .accessibilityAction(named: isSaved ? DSLoc.t("Убрать из изучаемого", "Remove from study list") : DSLoc.t("Сохранить", "Save")) { onToggleSave() }
     }
 
+    // Inline copy (kept rather than a nested CopyButton so it folds into the card's combined
+    // accessibility element); timing/animation match CopyButton so feedback is consistent app-wide.
     private func copyToClipboard() {
         UIPasteboard.general.string = english
         UINotificationFeedbackGenerator().notificationOccurred(.success)
-        withAnimation { copied = true }
+        withAnimation(Tokens.Motion.quick) { copied = true }
         Task {
-            try? await Task.sleep(for: .seconds(1.5))
-            withAnimation { copied = false }
+            try? await Task.sleep(for: .seconds(1.6))
+            withAnimation(Tokens.Motion.quick) { copied = false }
         }
     }
 }

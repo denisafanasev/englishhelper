@@ -37,12 +37,18 @@ public final class VoiceViewModel {
     }
     public private(set) var variants: [PhraseVariant] = []
     public private(set) var errorMessage: String?
+    /// A SAVE failure shown independently of `phase` (the results stay on screen); the request-level
+    /// `errorMessage` only renders in `.failed`, so a background save error needs its own channel.
+    public private(set) var saveError: String?
     public private(set) var isOffline = false
     public private(set) var playingVariantID: UUID?
     public var showMicPriming = false
 
     private var savedVariantIDs: Set<UUID> = []           // optimistic "saved" flag (instant UI)
     private var savedExpressionIDs: [UUID: UUID] = [:]    // variant.id → stored Expression.id
+    /// Bumped on every new result set; lets an in-flight save tell "user un-saved" from "results
+    /// were regenerated" so a regenerate can't silently delete a phrase the user just bookmarked.
+    private var resultsGeneration = 0
 
     // Dependencies (use cases)
     private let howToSay: any HowToSayUseCase
@@ -130,6 +136,7 @@ public final class VoiceViewModel {
             guard let self else { return }
             do {
                 for try await transcript in self.voiceCapture() {
+                    guard self.phase == .listening else { break }   // a late value mustn't overwrite after stop
                     self.intent = transcript.text
                 }
                 self.captureEndedNaturally()
@@ -222,9 +229,11 @@ public final class VoiceViewModel {
         mode = newMode
         if canSubmit, phase == .results || phase == .processing {
             submit()                          // re-run the same input in the new mode
-        } else if phase == .results || phase == .processing {
-            requestTask?.cancel()             // no input to re-run with → drop stale/in-flight results
+        } else if phase == .results || phase == .processing || phase == .failed {
+            requestTask?.cancel()             // no input to re-run with → drop stale/in-flight/errored results
             variants = []
+            errorMessage = nil                // a stale error's Retry would otherwise re-run the NEW mode
+            isOffline = false
             phase = .idle
         }
     }
@@ -250,6 +259,7 @@ public final class VoiceViewModel {
                 self.variants = result
                 self.savedVariantIDs = []
                 self.savedExpressionIDs = [:]
+                self.resultsGeneration += 1
                 self.phase = .results
             } catch is CancellationError {
                 // superseded
@@ -276,11 +286,11 @@ public final class VoiceViewModel {
                                  "No Claude API key. Add one to get options.")
         case .overloaded:
             errorMessage = Loc.t("Сервис перегружен, попробуйте позже.", "Service is overloaded — try later.")
-        case .requestFailed(let info) where info.contains("offline"):
+        case .offline:
             isOffline = true
             errorMessage = Loc.t("Нет соединения. Проверьте интернет и попробуйте снова.",
                                  "No connection. Check the internet and try again.")
-        case .requestFailed(let info) where info.contains("timed out"):
+        case .timedOut:
             errorMessage = Loc.t("Сервис не ответил вовремя. Попробуйте ещё раз.",
                                  "The service didn't respond in time. Try again.")
         case .invalidOutput:
@@ -331,25 +341,31 @@ public final class VoiceViewModel {
             }
         } else {
             savedVariantIDs.insert(id)                          // instant UI; enrich+store in background
+            let generation = resultsGeneration
             Task { [weak self] in
                 guard let self else { return }
                 do {
                     let stored = try await self.saveExpression(
                         en: variant.en, knownRU: nil, context: variant.contextRU
                     )
-                    if self.savedVariantIDs.contains(id) {
+                    if self.resultsGeneration != generation {
+                        // Results were regenerated while saving — keep the expression persisted (the
+                        // user DID bookmark it); just drop the now-defunct optimistic mapping.
+                    } else if self.savedVariantIDs.contains(id) {
                         self.savedExpressionIDs[id] = stored.id
                     } else {
-                        try? await self.studyList.delete(id: stored.id)   // unsaved while saving
+                        try? await self.studyList.delete(id: stored.id)   // user un-saved while saving
                     }
                 } catch {
                     self.savedVariantIDs.remove(id)             // revert on failure
-                    self.errorMessage = Loc.t("Не удалось сохранить в изучаемое.",
-                                              "Couldn't save to your study list.")
+                    self.saveError = Loc.t("Не удалось сохранить в изучаемое.",
+                                           "Couldn't save to your study list.")
                 }
             }
         }
     }
+
+    public func clearSaveError() { saveError = nil }
 
     public func reset() {
         captureTask?.cancel(); requestTask?.cancel(); playTask?.cancel()

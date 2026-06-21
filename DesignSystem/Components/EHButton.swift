@@ -15,6 +15,9 @@ public struct EHButton: View {
     private let kind: Kind
     private let fillWidth: Bool
     private let action: () -> Void
+    /// `.buttonStyle(.plain)` doesn't dim on `.disabled()`, so read the environment and dim ourselves —
+    /// otherwise a disabled primary button looks fully active (a silent dead button).
+    @Environment(\.isEnabled) private var isEnabled
 
     public init(_ title: String, icon: String? = nil, kind: Kind = .primary,
                 fillWidth: Bool = false, action: @escaping () -> Void) {
@@ -31,10 +34,10 @@ public struct EHButton: View {
                 if let icon { Image(systemName: icon) }
                 Text(title)
             }
-            .font(.system(size: 16, weight: .semibold))
+            .font(Tokens.Text.headline.font)   // scales with Dynamic Type (was a fixed 16pt)
             .tracking(-0.2)
             .foregroundStyle(foreground)
-            .frame(height: 50)
+            .frame(minHeight: 50)              // minHeight so the pill grows with larger text
             .frame(maxWidth: fillWidth ? .infinity : nil)
             .padding(.horizontal, Tokens.Space.s20)
             .background(background)
@@ -46,6 +49,7 @@ public struct EHButton: View {
             }
         }
         .buttonStyle(.plain)
+        .opacity(isEnabled ? 1 : 0.4)
     }
 
     private var foreground: Color {
@@ -66,7 +70,8 @@ public struct EHButton: View {
 }
 
 private extension View {
-    /// Capsule glass fill honoring Reduce Transparency.
+    /// Capsule glass fill honoring Reduce Transparency. Mirrors `glassPanel`'s solid fallback but for a
+    /// Capsule shape (glassPanel is rounded-rect only), so the two are intentionally parallel.
     func glassPanelCapsule() -> some View { modifier(CapsuleGlass()) }
 }
 

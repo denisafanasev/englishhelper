@@ -136,6 +136,7 @@ public struct OnboardingView: View {
                 }
             }
             .padding(.top, Tokens.Space.s4)
+            .accessibilityHidden(true)   // purely decorative — don't read six codes as separate elements
         }
         .frame(maxWidth: .infinity)
     }

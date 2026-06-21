@@ -8,15 +8,16 @@ import Presentation
 
 @main
 struct EnglishHelperApp: App {
-    /// Composition root. Boots LIVE adapters; falls back to mocks if persistence can't initialize
-    /// so the app always launches.
+    /// Composition root. Boots LIVE adapters. `bootLive` already degrades a failed on-disk store to
+    /// an in-memory one (flagged via `usingFallbackStore` → a visible banner), so the only way it
+    /// throws is a total SwiftData failure; mocks are the last-resort so the app still opens.
     private let container: AppContainer
 
     init() {
         let config = AppConfig.load()
-        if let live = try? AppContainer.bootLive(config: config) {
-            container = live
-        } else {
+        do {
+            container = try AppContainer.bootLive(config: config)
+        } catch {
             container = AppContainer.bootMock(config: config)
         }
     }
@@ -29,7 +30,8 @@ struct EnglishHelperApp: App {
                 photo: container.makePhotoTranslateViewModel(),
                 library: container.makeStudyListViewModel(),
                 history: container.makeHistoryViewModel(),
-                settings: container.makeSettingsViewModel()
+                settings: container.makeSettingsViewModel(),
+                degradedStorage: container.usingFallbackStore
             )
         }
     }

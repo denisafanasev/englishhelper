@@ -9,12 +9,18 @@
 
 import Foundation
 import SwiftData
+import OSLog
 import Domain
 import Adapters
 import Presentation
 
 public final class AppContainer: Sendable {
     public let config: AppConfig
+    /// True when the on-disk store could not be opened and the app is running on an in-memory store:
+    /// real Claude still works, but study-list/history changes WON'T survive relaunch. Drives a banner.
+    public let usingFallbackStore: Bool
+
+    private static let log = Logger(subsystem: "com.englishhelper.app", category: "persistence")
 
     // Ports (adapters)
     public let llm: any LLMClient
@@ -48,6 +54,7 @@ public final class AppContainer: Sendable {
 
     public init(
         config: AppConfig,
+        usingFallbackStore: Bool = false,
         llm: any LLMClient,
         speechRecognizer: any SpeechRecognizing,
         speechRecognizerEN: any SpeechRecognizing,
@@ -58,6 +65,7 @@ public final class AppContainer: Sendable {
         exporter: any DeckExporting
     ) {
         self.config = config
+        self.usingFallbackStore = usingFallbackStore
         self.llm = llm
         self.speechRecognizer = speechRecognizer
         self.speechRecognizerEN = speechRecognizerEN
@@ -94,9 +102,10 @@ public final class AppContainer: Sendable {
     /// v1: the whole graph on LIVE adapters. Swapping any engine is exactly ONE line below
     /// (see README "Swapping an engine"). The Domain/Presentation never learn which one is wired.
     public static func bootLive(config: AppConfig = .load()) throws -> AppContainer {
-        let modelContainer = try ModelContainer(for: ExpressionModel.self, HistoryModel.self)
+        let (modelContainer, usingFallbackStore) = try makePersistentContainer()
         return AppContainer(
             config: config,
+            usingFallbackStore: usingFallbackStore,
             llm: ClaudeLLMClient(apiKey: config.claudeAPIKey ?? "",
                                  model: config.claudeModel,
                                  baseURL: config.claudeBaseURL),
@@ -110,11 +119,33 @@ public final class AppContainer: Sendable {
             }),
             // All TTS speaks the STUDIED language (resolved per utterance). ← swap TTS engine here
             speechSynthesizer: NativeSpeechSynthesizer(localeProvider: { StudiedLanguage.current.speechLocale }),
-            textRecognizer: VisionTextRecognizer(),         // ← swap OCR engine here
+            // NB: the photo flow currently uses Claude's vision (PhotoTranslateInteractor → LLM), so this
+            // on-device OCR adapter is wired for the port contract / future use but NOT consumed today.
+            textRecognizer: VisionTextRecognizer(),         // ← swap OCR engine here (when OCR is used)
             expressions: SwiftDataExpressionRepository(modelContainer: modelContainer),
             history: SwiftDataHistoryRepository(modelContainer: modelContainer),
             exporter: AlgoAppXMLExporter()
         )
+    }
+
+    /// Open the on-disk SwiftData store, applying `AppMigrationPlan`. If the store can't be opened
+    /// (corruption, or a schema change with no migration stage), DON'T silently downgrade to canned
+    /// mocks — log it and fall back to an IN-MEMORY store so the app stays on real adapters (real
+    /// Claude, real in-session save/history). The returned flag drives a visible "changes won't be
+    /// saved" banner, so the user is never quietly losing data. The on-disk file is left untouched so
+    /// a future build with a proper migration can still recover it. Throws only if even an in-memory
+    /// store can't be created.
+    private static func makePersistentContainer() throws -> (ModelContainer, fallback: Bool) {
+        let schema = PersistenceSchema.current
+        do {
+            let onDisk = ModelConfiguration(schema: schema)
+            let container = try ModelContainer(for: schema, migrationPlan: AppMigrationPlan.self, configurations: onDisk)
+            return (container, false)
+        } catch {
+            log.error("On-disk store failed to open: \(String(describing: error), privacy: .public). Falling back to in-memory storage — changes this session will NOT persist.")
+            let memory = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            return (try ModelContainer(for: schema, configurations: memory), true)
+        }
     }
 
     /// Previews / tests / offline fallback: the whole graph on mocks. No network, no permissions.

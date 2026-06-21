@@ -35,10 +35,23 @@ public struct VoiceView: View {
                 }
                 .scrollDismissesKeyboard(.interactively)
             }
-            .navigationTitle(Loc.t("Как сказать", "Say it"))
+            // Screen TITLE key is "How to say" — distinct from the Voice TAB key "Say it", so FR/ES/DE/IT
+            // render the descriptive title rather than the short tab verb ("Dire"/"Decir"/…).
+            .navigationTitle(Loc.t("Как сказать", "How to say"))
             .settingsTrigger()
             .sheet(isPresented: $model.showMicPriming) { primingSheet }
+            .alert(Loc.t("Сохранение", "Saving"), isPresented: saveErrorBinding) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(model.saveError ?? "")
+            }
         }
+    }
+
+    /// A background save failure is shown as an alert so it surfaces even while results are on screen
+    /// (the inline error UI only renders in the `.failed` phase).
+    private var saveErrorBinding: Binding<Bool> {
+        Binding(get: { model.saveError != nil }, set: { if !$0 { model.clearSaveError() } })
     }
 
     // MARK: Input
@@ -79,12 +92,11 @@ public struct VoiceView: View {
                 }
             }
 
-            EHButton(actionTitle, icon: "sparkles", kind: .primary, fillWidth: true) {
+            EHButton(actionTitle, icon: actionIcon, kind: .primary, fillWidth: true) {
                 fieldFocused = false
                 model.pick()
             }
-            .disabled(!canPick)
-            .opacity(canPick ? 1 : 0.5)
+            .disabled(!canPick)   // EHButton dims itself when disabled
 
             SegmentedSelector(
                 ToneOfVoice.allCases,
@@ -122,14 +134,24 @@ public struct VoiceView: View {
                     "Beschreibe die Situation", "Descrivi la situazione")
     }
 
+    /// With results already shown the button regenerates (`pick()` → `regenerate()`), so the label and
+    /// icon must read "another set", not the first-run "find phrasings".
     private var actionTitle: String {
-        model.mode == .howToSay
+        if model.phase == .results {
+            return Loc.t("Другие варианты", "Other options",
+                         "Autres options", "Otras opciones", "Andere Optionen", "Altre opzioni")
+        }
+        return model.mode == .howToSay
             ? Loc.t("Подобрать варианты", "Find phrasings",
                     "Trouver des formulations", "Buscar formulaciones",
                     "Formulierungen finden", "Trova formulazioni")
             : Loc.t("Подобрать фразы", "Suggest phrases",
                     "Proposer des phrases", "Sugerir frases",
                     "Phrasen vorschlagen", "Suggerisci frasi")
+    }
+
+    private var actionIcon: String {
+        model.phase == .results ? "arrow.triangle.2.circlepath" : "sparkles"
     }
 
     private var loadingText: String {

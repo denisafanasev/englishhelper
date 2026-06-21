@@ -25,16 +25,26 @@ public final class ClaudeLLMClient: LLMClient {
         apiKey: String,
         model: String,
         baseURL: URL,
-        session: URLSession = .shared,
+        session: URLSession? = nil,
         maxRetries: Int = 2,
         baseRetryDelay: Double = 0.5
     ) {
         self.apiKey = apiKey
         self.model = model
         self.endpoint = baseURL.appending(path: "v1/messages")
-        self.session = session
+        // An instance-owned, connectivity-aware session (not the global `.shared`): fail fast when
+        // offline so it maps to LLMError.offline instead of hanging, with explicit timeouts.
+        self.session = session ?? Self.defaultSession()
         self.maxRetries = maxRetries
         self.baseRetryDelay = baseRetryDelay
+    }
+
+    private static func defaultSession() -> URLSession {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 30
+        config.timeoutIntervalForResource = 60
+        config.waitsForConnectivity = false
+        return URLSession(configuration: config)
     }
 
     public func run<Template: PromptTemplate>(
@@ -103,16 +113,21 @@ public final class ClaudeLLMClient: LLMClient {
     private func send(_ request: URLRequest) async throws -> Data {
         var attempt = 0
         while true {
+            // A superseded request cancels its Task; surface that as the dedicated case so callers
+            // never show it as a failure (URLError(.cancelled) below covers the in-flight case).
+            if Task.isCancelled { throw LLMError.cancelled }
             let data: Data
             let response: URLResponse
             do {
                 (data, response) = try await session.data(for: request)
             } catch is CancellationError {
                 throw LLMError.cancelled
+            } catch let error as URLError where error.code == .cancelled {
+                throw LLMError.cancelled                 // URLSession's own cancellation, not Swift's
             } catch let error as URLError where error.code == .timedOut {
-                throw LLMError.requestFailed("timed out")
-            } catch let error as URLError where error.code == .notConnectedToInternet || error.code == .networkConnectionLost {
-                throw LLMError.requestFailed("offline")
+                throw LLMError.timedOut
+            } catch let error as URLError where Self.offlineCodes.contains(error.code) {
+                throw LLMError.offline
             } catch {
                 throw LLMError.requestFailed(error.localizedDescription)
             }
@@ -121,7 +136,8 @@ public final class ClaudeLLMClient: LLMClient {
                 throw LLMError.requestFailed("no HTTP response")
             }
             if (200..<300).contains(http.statusCode) { return data }
-            if http.statusCode == 401 { throw LLMError.notConfigured }
+            // 401 (missing/invalid key) and 403 (revoked/forbidden key) both mean "fix your key".
+            if http.statusCode == 401 || http.statusCode == 403 { throw LLMError.notConfigured }
 
             let isOverload = http.statusCode == 429 || http.statusCode == 529
             let isRetryable = isOverload || http.statusCode >= 500
@@ -131,7 +147,8 @@ public final class ClaudeLLMClient: LLMClient {
                 continue
             }
             if isOverload { throw LLMError.overloaded }
-            let detail = String(data: data, encoding: .utf8) ?? ""
+            // Bound the echoed API error body: it can be large and may contain request content.
+            let detail = (String(data: data, encoding: .utf8) ?? "").prefix(200)
             throw LLMError.requestFailed("HTTP \(http.statusCode): \(detail)")
         }
     }
@@ -186,6 +203,13 @@ public final class ClaudeLLMClient: LLMClient {
         }
         return objects
     }
+
+    /// URLError codes that mean "no usable network path" — all mapped to LLMError.offline so every
+    /// consumer can react identically instead of sniffing localized strings.
+    private static let offlineCodes: Set<URLError.Code> = [
+        .notConnectedToInternet, .networkConnectionLost, .cannotFindHost, .cannotConnectToHost,
+        .dnsLookupFailed, .dataNotAllowed, .internationalRoamingOff,
+    ]
 
     private static func mediaType(for data: Data) -> String {
         data.starts(with: [0x89, 0x50, 0x4E, 0x47]) ? "image/png" : "image/jpeg"   // PNG magic else JPEG

@@ -24,6 +24,10 @@ public struct PhraseVariant: Codable, Sendable, Equatable, Identifiable, Hashabl
     }
 
     // Decoded from the LLM JSON: { "en", "register", "context_ru" } — `id` is synthesized.
+    // NOTE: `en` / `context_ru` are HISTORICAL wire-key labels, not language assertions: `en` carries
+    // the STUDIED-language phrasing and `context_ru` the NATIVE-language note, whatever those languages
+    // are (the prompt instructs the model which language to write each in). Kept stable as an internal
+    // contract between the template schema and this decoder.
     private enum CodingKeys: String, CodingKey {
         case en, register
         case contextRU = "context_ru"
@@ -42,5 +46,14 @@ public struct PhraseVariant: Codable, Sendable, Equatable, Identifiable, Hashabl
         try c.encode(en, forKey: .en)
         try c.encode(register, forKey: .register)
         try c.encode(contextRU, forKey: .contextRU)
+    }
+
+    // Content-based equality/identity: `id` is synthesized fresh on every decode, so including it
+    // would break encode→decode round-trip equality. `id` still drives Identifiable for SwiftUI.
+    public static func == (lhs: PhraseVariant, rhs: PhraseVariant) -> Bool {
+        lhs.en == rhs.en && lhs.register == rhs.register && lhs.contextRU == rhs.contextRU
+    }
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(en); hasher.combine(register); hasher.combine(contextRU)
     }
 }

@@ -46,15 +46,26 @@ public struct StudyListView: View {
             .sheet(isPresented: $model.showAddSheet) { addSheet }
             .sheet(item: $shareItem) { item in ShareSheet(items: [item.url]) }
             .onChange(of: model.exportedDeck) { _, deck in
-                if let deck, let url = writeTemp(deck) {
+                guard let deck else { return }
+                if let url = writeTemp(deck) {
                     shareItem = ShareItem(url: url)
                     model.clearExport()
+                } else {
+                    model.reportExportWriteFailed()   // don't silently swallow the temp-write failure
                 }
+            }
+            .onChange(of: model.showAddSheet) { _, shown in
+                if !shown { model.resetAddForm() }    // clear stale text/error on Cancel or swipe-dismiss
             }
             .alert(Loc.t("Экспорт", "Export"), isPresented: exportErrorBinding) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(model.exportError ?? "")
+            }
+            .alert(Loc.t("Список", "List"), isPresented: actionErrorBinding) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(model.actionError ?? "")
             }
         }
     }
@@ -72,7 +83,7 @@ public struct StudyListView: View {
         case .empty:
             StatusView(systemImage: "rectangle.stack", title: Loc.t("Пока пусто", "Nothing yet"),
                        message: Loc.t("Сохраняйте фразы из «Сказать», «Понять» или «Смотреть» — или добавьте вручную.",
-                                      "Save phrases from “Say”, “Understand”, or “Look” — or add them manually."),
+                                      "Save phrases from “Say it”, “Get it”, or “See it” — or add them manually."),
                        actionTitle: Loc.t("Добавить", "Add"), action: { model.showAddSheet = true })
         case .loaded:
             list
@@ -139,8 +150,7 @@ public struct StudyListView: View {
                         EHButton(Loc.t("Сохранить", "Save"), icon: "sparkles", kind: .primary, fillWidth: true) {
                             model.add()
                         }
-                        .disabled(!model.canAdd)
-                        .opacity(model.canAdd ? 1 : 0.5)
+                        .disabled(!model.canAdd)   // EHButton dims itself when disabled
                     }
                 }
                 .padding(Tokens.Space.s20)
@@ -163,6 +173,10 @@ public struct StudyListView: View {
         Binding(get: { model.exportError != nil }, set: { if !$0 { model.clearExportError() } })
     }
 
+    private var actionErrorBinding: Binding<Bool> {
+        Binding(get: { model.actionError != nil }, set: { if !$0 { model.clearActionError() } })
+    }
+
     private func writeTemp(_ deck: ExportedDeck) -> URL? {
         let url = FileManager.default.temporaryDirectory.appending(path: deck.filename)
         do {
@@ -178,6 +192,7 @@ private struct StudyRow: View {
     let expression: Domain.Expression
     let isPlaying: Bool
     let onPlay: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(alignment: .top, spacing: Tokens.Space.s12) {
@@ -201,7 +216,7 @@ private struct StudyRow: View {
             VStack(alignment: .trailing, spacing: Tokens.Space.s8) {
                 Button(action: onPlay) {
                     Image(systemName: isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2")
-                        .symbolEffect(.variableColor.iterative, isActive: isPlaying)
+                        .symbolEffect(.variableColor.iterative, isActive: isPlaying && !reduceMotion)
                         .font(.system(size: 18, weight: .medium))
                         .foregroundStyle(Tokens.Content.secondary)
                 }

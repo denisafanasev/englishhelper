@@ -33,11 +33,16 @@ public struct PhotoTranslateView: View {
                     .padding(Tokens.Space.s20)
                 }
             }
-            .navigationTitle(Loc.t("Фото-перевод", "See it"))
+            // Screen TITLE key is "Photo translation" — distinct from the camera TAB key "See it", so
+            // FR/ES/DE/IT don't render the tab verb ("Voir"/"Ver"/…) as the title.
+            .navigationTitle(Loc.t("Фото-перевод", "Photo translation"))
             .settingsTrigger()
             .sheet(isPresented: $model.showCameraPriming) { primingSheet }
             .fullScreenCover(isPresented: $model.presentCamera) {
-                CameraPicker(onImage: { model.didCapture(prepareImageData($0) ?? $0) },
+                CameraPicker(onImage: { data in
+                                 // Downscale/encode OFF the main actor, then hand back to the @MainActor VM.
+                                 Task { model.didCapture(await Self.prepareDetached(data) ?? data) }
+                             },
                              onCancel: { model.cameraCancelled() })
                     .ignoresSafeArea()
             }
@@ -45,13 +50,25 @@ public struct PhotoTranslateView: View {
                 guard let item else { return }
                 Task {
                     if let data = try? await item.loadTransferable(type: Data.self),
-                       let prepared = prepareImageData(data) {
+                       let prepared = await Self.prepareDetached(data) {
                         model.didPickFromLibrary(prepared)
+                    } else {
+                        model.imageLoadFailed()
                     }
                     libraryItem = nil
                 }
             }
+            .alert(Loc.t("Сохранение", "Saving"), isPresented: saveErrorBinding) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(model.saveError ?? "")
+            }
         }
+    }
+
+    /// Surface a background save failure regardless of `phase` (inline error UI is only in `.failed`).
+    private var saveErrorBinding: Binding<Bool> {
+        Binding(get: { model.saveError != nil }, set: { if !$0 { model.clearSaveError() } })
     }
 
     @ViewBuilder private var contentSection: some View {
@@ -260,8 +277,16 @@ public struct PhotoTranslateView: View {
         model.imageData.flatMap(UIImage.init(data:))
     }
 
+    /// Run the CPU-heavy downscale/JPEG-encode on a background task so it never hitches the main
+    /// thread (it was previously synchronous on the @MainActor View, stalling the UI as the camera
+    /// sheet dismissed). Returns nil if the data isn't a decodable image.
+    private static func prepareDetached(_ data: Data) async -> Data? {
+        await Task.detached { prepareImageData(data) }.value
+    }
+
     /// Downscale (max 1536px) and re-encode to JPEG: keeps the upload small and a format Claude accepts.
-    private func prepareImageData(_ data: Data) -> Data? {
+    /// `nonisolated static` so it can run off the main actor.
+    nonisolated private static func prepareImageData(_ data: Data) -> Data? {
         guard let image = UIImage(data: data) else { return nil }
         let maxDimension: CGFloat = 1536
         let longest = max(image.size.width, image.size.height)

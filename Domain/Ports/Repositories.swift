@@ -13,6 +13,16 @@ public protocol ExpressionRepository: Sendable {
     func delete(id: Expression.ID) async throws
     /// Toggle the staging "learned" flag.
     func setLearned(_ learned: Bool, id: Expression.ID) async throws
+    /// First existing expression whose `en` matches (case-insensitive, trimmed), or nil. Drives
+    /// content-level de-duplication so the same phrase isn't stored twice.
+    func find(en: String) async throws -> Expression?
+}
+
+public extension ExpressionRepository {
+    /// Normalized key for content-level matching of an expression's `en`.
+    static func normalizedKey(_ en: String) -> String {
+        en.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
 }
 
 /// Append + fetch of request history. Append-only by intent.

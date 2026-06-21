@@ -217,10 +217,19 @@ public enum Tokens {
         public let weightCSS: Int
         public let tracking: CGFloat
 
-        public var font: Font { .system(size: size, weight: weight) }
-        /// Extra leading to approximate the design line-height on top of the system font's natural line height.
+        /// Scales the design point size with Dynamic Type (via `UIFontMetrics`) so the whole app
+        /// responds to the user's Larger Text setting — `.system(size:)` alone is frozen. SwiftUI
+        /// re-evaluates this on content-size-category changes, so it tracks live.
+        public var font: Font {
+            Font(UIFontMetrics.default.scaledFont(for: UIFont.systemFont(ofSize: size, weight: weight.uiKit)))
+        }
+        /// Extra leading to approximate the design line-height, scaled to match the scaled font so the
+        /// spacing stays proportional at larger Dynamic Type sizes.
         public var lineSpacing: CGFloat {
-            max(0, lineHeight - UIFont.systemFont(ofSize: size, weight: weight.uiKit).lineHeight)
+            let scaledTarget = UIFontMetrics.default.scaledValue(for: lineHeight)
+            let scaledFontLineHeight = UIFontMetrics.default
+                .scaledFont(for: UIFont.systemFont(ofSize: size, weight: weight.uiKit)).lineHeight
+            return max(0, scaledTarget - scaledFontLineHeight)
         }
     }
     //  ⚠️ PRODUCT OVERRIDE: every size + lineHeight below is the design scale MINUS 1pt (a global

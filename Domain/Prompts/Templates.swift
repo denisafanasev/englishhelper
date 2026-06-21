@@ -217,7 +217,10 @@ public struct WhatToSayTemplate: PromptTemplate {
 
     public func decode(_ rawJSON: String) throws -> HowToSayResult {
         let result = try decodeJSON(HowToSayResult.self, from: rawJSON)
-        // Honor the 10-max even if the model overshoots; sanitize to plain text like every template.
+        // The schema/prompt ASK for 3–10 (a quality nudge for the model). The decoder is deliberately
+        // lenient on the low end: if the model returns just 1–2 genuinely-useful phrases, show them
+        // rather than hard-failing the whole request — only an EMPTY set is an error. The 10-max is
+        // still enforced here in case the model overshoots. Sanitize to plain text like every template.
         let clamped = result.variants.prefix(10).map {
             PhraseVariant(id: $0.id, en: PlainText.clean($0.en), register: $0.register,
                           contextRU: PlainText.clean($0.contextRU))

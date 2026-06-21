@@ -35,7 +35,17 @@ public struct InView: View {
             .navigationTitle(Loc.t("Понять", "Get it"))
             .settingsTrigger()
             .sheet(isPresented: $model.showMicPriming) { primingSheet }
+            .alert(Loc.t("Сохранение", "Saving"), isPresented: saveErrorBinding) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(model.saveError ?? "")
+            }
         }
+    }
+
+    /// Surface a background save failure regardless of `phase` (inline error UI is only in `.failed`).
+    private var saveErrorBinding: Binding<Bool> {
+        Binding(get: { model.saveError != nil }, set: { if !$0 { model.clearSaveError() } })
     }
 
     // MARK: Input
@@ -68,8 +78,7 @@ public struct InView: View {
                 fieldFocused = false
                 model.submit()
             }
-            .disabled(!canTranslate)
-            .opacity(canTranslate ? 1 : 0.5)
+            .disabled(!canTranslate)   // EHButton dims itself when disabled
 
             SegmentedSelector(
                 InViewModel.Mode.allCases,

@@ -28,10 +28,12 @@ public final class SettingsViewModel {
     }
 
     public func check() async {
+        let previous = health
         health = .checking
         switch await connectionHealth() {
         case .ok: health = .ok
         case .failed(let reason): health = .failed(Self.message(for: reason))
+        case .cancelled: health = previous   // check torn down — restore prior status, no false failure
         }
     }
 

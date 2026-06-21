@@ -20,13 +20,17 @@ public enum AppLocale {
     public static let supported = ["ru", "en", "fr", "es", "de", "it"]
 
     /// First system-preferred language we support, else English. Used when the user hasn't chosen.
-    public static func systemDefaultCode() -> String {
+    /// Memoized: `Locale.preferredLanguages` is fixed for the process lifetime, so the (heavier) scan
+    /// runs once instead of on every `Loc.t` call that falls through to the system default.
+    public static func systemDefaultCode() -> String { cachedSystemDefault }
+
+    private static let cachedSystemDefault: String = {
         for language in Locale.preferredLanguages {
             let code = String(language.prefix(2)).lowercased()
             if supported.contains(code) { return code }
         }
         return "en"
-    }
+    }()
 
     /// The language actually used: the user's stored choice if it's one we support; otherwise the
     /// system default among supported; otherwise English. (An obsolete stored value like the old

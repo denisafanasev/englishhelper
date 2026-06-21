@@ -27,13 +27,17 @@ public struct RootView: View {
     @State private var onboarding = OnboardingStore()
     @State private var selection = "out"
 
+    /// True when persistence fell back to an in-memory store — changes this session won't be saved.
+    private let degradedStorage: Bool
+
     public init(
         out: VoiceViewModel,
         inbound: InViewModel,
         photo: PhotoTranslateViewModel,
         library: StudyListViewModel,
         history: HistoryViewModel,
-        settings: SettingsViewModel
+        settings: SettingsViewModel,
+        degradedStorage: Bool = false
     ) {
         _out = State(initialValue: out)
         _inbound = State(initialValue: inbound)
@@ -41,6 +45,7 @@ public struct RootView: View {
         _library = State(initialValue: library)
         _history = State(initialValue: history)
         _settings = State(initialValue: settings)
+        self.degradedStorage = degradedStorage
     }
 
     public var body: some View {
@@ -64,9 +69,14 @@ public struct RootView: View {
                         HistoryView(model: history)
                     }
                 }
+                .safeAreaInset(edge: .top) {
+                    if degradedStorage { degradedStorageBanner }
+                }
                 // Rebuild ONLY the tab content when the interface language changes — re-running every
                 // screen's `Loc.t(...)`. Scoped here (not the whole body) so the Settings sheet and
                 // `@State` survive: switching language live keeps the sheet open instead of dismissing.
+                // TRADE-OFF: this discards transient view-local @State inside the tabs (e.g. a half-built
+                // export share) — acceptable since changing language mid-action is rare and deliberate.
                 .id(language.language)
                 .environment(ui)
                 .environment(\.locale, language.locale)
@@ -98,5 +108,29 @@ public struct RootView: View {
             }
         }
         .preferredColorScheme(theme.colorScheme)
+    }
+
+    /// Shown when the on-disk store couldn't be opened: the app runs, but nothing saved this session
+    /// will survive a relaunch. A SOLID surface (never glass under warning text) for legibility.
+    private var degradedStorageBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            Text(Loc.t(
+                "Сохранённые данные недоступны. Изменения этой сессии не сохранятся.",
+                "Saved data is unavailable. Changes this session won't be kept.",
+                "Données enregistrées indisponibles. Les modifications de cette session ne seront pas conservées.",
+                "Datos guardados no disponibles. Los cambios de esta sesión no se guardarán.",
+                "Gespeicherte Daten nicht verfügbar. Änderungen dieser Sitzung werden nicht gespeichert.",
+                "Dati salvati non disponibili. Le modifiche di questa sessione non verranno conservate."))
+                .font(.footnote)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .background(.bar)
+        .accessibilityElement(children: .combine)
     }
 }

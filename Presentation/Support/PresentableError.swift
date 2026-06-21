@@ -25,10 +25,10 @@ func presentableError(_ error: Error) -> PresentableError {
     case .overloaded:
         return PresentableError(message: Loc.t("Сервис перегружен, попробуйте позже.",
                                                "Service is overloaded — try later."), isOffline: false)
-    case .requestFailed(let info) where info.contains("offline"):
+    case .offline:
         return PresentableError(message: Loc.t("Нет соединения. Проверьте интернет и попробуйте снова.",
                                                "No connection. Check the internet and try again."), isOffline: true)
-    case .requestFailed(let info) where info.contains("timed out"):
+    case .timedOut:
         return PresentableError(message: Loc.t("Сервис не ответил вовремя. Попробуйте ещё раз.",
                                                "The service didn't respond in time. Try again."), isOffline: false)
     case .invalidOutput:

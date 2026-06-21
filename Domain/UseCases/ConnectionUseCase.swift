@@ -11,6 +11,7 @@ import Foundation
 public enum ConnectionHealth: Sendable, Equatable {
     case ok
     case failed(Reason)
+    case cancelled   // the check was cancelled (e.g. Settings dismissed) — caller should keep prior status
 
     /// Localizable failure reasons (the UI maps these to text).
     public enum Reason: Sendable, Equatable {
@@ -34,11 +35,11 @@ public struct ConnectionHealthInteractor: ConnectionHealthUseCase {
             switch error {
             case .notConfigured: return .failed(.noKey)
             case .overloaded: return .failed(.overloaded)
-            case .requestFailed(let info) where info.contains("offline"): return .failed(.offline)
-            case .requestFailed(let info) where info.contains("timed out"): return .failed(.timeout)
+            case .offline: return .failed(.offline)
+            case .timedOut: return .failed(.timeout)
             case .requestFailed: return .failed(.unavailable)
             case .invalidOutput: return .failed(.badResponse)
-            case .cancelled: return .failed(.unknown)
+            case .cancelled: return .cancelled   // sheet dismissed mid-check — not a connectivity fault
             }
         } catch {
             return .failed(.unknown)

@@ -18,4 +18,21 @@ public enum Register: String, Codable, Sendable, CaseIterable, Hashable {
     case neutral
     case casual
     case slang
+
+    /// Tolerant decode: the LLM is non-deterministic, so `register` can arrive capitalized
+    /// ("Formal"), as a synonym ("informal", "polite"), or localized despite the schema's enum
+    /// constraint. Normalize and map known synonyms; fall back to `.neutral` for anything unknown
+    /// rather than throwing — one off-schema tag must not discard the whole (otherwise valid) batch.
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        switch raw {
+        case "formal", "polite": self = .formal
+        case "neutral", "standard", "default": self = .neutral
+        case "casual", "informal", "colloquial", "conversational": self = .casual
+        case "slang", "vulgar", "street": self = .slang
+        default: self = Register(rawValue: raw) ?? .neutral
+        }
+    }
 }

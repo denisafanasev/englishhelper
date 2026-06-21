@@ -38,6 +38,10 @@ public struct HowToSayInteractor: HowToSayUseCase {
         let result = try await llm.run(
             HowToSayTemplate(tone: tone, studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage), input: intent
         )
+        // History logging is INTENTIONALLY best-effort: the user already has their result, so a failed
+        // (or cancelled) append must never fail/cancel the request. `try?` is deliberate here and at
+        // every `history.append` below. (Domain is Foundation-only, so the drop can't be logged here;
+        // a corrupt READ is logged in the SwiftData repository.)
         try? await history.append(
             HistoryEntry(inputText: intent, result: .howToSay(result.variants))
         )
