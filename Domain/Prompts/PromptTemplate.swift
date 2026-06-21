@@ -36,6 +36,18 @@ public protocol PromptTemplate<Input, Output>: Sendable {
 
 public extension PromptTemplate {
     func image(for input: Input) -> Data? { nil }
+
+    /// Output token budget for THIS template. Short tasks (a few phrasings, one translation, an
+    /// explanation) need little; the photo translator can emit many text blocks and needs far more.
+    /// The LLM adapter caps the response at this value — too low truncates the JSON mid-stream, which
+    /// the adapter surfaces as `LLMError.responseTooLong`. Default suits the short text tasks.
+    var maxOutputTokens: Int { 2048 }
+
+    /// True for short, latency-sensitive TEXT tasks (phrasings, translation, explanation): lets the
+    /// adapter pick faster model settings (low effort, no extended reasoning) to optimize response
+    /// speed. Vision / long-output templates set this false to trade a little latency for accuracy
+    /// and headroom. This is a backend-agnostic HINT — the LLM adapter maps it to provider params.
+    var prefersFastResponse: Bool { true }
 }
 
 public extension PromptTemplate {

@@ -479,6 +479,12 @@ public struct PhotoBlocksTemplate: PromptTemplate {
         self.nativeLanguage = nativeLanguage
     }
 
+    // A photo can contain a LOT of text (a full menu, a page) — each block emits en + ru, so the
+    // response is far larger than the short text tasks. 2048 truncates it mid-JSON; give it room.
+    public var maxOutputTokens: Int { 8192 }
+    // Vision OCR + translation of dense text: lean toward accuracy/headroom over raw speed.
+    public var prefersFastResponse: Bool { false }
+
     public var systemPrompt: String {
         """
         You read text from a photo. The text may be in ANY language. Group it into BLOCKS of connected

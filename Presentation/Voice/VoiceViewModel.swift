@@ -293,6 +293,9 @@ public final class VoiceViewModel {
         case .timedOut:
             errorMessage = Loc.t("Сервис не ответил вовремя. Попробуйте ещё раз.",
                                  "The service didn't respond in time. Try again.")
+        case .responseTooLong:
+            errorMessage = Loc.t("Слишком много текста для одного запроса. Попробуйте часть поменьше.",
+                                 "Too much text to handle at once. Try a smaller part.")
         case .invalidOutput:
             errorMessage = Loc.t("Не удалось разобрать ответ. Попробуйте ещё раз.",
                                  "Couldn't parse the response. Try again.")

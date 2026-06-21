@@ -16,7 +16,6 @@ public final class ClaudeLLMClient: LLMClient {
     private let endpoint: URL
     private let session: URLSession
     private let anthropicVersion = "2023-06-01"
-    private let maxTokens = 2048
     /// Retries on transient 429/529/5xx with exponential backoff (Anthropic's recommendation).
     private let maxRetries: Int
     private let baseRetryDelay: Double   // seconds
@@ -41,8 +40,10 @@ public final class ClaudeLLMClient: LLMClient {
 
     private static func defaultSession() -> URLSession {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30
-        config.timeoutIntervalForResource = 60
+        // Ceiling for the slowest case (a dense photo): the per-REQUEST timeoutInterval set in run()
+        // is the real cap (30s for text, 90s for photo), so these just need to be ≥ that.
+        config.timeoutIntervalForRequest = 90
+        config.timeoutIntervalForResource = 120
         config.waitsForConnectivity = false
         return URLSession(configuration: config)
     }
@@ -67,16 +68,24 @@ public final class ClaudeLLMClient: LLMClient {
         }
         content.append(.text(template.userMessage(for: input)))
 
+        // Per-template tuning. None of these tasks need chain-of-thought, so thinking is disabled
+        // everywhere — that alone is the big latency win (extended reasoning on a dense photo blew
+        // the response out to ~50s+). Short TEXT tasks then run at LOW effort with a tight 30s
+        // timeout (fast). The photo translator runs at MEDIUM effort with a larger output budget and
+        // a much longer timeout, because OCR-ing + translating a dense page is genuinely a 30–60s job.
+        let fast = template.prefersFastResponse
         let body = RequestBody(
             model: model,
-            max_tokens: maxTokens,
+            max_tokens: template.maxOutputTokens,
             system: system,
-            messages: [.init(role: "user", content: content)]
+            messages: [.init(role: "user", content: content)],
+            thinking: .init(type: "disabled"),
+            output_config: .init(effort: fast ? "low" : "medium")
         )
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
-        request.timeoutInterval = 30
+        request.timeoutInterval = fast ? 30 : 90
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.setValue(anthropicVersion, forHTTPHeaderField: "anthropic-version")
@@ -90,6 +99,9 @@ public final class ClaudeLLMClient: LLMClient {
         } catch {
             throw LLMError.invalidOutput("unparseable API envelope: \(error)")
         }
+        // The model hit its output-token budget and the JSON is truncated mid-stream — surface a
+        // clear, actionable error instead of a generic "couldn't parse the response".
+        if decoded.stop_reason == "max_tokens" { throw LLMError.responseTooLong }
         let text = decoded.content.compactMap(\.text).joined()
         guard !text.isEmpty else { throw LLMError.invalidOutput("empty model response") }
 
@@ -221,7 +233,14 @@ public final class ClaudeLLMClient: LLMClient {
         let max_tokens: Int
         let system: String
         let messages: [Message]
+        /// Omitted when nil (synthesized `encodeIfPresent`). `{"type":"disabled"}` skips extended
+        /// reasoning for fast text tasks; left off for vision so the model can think a little.
+        let thinking: Thinking?
+        /// Output config — currently just `effort` (low for fast text, medium for vision/long tasks).
+        let output_config: OutputConfig?
         struct Message: Encodable { let role: String; let content: [ContentBlock] }
+        struct Thinking: Encodable { let type: String }
+        struct OutputConfig: Encodable { let effort: String }
     }
 
     private enum ContentBlock: Encodable {
@@ -250,6 +269,7 @@ public final class ClaudeLLMClient: LLMClient {
 
     private struct MessagesResponse: Decodable {
         let content: [Block]
+        let stop_reason: String?
         struct Block: Decodable { let type: String; let text: String? }
     }
 }

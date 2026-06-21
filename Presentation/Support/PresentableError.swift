@@ -31,6 +31,9 @@ func presentableError(_ error: Error) -> PresentableError {
     case .timedOut:
         return PresentableError(message: Loc.t("Сервис не ответил вовремя. Попробуйте ещё раз.",
                                                "The service didn't respond in time. Try again."), isOffline: false)
+    case .responseTooLong:
+        return PresentableError(message: Loc.t("Слишком много текста для одного запроса. Попробуйте часть поменьше.",
+                                               "Too much text to handle at once. Try a smaller part."), isOffline: false)
     case .invalidOutput:
         return PresentableError(message: Loc.t("Не удалось разобрать ответ. Попробуйте ещё раз.",
                                                "Couldn't parse the response. Try again."), isOffline: false)

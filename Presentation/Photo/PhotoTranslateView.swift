@@ -139,14 +139,22 @@ public struct PhotoTranslateView: View {
                     .overlay {
                         ZStack {
                             Tokens.Scrim.solid
-                            LoadingView(Loc.t("Распознаю и перевожу…", "Reading and translating…"))
+                            // A moving bar (not just a spinner) — recognizing + translating a dense
+                            // photo can take ~30s, so show visible forward progress while it works.
+                            TimedProgressView(progressCaption, expectedDuration: 30)
                         }
                         .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.card, style: .continuous))
                     }
             } else {
-                LoadingView(Loc.t("Распознаю и перевожу…", "Reading and translating…"))
+                TimedProgressView(progressCaption, expectedDuration: 30)
             }
         }
+    }
+
+    private var progressCaption: String {
+        Loc.t("Распознаю и перевожу…", "Reading and translating…",
+              "Lecture et traduction…", "Leyendo y traduciendo…",
+              "Lese und übersetze…", "Lettura e traduzione…")
     }
 
     private var resultSection: some View {
