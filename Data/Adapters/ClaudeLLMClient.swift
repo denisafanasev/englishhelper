@@ -25,7 +25,7 @@ public final class ClaudeLLMClient: LLMClient {
         model: String,
         baseURL: URL,
         session: URLSession? = nil,
-        maxRetries: Int = 2,
+        maxRetries: Int = 3,
         baseRetryDelay: Double = 0.5
     ) {
         self.apiKey = apiKey
@@ -121,7 +121,10 @@ public final class ClaudeLLMClient: LLMClient {
         throw lastError
     }
 
-    /// Sends the request, retrying transient 429 / 529 / 5xx with exponential backoff.
+    /// Sends the request, retrying TRANSIENT failures — both transport-level (a dropped connection,
+    /// DNS/host hiccup, TLS reset) and HTTP 429 / 529 / 5xx — with exponential backoff. Mobile networks
+    /// blip constantly (cell handoff, weak signal), so a momentary failure recovers silently instead of
+    /// surfacing as a hard "Service unavailable"; only a SUSTAINED failure (retries exhausted) is shown.
     private func send(_ request: URLRequest) async throws -> Data {
         var attempt = 0
         while true {
@@ -134,12 +137,17 @@ public final class ClaudeLLMClient: LLMClient {
                 (data, response) = try await session.data(for: request)
             } catch is CancellationError {
                 throw LLMError.cancelled
-            } catch let error as URLError where error.code == .cancelled {
-                throw LLMError.cancelled                 // URLSession's own cancellation, not Swift's
-            } catch let error as URLError where error.code == .timedOut {
-                throw LLMError.timedOut
-            } catch let error as URLError where Self.offlineCodes.contains(error.code) {
-                throw LLMError.offline
+            } catch let error as URLError {
+                if error.code == .cancelled { throw LLMError.cancelled }   // deliberate supersede
+                // Retry a transient transport failure before giving up; only map the FINAL one.
+                if Self.isRetryableTransport(error.code), attempt < maxRetries {
+                    attempt += 1
+                    try await backoff(attempt: attempt, response: nil)
+                    continue
+                }
+                if error.code == .timedOut { throw LLMError.timedOut }
+                if Self.offlineCodes.contains(error.code) { throw LLMError.offline }
+                throw LLMError.requestFailed(error.localizedDescription)
             } catch {
                 throw LLMError.requestFailed(error.localizedDescription)
             }
@@ -165,10 +173,10 @@ public final class ClaudeLLMClient: LLMClient {
         }
     }
 
-    /// Wait before a retry: honor `Retry-After` if present, else exponential backoff.
-    private func backoff(attempt: Int, response: HTTPURLResponse) async throws {
+    /// Wait before a retry: honor `Retry-After` if present (HTTP retries), else exponential backoff.
+    private func backoff(attempt: Int, response: HTTPURLResponse?) async throws {
         let seconds: Double
-        if let header = response.value(forHTTPHeaderField: "Retry-After"), let value = Double(header) {
+        if let header = response?.value(forHTTPHeaderField: "Retry-After"), let value = Double(header) {
             seconds = min(value, 10)
         } else {
             seconds = min(baseRetryDelay * pow(2, Double(attempt - 1)), 8)
@@ -177,6 +185,21 @@ public final class ClaudeLLMClient: LLMClient {
             try await Task.sleep(for: .seconds(seconds))
         } catch {
             throw LLMError.cancelled
+        }
+    }
+
+    /// Transient transport failures worth a retry — the connection HAD a path that failed momentarily
+    /// (dropped mid-flight, DNS/host hiccup, TLS reset). Deliberately NOT `.timedOut` (the per-request
+    /// timeout already gave it a full chance — retrying would double the wait) and NOT the genuine
+    /// "no network path" codes in `offlineCodes` (those map straight to `.offline` so the user is told
+    /// to check their connection rather than waiting through retries).
+    private static func isRetryableTransport(_ code: URLError.Code) -> Bool {
+        switch code {
+        case .networkConnectionLost, .cannotConnectToHost, .cannotFindHost,
+             .dnsLookupFailed, .secureConnectionFailed:
+            return true
+        default:
+            return false
         }
     }
 

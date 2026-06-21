@@ -13,6 +13,7 @@ import DesignSystem
 public struct VoiceView: View {
     @State private var model: VoiceViewModel
     @FocusState private var fieldFocused: Bool
+    @Environment(AppUIState.self) private var ui   // for routing per-variant "explain" into Get it
     /// `false` for the text-only "Текст" tab (no microphone — same flow, typed input).
     private let showsMic: Bool
 
@@ -239,7 +240,15 @@ public struct VoiceView: View {
                     isSaved: model.isSaved(variant),
                     isPlaying: model.isPlaying(variant),
                     onPlay: { model.play(variant) },
-                    onToggleSave: { model.toggleSave(variant) }
+                    onToggleSave: { model.toggleSave(variant) },
+                    // "Why this one?" → route into the Explain engine for THIS phrasing, contrasted
+                    // against the sibling variants. Reuses the same Explain flow as See it / History.
+                    onExplain: {
+                        let alternatives = model.variants
+                            .filter { $0.id != variant.id }
+                            .map(\.en)
+                        ui.pendingExplain = ExplainRequest(text: variant.en, alternatives: alternatives)
+                    }
                 )
             }
         }

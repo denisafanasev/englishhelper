@@ -11,16 +11,6 @@ import Foundation
 
 // MARK: - Shared output payloads
 
-/// `{ "ru": "..." }` — pure translation, shared by translate + photoTranslate.
-public struct Translation: Codable, Sendable, Equatable {
-    public let ru: String
-}
-
-/// `{ "translation": "..." }` — translation into a configurable target language.
-public struct TargetTranslation: Codable, Sendable, Equatable {
-    public let translation: String
-}
-
 /// `{ "variants": [ { en, register, context_ru } ] }`
 public struct HowToSayResult: Codable, Sendable, Equatable {
     public let variants: [PhraseVariant]
@@ -248,91 +238,6 @@ public struct WhatToSayTemplate: PromptTemplate {
     }
 }
 
-// MARK: - translateText
-
-/// EN text → pure Russian translation (no commentary).
-public struct TranslateTextTemplate: PromptTemplate {
-    public typealias Input = String
-    public typealias Output = Translation
-
-    public let id = "translateText"
-    public init() {}
-
-    public var systemPrompt: String {
-        """
-        Translate the given English text into natural Russian. Return ONLY the translation in "ru" —
-        no commentary, alternatives, transliteration, or notes. \(plainTextRule)
-        """
-    }
-
-    public var outputJSONSchema: String {
-        #"{"type":"object","properties":{"ru":{"type":"string"}},"required":["ru"]}"#
-    }
-
-    public func userMessage(for input: String) -> String { input }
-
-    public func decode(_ rawJSON: String) throws -> Translation {
-        try decodeJSON(Translation.self, from: rawJSON)
-    }
-}
-
-// MARK: - translateToTarget ("Понять"/In: understand OR compose, into target language)
-
-/// The model decides between TWO jobs and returns ONE result in `targetLanguage`:
-///  • a faithful, meaning-accurate translation of text the user wants to understand, OR
-///  • a phrase composed from an instruction ("скажи, что я занят"), styled by `tone`.
-/// Source language auto-detected.
-public struct TranslateToTargetTemplate: PromptTemplate {
-    public typealias Input = String
-    public typealias Output = TargetTranslation
-
-    public let id = "translateToTarget"
-    public let targetLanguage: String   // e.g. "Russian", "English"
-    public let tone: Register
-    public init(targetLanguage: String, tone: Register = .casual) {
-        self.targetLanguage = targetLanguage
-        self.tone = tone
-    }
-
-    public var systemPrompt: String {
-        """
-        You produce ONE result in \(targetLanguage) for someone learning a language.
-        Detect the source language automatically and decide what the user's input is:
-
-        1. A word, phrase, sentence, or passage to UNDERSTAND (something they read or heard).
-           Translate it into \(targetLanguage), preserving the exact meaning. Do not embellish or
-           change the register.
-
-        2. An INSTRUCTION describing what they want to say, e.g. "say that I have no time",
-           "tell him I'll be late", "вежливо откажись от встречи". Compose ONE natural
-           \(targetLanguage) phrase that expresses it in a \(toneHint) register, worded as if the
-           user is saying it themselves — not a description of the request.
-
-        If the input could be read either way, prefer a faithful translation.
-        Return ONLY the result in "translation" — no commentary, labels, quotes, transliteration,
-        or alternatives. \(plainTextRule)
-        """
-    }
-
-    private var toneHint: String {
-        switch tone {
-        case .formal: "formal and polite"
-        case .neutral, .casual: "everyday conversational"
-        case .slang: "informal and slangy"
-        }
-    }
-
-    public var outputJSONSchema: String {
-        #"{"type":"object","properties":{"translation":{"type":"string"}},"required":["translation"]}"#
-    }
-
-    public func userMessage(for input: String) -> String { input }
-
-    public func decode(_ rawJSON: String) throws -> TargetTranslation {
-        try decodeJSON(TargetTranslation.self, from: rawJSON)
-    }
-}
-
 // MARK: - explainExpression ("Понять"/Get, Explain mode)
 
 /// A word, phrase, OR a longer multi-line passage → a structured explanation in the learner's NATIVE
@@ -346,9 +251,13 @@ public struct TranslateToTargetTemplate: PromptTemplate {
 public struct ExplainInput: Sendable, Equatable {
     public let text: String
     public let image: Data?
-    public init(text: String, image: Data? = nil) {
+    /// Other phrasings the expression is being chosen AMONG (the sibling "Say it" variants). When
+    /// present, the explanation contrasts THIS phrasing against them — why this one, not those.
+    public let alternatives: [String]
+    public init(text: String, image: Data? = nil, alternatives: [String] = []) {
         self.text = text
         self.image = image
+        self.alternatives = alternatives
     }
 }
 
@@ -400,6 +309,10 @@ public struct ExplainExpressionTemplate: PromptTemplate {
           \(nativeLanguage)-speaking culture, so the learner can map it onto something familiar.
 
         If the input is a single neutral word, still describe its connotations and typical usage.
+
+        If the user message lists ALTERNATIVE phrasings (under "Other phrasings…"), the user is choosing
+        between them: make "meaning" and especially "register" explain WHY this exact phrasing rather
+        than those — the distinguishing nuance (tense/aspect, formality, connotation, when each fits).
         \(plainTextRule)
         """
     }
@@ -412,7 +325,16 @@ public struct ExplainExpressionTemplate: PromptTemplate {
         """
     }
 
-    public func userMessage(for input: ExplainInput) -> String { input.text }
+    public func userMessage(for input: ExplainInput) -> String {
+        guard !input.alternatives.isEmpty else { return input.text }
+        let others = input.alternatives.map { "- \($0)" }.joined(separator: "\n")
+        return """
+        \(input.text)
+
+        Other phrasings the user is choosing between (contrast this one against them):
+        \(others)
+        """
+    }
 
     public func image(for input: ExplainInput) -> Data? { input.image }
 
@@ -599,34 +521,6 @@ public struct PhotoExplainTemplate: PromptTemplate {
     public func decode(_ rawJSON: String) throws -> SceneExplanation {
         let raw = try decodeJSON(SceneExplanation.self, from: rawJSON)
         return SceneExplanation(title: PlainText.clean(raw.title), details: PlainText.clean(raw.details))
-    }
-}
-
-// MARK: - photoTranslate (legacy text-translate; kept for the port/history shape)
-
-/// OCR'd EN text → pure Russian translation (same schema as translateText).
-public struct PhotoTranslateTemplate: PromptTemplate {
-    public typealias Input = String
-    public typealias Output = Translation
-
-    public let id = "photoTranslate"
-    public init() {}
-
-    public var systemPrompt: String {
-        """
-        The input is English text recognized from a photo (it may contain OCR noise).
-        Translate it into natural Russian. Return ONLY the translation in "ru" — no commentary. \(plainTextRule)
-        """
-    }
-
-    public var outputJSONSchema: String {
-        #"{"type":"object","properties":{"ru":{"type":"string"}},"required":["ru"]}"#
-    }
-
-    public func userMessage(for input: String) -> String { input }
-
-    public func decode(_ rawJSON: String) throws -> Translation {
-        try decodeJSON(Translation.self, from: rawJSON)
     }
 }
 

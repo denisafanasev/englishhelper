@@ -349,6 +349,12 @@ public enum Tokens {
         public static let stroke: CGFloat = 1.7
         /// Stroke for a knockout glyph on a filled shape (e.g. checkmark on a solid circle).  · icons.jsx:22
         public static let strokeOnFill: CGFloat = 2.0
+
+        /// Card action-row glyphs (play · explain · copy) — the secondary actions on a result card.
+        /// Single source of truth so every card across all sections stays in lockstep.
+        public static let cardAction: CGFloat = 14
+        /// The save/bookmark glyph — kept a touch larger than the other card actions for emphasis.
+        public static let cardActionProminent: CGFloat = 16
     }
 }
 

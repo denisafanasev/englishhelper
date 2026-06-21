@@ -81,9 +81,12 @@ public final class ThemeStore {
 public struct ExplainRequest: Equatable, Sendable {
     public let text: String
     public let imageData: Data?
-    public init(text: String, imageData: Data? = nil) {
+    /// Sibling phrasings to contrast against — set when routing a per-variant "why this one?" from Say it.
+    public let alternatives: [String]
+    public init(text: String, imageData: Data? = nil, alternatives: [String] = []) {
         self.text = text
         self.imageData = imageData
+        self.alternatives = alternatives
     }
 }
 

@@ -214,7 +214,7 @@ public struct PhotoTranslateView: View {
         VStack(alignment: .leading, spacing: Tokens.Space.s12) {
             HStack(alignment: .top) {
                 Text(explanation.title)
-                    .textStyle(Tokens.Text.title3)
+                    .textStyle(Tokens.Text.headline)
                     .foregroundStyle(Tokens.Content.primary)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: Tokens.Space.s8)
@@ -234,53 +234,48 @@ public struct PhotoTranslateView: View {
         .glassPanel(cornerRadius: Tokens.Radius.card)
     }
 
-    /// One recognized block: English + Russian translation, with play + save.
+    /// One recognized block: English + Russian translation, with the full action row.
     private func blockCard(_ block: TranslatedBlock) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s12) {
+            // Studied text + icon actions (Play · Explain · Copy · Save) in the header row — same
+            // order/look as the phrase cards, so every card's action row is identical.
             HStack(alignment: .top) {
                 Text(block.en)
-                    .textStyle(Tokens.Text.title3)
+                    .textStyle(Tokens.Text.headline)
                     .foregroundStyle(Tokens.Content.primary)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: Tokens.Space.s8)
-                Button { model.toggleSave(block) } label: {
-                    Image(systemName: model.isSaved(block) ? "bookmark.fill" : "bookmark")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(model.isSaved(block) ? Tokens.Content.primary : Tokens.Content.tertiary)
+                HStack(spacing: Tokens.Space.s16) {
+                    Button { model.play(block) } label: {
+                        Image(systemName: model.isPlaying(block) ? "speaker.wave.2.fill" : "speaker.wave.2")
+                            .font(.system(size: Tokens.Icon.cardAction, weight: .medium))
+                            .symbolEffect(.variableColor.iterative, isActive: model.isPlaying(block))
+                            .foregroundStyle(model.isPlaying(block) ? Tokens.Content.primary : Tokens.Content.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Loc.t("Озвучить", "Play"))
+
+                    Button { ui.pendingExplain = ExplainRequest(text: block.en, imageData: model.imageData) } label: {
+                        Image(systemName: "lightbulb")
+                            .font(.system(size: Tokens.Icon.cardAction, weight: .medium))
+                            .foregroundStyle(Tokens.Content.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Loc.t("Объяснить", "Explain"))
+
+                    CopyButton(block.en, style: .icon,
+                               accessibilityLabel: Loc.t("Скопировать выражение", "Copy expression"))
+
+                    Button { model.toggleSave(block) } label: {
+                        Image(systemName: model.isSaved(block) ? "bookmark.fill" : "bookmark")
+                            .font(.system(size: Tokens.Icon.cardActionProminent, weight: .medium))
+                            .foregroundStyle(model.isSaved(block) ? Tokens.Content.primary : Tokens.Content.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(model.isSaved(block)
+                        ? Loc.t("Убрать из изучаемого", "Remove from study list")
+                        : Loc.t("Сохранить в изучаемое", "Save to study list"))
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(model.isSaved(block)
-                    ? Loc.t("Убрать из изучаемого", "Remove from study list")
-                    : Loc.t("Сохранить в изучаемое", "Save to study list"))
-            }
-
-            // Actions on the studied-language text, directly under it. Play / Explain as labels; the
-            // copy is an ICON at the trailing edge — same look as the translation's copy below it (so
-            // the two copy icons line up). Explain opens Get it (Explain mode) with the block + photo.
-            HStack(spacing: Tokens.Space.s16) {
-                Button { model.play(block) } label: {
-                    Label(Loc.t("Озвучить", "Play"),
-                          systemImage: model.isPlaying(block) ? "speaker.wave.2.fill" : "speaker.wave.2")
-                        .font(.system(size: 12, weight: .semibold))
-                        .lineLimit(1)
-                        .foregroundStyle(Tokens.Content.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Loc.t("Озвучить", "Play"))
-
-                Button { ui.pendingExplain = ExplainRequest(text: block.en, imageData: model.imageData) } label: {
-                    Label(Loc.t("Объяснить", "Explain"), systemImage: "lightbulb")
-                        .font(.system(size: 12, weight: .semibold))
-                        .lineLimit(1)
-                        .foregroundStyle(Tokens.Content.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Loc.t("Объяснить", "Explain"))
-
-                Spacer(minLength: Tokens.Space.s8)
-
-                CopyButton(block.en, style: .icon,
-                           accessibilityLabel: Loc.t("Скопировать выражение", "Copy expression"))
             }
 
             Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)

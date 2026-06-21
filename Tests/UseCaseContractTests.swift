@@ -29,7 +29,7 @@ import Adapters
         // no-extended-reasoning settings — optimizing response speed.
         #expect(HowToSayTemplate().maxOutputTokens == 2048)
         #expect(HowToSayTemplate().prefersFastResponse)
-        #expect(TranslateTextTemplate().prefersFastResponse)
+        #expect(WhatToSayTemplate().prefersFastResponse)
         #expect(UnderstandTemplate().prefersFastResponse)
         #expect(ExplainExpressionTemplate().prefersFastResponse)
     }
@@ -43,15 +43,19 @@ import Adapters
     }
 
     @Test func translateThrowsOnMalformedJSON() async {
-        let useCase = TranslateTextInteractor(llm: StubLLMClient(behavior: .malformedJSON, latency: .milliseconds(1)),
-                                              history: MockHistoryRepository())
-        await #expect(throws: LLMError.self) { _ = try await useCase("hello") }
+        let useCase = UnderstandInteractor(llm: StubLLMClient(behavior: .malformedJSON, latency: .milliseconds(1)),
+                                           history: MockHistoryRepository())
+        await #expect(throws: LLMError.self) {
+            _ = try await useCase("hello", studiedLanguage: "English", nativeLanguage: "Russian")
+        }
     }
 
     @Test func translateThrowsOnTimeout() async {
-        let useCase = TranslateTextInteractor(llm: StubLLMClient(behavior: .timeout, latency: .milliseconds(1)),
-                                              history: MockHistoryRepository())
-        await #expect(throws: LLMError.self) { _ = try await useCase("hello") }
+        let useCase = UnderstandInteractor(llm: StubLLMClient(behavior: .timeout, latency: .milliseconds(1)),
+                                           history: MockHistoryRepository())
+        await #expect(throws: LLMError.self) {
+            _ = try await useCase("hello", studiedLanguage: "English", nativeLanguage: "Russian")
+        }
     }
 
     // MARK: History-append contract — exactly one on success, zero on failure

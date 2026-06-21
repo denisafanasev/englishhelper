@@ -51,6 +51,8 @@ public final class InViewModel {
     private var resultsGeneration = 0
     private var explainImage: Data?          // photo context for an Explain routed from See it
     private var explainImageText: String?    // the source text that photo context belongs to
+    private var explainAlternatives: [String] = []   // sibling variants to contrast (Say it "why this?")
+    private var explainAlternativesText: String?     // the source text those alternatives belong to
 
     // Dependencies (use cases)
     private let understand: any UnderstandUseCase        // faithful translate → studied + native
@@ -199,8 +201,10 @@ public final class InViewModel {
         let studiedLang = StudiedLanguage.current.promptName
         let nativeLang = TargetLanguage.current.promptName
         let mode = self.mode
-        // Use the routed photo context only while the input still matches what it was captured for.
+        // Use the routed photo context / sibling-variant context only while the input still matches
+        // what each was captured for (a user edit of `source` invalidates them).
         let explainImg = (mode == .explain && explainImageText == text) ? explainImage : nil
+        let explainAlts = (mode == .explain && explainAlternativesText == text) ? explainAlternatives : []
         requestTask?.cancel()
         phase = .processing
         errorMessage = nil
@@ -215,7 +219,7 @@ public final class InViewModel {
                     self.translation = result.native      // understanding line
                     self.explanation = nil
                 case .explain:
-                    let result = try await self.explain(text, studiedLanguage: studiedLang, nativeLanguage: nativeLang, image: explainImg)
+                    let result = try await self.explain(text, studiedLanguage: studiedLang, nativeLanguage: nativeLang, image: explainImg, alternatives: explainAlts)
                     self.studied = result.studied
                     self.explanation = result
                     self.translation = nil
@@ -239,11 +243,13 @@ public final class InViewModel {
 
     /// Open this screen in Explain mode for an externally-supplied phrase (routed from See it /
     /// History), optionally with a photo as visual context, and run it immediately.
-    public func startExplain(text: String, image: Data?) {
+    public func startExplain(text: String, image: Data?, alternatives: [String] = []) {
         mode = .explain
         source = text
         explainImage = image
         explainImageText = image == nil ? nil : text
+        explainAlternatives = alternatives
+        explainAlternativesText = alternatives.isEmpty ? nil : text
         submit()
     }
 
@@ -379,5 +385,7 @@ public final class InViewModel {
         savedExpressionID = nil
         explainImage = nil
         explainImageText = nil
+        explainAlternatives = []
+        explainAlternativesText = nil
     }
 }

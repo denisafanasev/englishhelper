@@ -35,7 +35,6 @@ public final class AppContainer: Sendable {
     // Use cases (what Presentation consumes)
     public let howToSay: any HowToSayUseCase
     public let whatToSay: any WhatToSayUseCase
-    public let translateText: any TranslateTextUseCase
     public let photoTranslate: any PhotoTranslateUseCase
     public let photoExplain: any PhotoExplainUseCase
     public let enrich: any EnrichExpressionUseCase
@@ -49,7 +48,6 @@ public final class AppContainer: Sendable {
     public let voiceCaptureEN: any VoiceCaptureUseCase
     public let pronounce: any PlayPronunciationUseCase
     public let connectionHealth: any ConnectionHealthUseCase
-    public let translateToTarget: any TranslateToTargetUseCase
     public let understand: any UnderstandUseCase
     public let explainExpression: any ExplainExpressionUseCase
 
@@ -79,7 +77,6 @@ public final class AppContainer: Sendable {
         // Wire use cases onto the ports.
         self.howToSay = HowToSayInteractor(llm: llm, history: history)
         self.whatToSay = WhatToSayInteractor(llm: llm, history: history)
-        self.translateText = TranslateTextInteractor(llm: llm, history: history)
         self.photoTranslate = PhotoTranslateInteractor(llm: llm, history: history)   // LLM vision (no local OCR)
         self.photoExplain = PhotoExplainInteractor(llm: llm)                          // "See it" Explain mode
         self.enrich = EnrichExpressionInteractor(llm: llm)
@@ -96,7 +93,6 @@ public final class AppContainer: Sendable {
         self.voiceCaptureEN = VoiceCaptureInteractor(recognizer: speechRecognizerEN)
         self.pronounce = PlayPronunciationInteractor(synthesizer: speechSynthesizer)
         self.connectionHealth = ConnectionHealthInteractor(llm: llm)
-        self.translateToTarget = TranslateToTargetInteractor(llm: llm, history: history)
         self.understand = UnderstandInteractor(llm: llm, history: history)
         self.explainExpression = ExplainExpressionInteractor(llm: llm)
     }

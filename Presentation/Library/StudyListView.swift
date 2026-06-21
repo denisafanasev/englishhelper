@@ -12,6 +12,7 @@ import DesignSystem
 public struct StudyListView: View {
     @State private var model: StudyListViewModel
     @State private var shareItem: ShareItem?
+    @Environment(AppUIState.self) private var ui
 
     public init(model: StudyListViewModel) {
         _model = State(initialValue: model)
@@ -95,7 +96,8 @@ public struct StudyListView: View {
             ForEach(model.expressions) { expression in
                 StudyRow(expression: expression,
                          isPlaying: model.isPlaying(expression),
-                         onPlay: { model.play(expression) })
+                         onPlay: { model.play(expression) },
+                         onExplain: { ui.pendingExplain = ExplainRequest(text: expression.en) })
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                     .listRowInsets(EdgeInsets(top: Tokens.Space.s4, leading: Tokens.Space.s16,
@@ -192,6 +194,7 @@ private struct StudyRow: View {
     let expression: Domain.Expression
     let isPlaying: Bool
     let onPlay: () -> Void
+    let onExplain: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -214,14 +217,25 @@ private struct StudyRow: View {
             }
             Spacer(minLength: Tokens.Space.s8)
             VStack(alignment: .trailing, spacing: Tokens.Space.s8) {
-                Button(action: onPlay) {
-                    Image(systemName: isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2")
-                        .symbolEffect(.variableColor.iterative, isActive: isPlaying && !reduceMotion)
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(Tokens.Content.secondary)
+                // Play · Explain in one icon row — same order/look as the result cards.
+                HStack(spacing: Tokens.Space.s16) {
+                    Button(action: onPlay) {
+                        Image(systemName: isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2")
+                            .symbolEffect(.variableColor.iterative, isActive: isPlaying && !reduceMotion)
+                            .font(.system(size: Tokens.Icon.cardAction, weight: .medium))
+                            .foregroundStyle(isPlaying ? Tokens.Content.primary : Tokens.Content.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Loc.t("Озвучить", "Play"))
+
+                    Button(action: onExplain) {
+                        Image(systemName: "lightbulb")
+                            .font(.system(size: Tokens.Icon.cardAction, weight: .medium))
+                            .foregroundStyle(Tokens.Content.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Loc.t("Объяснить", "Explain"))
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Loc.t("Озвучить", "Play"))
                 if expression.learned {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(Tokens.Signal.success)
@@ -234,5 +248,6 @@ private struct StudyRow: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(expression.en). \(expression.ru). \(expression.learned ? Loc.t("Выучено", "Learned") : Loc.t("Не выучено", "Not learned"))")
         .accessibilityAction(named: Loc.t("Озвучить", "Play")) { onPlay() }
+        .accessibilityAction(named: Loc.t("Объяснить", "Explain")) { onExplain() }
     }
 }

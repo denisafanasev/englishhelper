@@ -38,10 +38,6 @@ public final class MockLLMClient: LLMClient {
               {"en":"Do I need a follow-up visit?","register":"casual","context_ru":"В конце приёма."}
             ]}
             """
-        case "translateText", "photoTranslate":
-            return #"{"ru":"Это тестовый перевод."}"#
-        case "translateToTarget":
-            return #"{"translation":"Это тестовый перевод."}"#
         case "understand":
             return #"{"studied":"Could you give me a hand?","native":"Это тестовый перевод."}"#
         case "explainExpression":

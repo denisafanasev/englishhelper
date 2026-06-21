@@ -84,7 +84,7 @@ public struct RootView: View {
                 .onChange(of: ui.pendingExplain) { _, request in
                     guard let request else { return }
                     selection = "in"
-                    inbound.startExplain(text: request.text, image: request.imageData)
+                    inbound.startExplain(text: request.text, image: request.imageData, alternatives: request.alternatives)
                     ui.pendingExplain = nil
                 }
                 .sheet(isPresented: $ui.showSettings) {

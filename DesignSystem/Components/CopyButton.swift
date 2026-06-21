@@ -41,7 +41,7 @@ public struct CopyButton: View {
                     .contentTransition(.symbolEffect(.replace))
             case .icon:
                 Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.system(size: Tokens.Icon.cardAction, weight: .medium))
                     .foregroundStyle(copied ? Tokens.Signal.success : Tokens.Content.tertiary)
                     .contentTransition(.symbolEffect(.replace))
             }
