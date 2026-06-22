@@ -48,6 +48,10 @@ public final class PhotoTranslateViewModel {
     /// photo replaced the result" and not silently delete a just-bookmarked expression.
     private var resultsGeneration = 0
     private var playingBlockID: UUID?
+    /// True when the last failure could plausibly succeed on a re-run of the SAME photo (network /
+    /// transient / server), so a "Retry" affordance is offered. False for content errors (no text,
+    /// no key, too long) where re-running can't help.
+    private var lastErrorRetryable = false
 
     private let photoTranslate: any PhotoTranslateUseCase
     private let photoExplain: any PhotoExplainUseCase
@@ -125,6 +129,15 @@ public final class PhotoTranslateViewModel {
         process(data)
     }
 
+    /// Whether the failed photo can be retried — we still hold the image and the error was transient.
+    public var canRetry: Bool { imageData != nil && lastErrorRetryable }
+
+    /// Manually re-run the LAST photo after a failure (the image is never lost on an error).
+    public func retry() {
+        guard let data = imageData else { return }
+        process(data)
+    }
+
     /// The picked library photo couldn't be loaded/decoded — surface it instead of silently doing nothing.
     public func imageLoadFailed() {
         requestTask?.cancel()
@@ -149,6 +162,7 @@ public final class PhotoTranslateViewModel {
         savedExpressionIDs = [:]
         errorMessage = nil
         isOffline = false
+        lastErrorRetryable = false
         phase = .processing
         let studied = StudiedLanguage.current.promptName   // the studied-language place/country context
         let native = TargetLanguage.current.promptName     // explanation / translation rendered in native
@@ -191,10 +205,23 @@ public final class PhotoTranslateViewModel {
                 errorMessage = Loc.t("Ошибка распознавания текста.", "Text recognition error.")
             }
             isOffline = false
+            lastErrorRetryable = false   // a recognition/content error won't change on a re-run
         } else {
             let presented = presentableError(error)
             errorMessage = presented.message
             isOffline = presented.isOffline
+            // Offer to retry the SAME photo for network / transient / server failures (the photo is
+            // kept). Not for "no key" or "too long", where re-running the same request can't help.
+            if let llm = error as? LLMError {
+                switch llm {
+                case .offline, .timedOut, .overloaded, .requestFailed, .invalidOutput:
+                    lastErrorRetryable = true
+                case .notConfigured, .responseTooLong, .cancelled:
+                    lastErrorRetryable = false
+                }
+            } else {
+                lastErrorRetryable = true
+            }
         }
     }
 
