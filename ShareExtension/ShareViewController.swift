@@ -14,7 +14,7 @@ final class ShareViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        Task { await handleShare() }
+        Task { @MainActor in await handleShare() }   // UIKit (responder chain, openURL:) must be on main
     }
 
     private func handleShare() async {
@@ -34,6 +34,10 @@ final class ShareViewController: UIViewController {
         }
 
         openHostApp()
+        // CRITICAL: give iOS a beat to FOREGROUND the host app before we finish. Completing the request
+        // immediately hands the foreground back to the SOURCE app and beats the pending open — so the
+        // payload arrives but the app never comes forward. A short wait lets the app switch win.
+        try? await Task.sleep(for: .milliseconds(700))
         extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
     }
 
@@ -64,19 +68,20 @@ final class ShareViewController: UIViewController {
 
     // MARK: Host-app launch
 
-    /// Extensions can't touch `UIApplication.shared`; walk the responder chain to an object that
-    /// responds to `openURL:` and invoke it. This is the standard Share-Extension → host-app launch.
+    /// Extensions can't touch `UIApplication.shared`; walk the responder chain to a UIApplication and
+    /// invoke `openURL:` on it — the standard Share-Extension → host-app launch (foregrounds the app).
+    /// (No `extensionContext.open` fallback: for share extensions it only background-delivers the URL
+    /// without foregrounding, which is exactly the failure we're avoiding.)
     private func openHostApp() {
         guard let url = URL(string: "englishhelper://share") else { return }
         let selector = NSSelectorFromString("openURL:")
         var responder: UIResponder? = self
         while let current = responder {
-            if current.responds(to: selector) {
-                current.perform(selector, with: url)
+            if let application = current as? UIApplication, application.responds(to: selector) {
+                application.perform(selector, with: url)
                 return
             }
             responder = current.next
         }
-        extensionContext?.open(url, completionHandler: nil)
     }
 }
