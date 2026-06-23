@@ -201,10 +201,11 @@ public struct InView: View {
     /// note (a single line for an unambiguous word or a phrase; several when a word has distinct senses).
     private func translationCard(_ variants: [TranslationVariant]) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s12) {
-            // Action icons on their OWN row above the source text (right-aligned), so the source text
-            // below keeps the FULL card width instead of being squeezed by the icons.
+            // Mode tag (left) + action icons (right) on their own row above the source text, so the
+            // source text below keeps the FULL card width — same layout as the generation cards.
             HStack(spacing: Tokens.Space.s16) {
-                Spacer(minLength: 0)
+                CardTagView(Loc.t("Перевод", "Translation", "Traduction", "Traducción", "Übersetzung", "Traduzione"))
+                Spacer(minLength: Tokens.Space.s8)
                 if !model.sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Button { model.play() } label: {
                         Image(systemName: model.isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2")
