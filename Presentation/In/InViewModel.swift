@@ -266,14 +266,15 @@ public final class InViewModel {
     public func selectMode(_ newMode: Mode) {
         guard newMode != mode else { return }
         mode = newMode
-        if canSubmit, phase == .result || phase == .processing {
+        // Re-run the SAME input in the new mode — including after a FAILURE (e.g. the model was
+        // unavailable in the previous mode), so switching mode retries instead of staying stuck.
+        if canSubmit, phase == .result || phase == .processing || phase == .failed {
             submit()
         } else {
             studied = nil
             translations = []
             explanation = nil
-            // Leaving results OR a failure: don't keep a stale result/error (whose Retry would re-run
-            // the NEW mode) on screen — drop back to idle.
+            // Nothing to re-run (no input): drop any stale result/error back to idle.
             if phase == .result || phase == .failed {
                 phase = .idle
                 errorMessage = nil

@@ -85,7 +85,9 @@ public final class PhotoTranslateViewModel {
     public func selectMode(_ newMode: Mode) {
         guard newMode != mode else { return }
         mode = newMode
-        if let data = imageData, phase == .result || phase == .processing {
+        // Re-run the SAME photo in the new mode — including after a FAILURE (e.g. the model was
+        // unavailable in the previous mode), so switching mode retries instead of staying stuck.
+        if let data = imageData, phase == .result || phase == .processing || phase == .failed {
             process(data)
         }
     }

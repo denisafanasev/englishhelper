@@ -189,4 +189,30 @@ import Presentation
         }
         #expect(stored.contains { $0.en == "give me a hand" })
     }
+
+    /// Switching mode after a FAILURE must re-run the same input (not stay stuck on the error).
+    @Test func switchingModeAfterFailureReRunsOnTheSameInput() async throws {
+        UserDefaults.standard.set("russian", forKey: "targetLanguage")
+        UserDefaults.standard.set("english", forKey: "studiedLanguage")
+        let vm = makeVM(llm: FlakyUnderstandLLM(failuresBeforeSuccess: 1))   // default mode Explain → first run fails
+        vm.source = "bank"
+        vm.submit()
+        try await waitUntil { vm.phase == .failed }
+        #expect(vm.phase == .failed)
+        vm.selectMode(.translate)                                            // switch → must retry the input
+        try await waitUntil { vm.phase == .result }
+        #expect(vm.phase == .result)
+        #expect(vm.translations.isEmpty == false)
+    }
+}
+
+/// Fails once (the previous-mode error), then returns a valid translation — verifies that switching
+/// mode after a failure re-runs the request on the same input.
+private final class FlakyUnderstandLLM: LLMClient, @unchecked Sendable {
+    nonisolated(unsafe) private var remaining: Int
+    init(failuresBeforeSuccess: Int) { self.remaining = failuresBeforeSuccess }
+    func run<Template: PromptTemplate>(_ template: Template, input: Template.Input) async throws -> Template.Output {
+        if remaining > 0 { remaining -= 1; throw LLMError.offline }
+        return try template.decode(#"{"studied":"bank","variants":[{"text":"банк","context":""}]}"#)
+    }
 }
