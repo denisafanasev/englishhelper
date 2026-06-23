@@ -52,7 +52,8 @@ import Presentation
         try await waitUntil { vm.phase == .result }
         #expect(vm.phase == .result)
         #expect(vm.studied == "Could you give me a hand?")   // headline = studied rendering
-        #expect(vm.translation == "Это тестовый перевод.")    // understanding line = native
+        #expect(vm.translations.count == 3)                  // 3–5 native renderings (mock returns 3)
+        #expect(vm.translations.first == "Не могли бы вы мне помочь?")   // first = primary translation
     }
 
     @Test func understandTemplateIsFaithfulStudiedPlusNative() {
@@ -121,12 +122,12 @@ import Presentation
         let vm = makeVM()
         vm.source = "give me a hand"
         vm.selectMode(.explain)          // no result yet → just switches, no auto-run
-        #expect(vm.translation == nil)
+        #expect(vm.translations.isEmpty)
         vm.submit()
         try await waitUntil { vm.phase == .result }
         #expect(vm.phase == .result)
         #expect(vm.explanation != nil)
-        #expect(vm.translation == nil)   // explain mode never leaves a stale translation
+        #expect(vm.translations.isEmpty)   // explain mode never leaves a stale translation
     }
 
     /// Regression: toggling Translate/Explain WHILE a request is in flight must cancel-and-restart

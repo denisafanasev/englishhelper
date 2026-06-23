@@ -80,6 +80,55 @@ import Presentation
         vm.toggleSave(block)
         #expect(vm.isSaved(block))   // optimistic, immediate
     }
+
+    /// A connection failure during processing must NOT lose the photo, and must offer a retry.
+    @Test func connectionFailureKeepsImageAndAllowsRetry() async throws {
+        let image = Data([0x01, 0x02, 0x03, 0xFF])
+        let vm = makeVM(llm: OfflineLLM())
+        vm.selectMode(.translate)
+        vm.didPickFromLibrary(image)
+        try await waitUntil { vm.phase == .failed }
+        #expect(vm.phase == .failed)
+        #expect(vm.isOffline)
+        #expect(vm.imageData == image)   // the photo is retained, not lost
+        #expect(vm.canRetry)             // a retry of the same photo is offered
+    }
+
+    /// Retry re-runs the SAME photo; once the connection recovers it succeeds.
+    @Test func retryReusesTheSameImageAndSucceeds() async throws {
+        let image = Data([0xAB, 0xCD])
+        let vm = makeVM(llm: FlakyLLM(failuresBeforeSuccess: 1))
+        vm.selectMode(.translate)
+        vm.didPickFromLibrary(image)
+        try await waitUntil { vm.phase == .failed }
+        #expect(vm.canRetry)
+        vm.retry()                       // no need to re-pick the photo
+        try await waitUntil { vm.phase == .result }
+        #expect(vm.phase == .result)
+        #expect(vm.blocks.isEmpty == false)
+        #expect(vm.imageData == image)   // still the same photo
+    }
+}
+
+/// Always fails with a connection error — exercises the "photo kept + retry offered" path.
+private struct OfflineLLM: LLMClient {
+    func run<Template: PromptTemplate>(_ template: Template, input: Template.Input) async throws -> Template.Output {
+        throw LLMError.offline
+    }
+}
+
+/// Fails `failuresBeforeSuccess` times, then returns one translated block — simulates a recovered link.
+/// The view model calls this sequentially (fail, then retry), so the unguarded counter is safe here.
+private final class FlakyLLM: LLMClient, @unchecked Sendable {
+    nonisolated(unsafe) private var remaining: Int
+    init(failuresBeforeSuccess: Int) { self.remaining = failuresBeforeSuccess }
+    func run<Template: PromptTemplate>(_ template: Template, input: Template.Input) async throws -> Template.Output {
+        if remaining > 0 {
+            remaining -= 1
+            throw LLMError.offline
+        }
+        return try template.decode(#"{"blocks":[{"en":"Caution","ru":"Осторожно"}]}"#)
+    }
 }
 
 /// Returns an empty-blocks result regardless of input — used to exercise the no-text path.

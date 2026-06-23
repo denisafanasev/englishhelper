@@ -186,8 +186,8 @@ public struct InView: View {
         VStack(spacing: Tokens.Space.s16) {
             if let explanation = model.explanation {
                 explanationCard(explanation)
-            } else if let translation = model.translation {
-                translationCard(translation)
+            } else if !model.translations.isEmpty {
+                translationCard(model.translations)
             }
             EHButton(Loc.t("Новое выражение", "New phrase"),
                      icon: "arrow.triangle.2.circlepath", kind: .glass, fillWidth: true) {
@@ -197,8 +197,8 @@ public struct InView: View {
     }
 
     /// Translate mode: the studied-language rendering is the headline (play + bookmark + the saved
-    /// study item); the native translation sits below as the "understanding" line.
-    private func translationCard(_ translation: String) -> some View {
+    /// study item); 3–5 native renderings sit below as the "understanding" lines (first = primary).
+    private func translationCard(_ natives: [String]) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s12) {
             // Studied source + icon actions (Play · Copy · Save) in the header row, like the phrase cards.
             HStack(alignment: .top) {
@@ -243,10 +243,21 @@ public struct InView: View {
 
             Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)
 
-            Text(translation)
-                .textStyle(Tokens.Text.body)
-                .foregroundStyle(Tokens.Content.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            // 3–5 native renderings of the meaning — the first is the primary (most faithful); the
+            // rest are alternative phrasings, dimmed. Each can be copied on its own.
+            VStack(alignment: .leading, spacing: Tokens.Space.s12) {
+                ForEach(Array(natives.enumerated()), id: \.offset) { index, native in
+                    HStack(alignment: .top, spacing: Tokens.Space.s8) {
+                        Text(native)
+                            .textStyle(Tokens.Text.body)
+                            .foregroundStyle(index == 0 ? Tokens.Content.primary : Tokens.Content.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: Tokens.Space.s8)
+                        CopyButton(native, style: .icon,
+                                   accessibilityLabel: Loc.t("Скопировать перевод", "Copy translation"))
+                    }
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Tokens.Space.s16)

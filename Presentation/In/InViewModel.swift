@@ -34,7 +34,7 @@ public final class InViewModel {
     public private(set) var mode: Mode = .explain
     public var source: String = ""                       // editable transcript / typed input
     public private(set) var studied: String?             // input rendered in the studied language (headline + TTS)
-    public private(set) var translation: String?         // Translate mode: native rendering (the line below)
+    public private(set) var translations: [String] = []  // Translate mode: 3–5 native renderings (the lines below)
     public private(set) var explanation: ExpressionExplanation?   // Explain mode result (native)
     public private(set) var errorMessage: String?
     /// A SAVE failure shown independently of `phase` (the result stays on screen); `errorMessage`
@@ -133,7 +133,7 @@ public final class InViewModel {
         errorMessage = nil
         isOffline = false
         studied = nil
-        translation = nil
+        translations = []
         explanation = nil
         source = ""
         phase = .listening
@@ -224,13 +224,13 @@ public final class InViewModel {
                 case .translate:
                     let result = try await self.understand(text, studiedLanguage: studiedLang, nativeLanguage: nativeLang)
                     self.studied = result.studied         // headline + TTS
-                    self.translation = result.native      // understanding line
+                    self.translations = result.natives    // 3–5 native renderings
                     self.explanation = nil
                 case .explain:
                     let result = try await self.explain(text, studiedLanguage: studiedLang, nativeLanguage: nativeLang, image: explainImg, alternatives: explainAlts)
                     self.studied = result.studied
                     self.explanation = result
-                    self.translation = nil
+                    self.translations = []
                 }
                 self.isSaved = false
                 self.savedExpressionID = nil
@@ -270,7 +270,7 @@ public final class InViewModel {
             submit()
         } else {
             studied = nil
-            translation = nil
+            translations = []
             explanation = nil
             // Leaving results OR a failure: don't keep a stale result/error (whose Retry would re-run
             // the NEW mode) on screen — drop back to idle.
@@ -356,7 +356,7 @@ public final class InViewModel {
             // We study the STUDIED-language rendering (the headline), with the native translation as
             // its gloss. In Explain mode there's no direct gloss, so enrich derives it.
             let en = studied
-            let knownRU = translation
+            let knownRU = translations.first
             let generation = resultsGeneration
             Task { [weak self] in
                 guard let self else { return }
@@ -384,7 +384,7 @@ public final class InViewModel {
         captureTask?.cancel(); requestTask?.cancel(); playTask?.cancel()
         phase = .idle
         studied = nil
-        translation = nil
+        translations = []
         explanation = nil
         source = ""
         errorMessage = nil

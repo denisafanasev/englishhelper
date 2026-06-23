@@ -84,10 +84,20 @@ public struct PhotoTranslateView: View {
             // No extra top padding: StatusView pads s24 internally; with the source buttons below,
             // a second s24 pushed them under the tab bar. See VoiceView for the same fix.
             VStack(spacing: Tokens.Space.s16) {
+                // Keep the photo on screen so it's clearly NOT lost — Retry re-runs this same image.
+                if let image = uiImage {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(image.size.width / image.size.height, contentMode: .fit)
+                        .frame(maxHeight: 220)
+                        .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.card, style: .continuous))
+                }
                 StatusView(
                     systemImage: model.isOffline ? "wifi.slash" : "exclamationmark.triangle",
                     title: model.isOffline ? Loc.t("Нет соединения", "No connection") : Loc.t("Не получилось", "Something went wrong"),
-                    message: model.errorMessage
+                    message: model.errorMessage,
+                    actionTitle: model.canRetry ? Loc.t("Повторить", "Retry") : nil,
+                    action: model.canRetry ? { model.retry() } : nil
                 )
                 sourceButtons
             }
