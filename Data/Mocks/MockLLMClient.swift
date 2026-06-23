@@ -39,7 +39,7 @@ public final class MockLLMClient: LLMClient {
             ]}
             """
         case "understand":
-            return #"{"studied":"Could you give me a hand?","native":"Это тестовый перевод."}"#
+            return #"{"studied":"Could you give me a hand?","natives":["Не могли бы вы мне помочь?","Помогите, пожалуйста.","Можете подсобить?"]}"#
         case "explainExpression":
             return """
             {"studied":"give me a hand",

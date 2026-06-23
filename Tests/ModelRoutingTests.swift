@@ -39,7 +39,7 @@ import Presentation
     }
 
     @Test func interactorPassesProviderTierToTemplate() async throws {
-        let spy = TierSpyLLMClient(cannedJSON: #"{"studied":"x","native":"y"}"#)
+        let spy = TierSpyLLMClient(cannedJSON: #"{"studied":"x","natives":["y"]}"#)
         let interactor = UnderstandInteractor(llm: spy, history: MockHistoryRepository(), tier: { .standard })
         _ = try await interactor("hi", studiedLanguage: "English", nativeLanguage: "Russian")
         #expect(spy.captured == .standard)   // the provider's tier reached the template (→ the client)

@@ -21,11 +21,12 @@ public struct HowToSayResult: Codable, Sendable, Equatable {
 public struct Understanding: Codable, Sendable, Equatable {
     /// The input rendered in the STUDIED language (headline + spoken).
     public let studied: String
-    /// The input rendered in the NATIVE language (the understanding line).
-    public let native: String
-    public init(studied: String, native: String) {
+    /// 3–5 distinct natural renderings of the meaning in the NATIVE language (different valid
+    /// translations / phrasings). At least one; the first is the primary (most faithful).
+    public let natives: [String]
+    public init(studied: String, natives: [String]) {
         self.studied = studied
-        self.native = native
+        self.natives = natives
     }
 }
 
@@ -395,28 +396,31 @@ public struct UnderstandTemplate: PromptTemplate {
     public var systemPrompt: String {
         """
         The user wants to understand some text. It may be in \(studiedLanguage), in \(nativeLanguage),
-        or in ANY other language — detect the source language automatically. Provide a FAITHFUL
-        translation that preserves the exact meaning and register; do NOT compose, embellish, add
-        commentary, or change the register.
-        Return TWO fields, each translated independently from the ORIGINAL text (never translate one
-        translation into another):
+        or in ANY other language — detect the source language automatically. Stay FAITHFUL to the exact
+        meaning and register; do NOT change the register or add commentary.
+        Return:
         - "studied": the text in \(studiedLanguage) (if the input is already in \(studiedLanguage),
-          copy it verbatim).
-        - "native": the text in \(nativeLanguage) (if the input is already in \(nativeLanguage),
-          copy it verbatim).
+          copy it verbatim). Translate from the ORIGINAL.
+        - "natives": 3 to 5 DISTINCT natural renderings of the same meaning in \(nativeLanguage) —
+          different valid phrasings or synonyms a native speaker might use — ordered with the most
+          faithful/literal FIRST, then more idiomatic alternatives. Each must preserve the meaning and
+          register. Only return fewer than 3 if the text genuinely has no other natural rendering.
+          Do NOT pad with near-identical duplicates.
         \(plainTextRule)
         """
     }
 
     public var outputJSONSchema: String {
-        #"{"type":"object","properties":{"studied":{"type":"string"},"native":{"type":"string"}},"required":["studied","native"]}"#
+        #"{"type":"object","properties":{"studied":{"type":"string"},"natives":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":5}},"required":["studied","natives"]}"#
     }
 
     public func userMessage(for input: String) -> String { input }
 
     public func decode(_ rawJSON: String) throws -> Understanding {
         let raw = try decodeJSON(Understanding.self, from: rawJSON)
-        return Understanding(studied: PlainText.clean(raw.studied), native: PlainText.clean(raw.native))
+        let natives = raw.natives.map(PlainText.clean).filter { !$0.isEmpty }
+        guard !natives.isEmpty else { throw LLMError.invalidOutput("understand: no native rendering") }
+        return Understanding(studied: PlainText.clean(raw.studied), natives: natives)
     }
 }
 
