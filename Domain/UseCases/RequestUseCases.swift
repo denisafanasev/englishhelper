@@ -209,7 +209,7 @@ public struct UnderstandInteractor: UnderstandUseCase {
         // card headlines, what TTS speaks in the studied language, and what saving files as the
         // study-card front), with the native translation as the result. Falls back to the raw input.
         let studied = result.studied.isEmpty ? text : result.studied
-        try? await history.append(HistoryEntry(inputText: studied, result: .translate(ru: result.natives.first ?? "")))
+        try? await history.append(HistoryEntry(inputText: studied, result: .translate(ru: result.variants.first?.text ?? "")))
         return result
     }
 }

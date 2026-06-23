@@ -34,7 +34,7 @@ public final class InViewModel {
     public private(set) var mode: Mode = .explain
     public var source: String = ""                       // editable transcript / typed input
     public private(set) var studied: String?             // input rendered in the studied language (headline + TTS)
-    public private(set) var translations: [String] = []  // Translate mode: 3–5 native renderings (the lines below)
+    public private(set) var translations: [TranslationVariant] = []  // Translate mode: 1–5 translations + context
     public private(set) var explanation: ExpressionExplanation?   // Explain mode result (native)
     public private(set) var errorMessage: String?
     /// A SAVE failure shown independently of `phase` (the result stays on screen); `errorMessage`
@@ -224,7 +224,7 @@ public final class InViewModel {
                 case .translate:
                     let result = try await self.understand(text, studiedLanguage: studiedLang, nativeLanguage: nativeLang)
                     self.studied = result.studied         // headline + TTS
-                    self.translations = result.natives    // 3–5 native renderings
+                    self.translations = result.variants   // 1–5 translations (+ context per variant)
                     self.explanation = nil
                 case .explain:
                     let result = try await self.explain(text, studiedLanguage: studiedLang, nativeLanguage: nativeLang, image: explainImg, alternatives: explainAlts)
@@ -356,7 +356,7 @@ public final class InViewModel {
             // We study the STUDIED-language rendering (the headline), with the native translation as
             // its gloss. In Explain mode there's no direct gloss, so enrich derives it.
             let en = studied
-            let knownRU = translations.first
+            let knownRU = translations.first?.text
             let generation = resultsGeneration
             Task { [weak self] in
                 guard let self else { return }

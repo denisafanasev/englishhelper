@@ -47,13 +47,14 @@ import Presentation
         UserDefaults.standard.set("english", forKey: "studiedLanguage")
         let vm = makeVM()
         vm.selectMode(.translate)                            // default is now Explain; test Translate
-        vm.source = "Could you give me a hand?"
+        vm.source = "bank"
         vm.submit()
         try await waitUntil { vm.phase == .result }
         #expect(vm.phase == .result)
-        #expect(vm.studied == "Could you give me a hand?")   // headline = studied rendering
-        #expect(vm.translations.count == 3)                  // 3–5 native renderings (mock returns 3)
-        #expect(vm.translations.first == "Не могли бы вы мне помочь?")   // first = primary translation
+        #expect(vm.studied == "bank")                        // headline = studied rendering
+        #expect(vm.translations.count == 2)                  // a word with two senses → two variants
+        #expect(vm.translations.first?.text == "банк")       // first translation
+        #expect(vm.translations.first?.context == "финансовое учреждение")   // with its context note
     }
 
     @Test func understandTemplateIsFaithfulStudiedPlusNative() {
@@ -103,16 +104,16 @@ import Presentation
         let list = StudyListInteractor(repository: repo)
         var stored: [Domain.Expression] = []
         let clock = ContinuousClock(); let start = clock.now
-        while !stored.contains(where: { $0.en == "Could you give me a hand?" }) {
+        while !stored.contains(where: { $0.en == "bank" }) {
             if clock.now - start > .seconds(2) { break }
             try await Task.sleep(for: .milliseconds(10))
             stored = (try? await list.list()) ?? []
         }
-        // Front = the studied rendering (mock "Could you give me a hand?") — NOT the raw input
-        // "Bonjour le monde" nor the native gloss "Это тестовый перевод.".
-        #expect(stored.contains { $0.en == "Could you give me a hand?" })
+        // Front = the studied rendering (mock "bank") — NOT the raw input "Bonjour le monde" nor a
+        // native gloss ("банк").
+        #expect(stored.contains { $0.en == "bank" })
         #expect(!stored.contains { $0.en == "Bonjour le monde" })
-        #expect(!stored.contains { $0.en == "Это тестовый перевод." })
+        #expect(!stored.contains { $0.en == "банк" })
     }
 
     // MARK: Explain mode

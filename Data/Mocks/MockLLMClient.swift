@@ -39,7 +39,7 @@ public final class MockLLMClient: LLMClient {
             ]}
             """
         case "understand":
-            return #"{"studied":"Could you give me a hand?","natives":["Не могли бы вы мне помочь?","Помогите, пожалуйста.","Можете подсобить?"]}"#
+            return #"{"studied":"bank","variants":[{"text":"банк","context":"финансовое учреждение"},{"text":"берег","context":"берег реки"}]}"#
         case "explainExpression":
             return """
             {"studied":"give me a hand",
