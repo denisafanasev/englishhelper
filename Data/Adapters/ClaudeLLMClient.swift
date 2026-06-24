@@ -92,13 +92,18 @@ public final class ClaudeLLMClient: LLMClient {
         // Route to the model tier the template asks for: plain translation → fast model (Haiku),
         // everything else → standard (Sonnet). Falls back to the standard model if no fast one is set.
         let modelName = template.modelTier == .fast ? fastModel : model
+        // The `effort` knob is only honoured by the reasoning-capable tiers (Opus / Sonnet 4.6+). Haiku
+        // 4.5 hard-REJECTS it with HTTP 400 "This model does not support the effort parameter", which
+        // would 400 EVERY request routed to the fast model (plain translate defaults to Haiku) — so omit
+        // `output_config` entirely whenever the resolved model is Haiku.
+        let supportsEffort = !modelName.localizedCaseInsensitiveContains("haiku")
         let body = RequestBody(
             model: modelName,
             max_tokens: template.maxOutputTokens,
             system: system,
             messages: [.init(role: "user", content: content)],
             thinking: .init(type: "disabled"),
-            output_config: .init(effort: fast ? "low" : "medium")
+            output_config: supportsEffort ? .init(effort: fast ? "low" : "medium") : nil
         )
 
         var request = URLRequest(url: endpoint)
