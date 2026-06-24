@@ -49,8 +49,6 @@ public final class InViewModel {
     /// Bumped on every new result so an in-flight save can tell "user un-saved" from "result was
     /// regenerated" and not silently delete a just-bookmarked expression.
     private var resultsGeneration = 0
-    private var explainImage: Data?          // photo context for an Explain routed from See it
-    private var explainImageText: String?    // the source text that photo context belongs to
     private var explainAlternatives: [String] = []   // sibling variants to contrast (Say it "why this?")
     private var explainAlternativesText: String?     // the source text those alternatives belong to
 
@@ -209,9 +207,8 @@ public final class InViewModel {
         let studiedLang = StudiedLanguage.current.promptName
         let nativeLang = TargetLanguage.current.promptName
         let mode = self.mode
-        // Use the routed photo context / sibling-variant context only while the input still matches
-        // what each was captured for (a user edit of `source` invalidates them).
-        let explainImg = (mode == .explain && explainImageText == text) ? explainImage : nil
+        // Use the routed sibling-variant context only while the input still matches what it was
+        // captured for (a user edit of `source` invalidates it).
         let explainAlts = (mode == .explain && explainAlternativesText == text) ? explainAlternatives : []
         requestTask?.cancel()
         phase = .processing
@@ -227,7 +224,7 @@ public final class InViewModel {
                     self.translations = result.variants   // 1–5 translations (+ context per variant)
                     self.explanation = nil
                 case .explain:
-                    let result = try await self.explain(text, studiedLanguage: studiedLang, nativeLanguage: nativeLang, image: explainImg, alternatives: explainAlts)
+                    let result = try await self.explain(text, studiedLanguage: studiedLang, nativeLanguage: nativeLang, image: nil, alternatives: explainAlts)
                     self.studied = result.studied
                     self.explanation = result
                     self.translations = []
@@ -249,13 +246,12 @@ public final class InViewModel {
         }
     }
 
-    /// Open this screen in Explain mode for an externally-supplied phrase (routed from See it /
-    /// History), optionally with a photo as visual context, and run it immediately.
-    public func startExplain(text: String, image: Data?, alternatives: [String] = []) {
+    /// Open this screen in Explain mode for an externally-supplied phrase (routed from See it / History
+    /// / Say it) and run it immediately. The phrase is explained on its own — no source-photo context;
+    /// `alternatives` (sibling Say-it phrasings) is the only extra context, used to contrast registers.
+    public func startExplain(text: String, alternatives: [String] = []) {
         mode = .explain
         source = text
-        explainImage = image
-        explainImageText = image == nil ? nil : text
         explainAlternatives = alternatives
         explainAlternativesText = alternatives.isEmpty ? nil : text
         submit()
@@ -392,8 +388,6 @@ public final class InViewModel {
         isPlaying = false
         isSaved = false
         savedExpressionID = nil
-        explainImage = nil
-        explainImageText = nil
         explainAlternatives = []
         explainAlternativesText = nil
     }

@@ -266,7 +266,10 @@ public struct PhotoTranslateView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(Loc.t("Озвучить", "Play"))
 
-                Button { ui.pendingExplain = ExplainRequest(text: block.en, imageData: model.imageData) } label: {
+                // Explain ONLY this card's phrase, in its own right — NOT in the photo's context. The
+                // photo is just where the phrase was found; the explanation should generalise (what the
+                // expression means broadly), so we deliberately do NOT carry the image along.
+                Button { ui.pendingExplain = ExplainRequest(text: block.en) } label: {
                     Image(systemName: "lightbulb")
                         .font(.system(size: Tokens.Icon.cardAction, weight: .medium))
                         .foregroundStyle(Tokens.Content.tertiary)

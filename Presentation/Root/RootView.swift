@@ -116,7 +116,7 @@ public struct RootView: View {
                 .onChange(of: ui.pendingExplain) { _, request in
                     guard let request else { return }
                     selection = "in"
-                    inbound.startExplain(text: request.text, image: request.imageData, alternatives: request.alternatives)
+                    inbound.startExplain(text: request.text, alternatives: request.alternatives)
                     ui.pendingExplain = nil
                 }
                 .sheet(isPresented: $ui.showSettings) {
@@ -151,7 +151,7 @@ public struct RootView: View {
         switch route {
         case .explainText(let text):
             selection = "in"
-            inbound.startExplain(text: text, image: nil)
+            inbound.startExplain(text: text)
         case .explainImage(let data):
             selection = "camera"
             photo.selectMode(.explain)

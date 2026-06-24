@@ -204,6 +204,31 @@ import Presentation
         #expect(vm.phase == .result)
         #expect(vm.translations.isEmpty == false)
     }
+
+    /// Regression: explaining a phrase routed from a See it card must NOT carry the source photo — the
+    /// explanation should generalise (what the phrase means on its own), not describe the whole photo.
+    @Test func startExplainCarriesNoPhotoContext() async throws {
+        UserDefaults.standard.set("russian", forKey: "targetLanguage")
+        UserDefaults.standard.set("english", forKey: "studiedLanguage")
+        let spy = ExplainImageSpyLLM()
+        let vm = makeVM(llm: spy)
+        vm.startExplain(text: "NAUGHTY BOY")          // as if tapped from a See it / Translate block
+        try await waitUntil { vm.phase == .result }
+        #expect(vm.phase == .result)
+        #expect(vm.explanation != nil)
+        #expect(spy.explainHadImage == false)         // no image attached → explained broadly, not in-photo
+    }
+}
+
+/// Records whether the Explain template carried an attached image, then defers to the mock for a valid
+/// response — proves the See it → Explain handoff sends just the phrase, WITHOUT the source photo.
+private final class ExplainImageSpyLLM: LLMClient, @unchecked Sendable {
+    nonisolated(unsafe) private(set) var explainHadImage: Bool?
+    private let backing = MockLLMClient()
+    func run<Template: PromptTemplate>(_ template: Template, input: Template.Input) async throws -> Template.Output {
+        if template.id == "explainExpression" { explainHadImage = template.image(for: input) != nil }
+        return try await backing.run(template, input: input)
+    }
 }
 
 /// Fails once (the previous-mode error), then returns a valid translation — verifies that switching

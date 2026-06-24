@@ -134,16 +134,14 @@ public final class SayItModelStore {
 }
 
 /// A request to open the "Понять"/Get it screen in Explain mode for a specific phrase. Used to route
-/// the "Explain" action from See it / History straight to the real Get it screen (no extra sheet),
-/// optionally carrying a photo as visual context (from See it).
+/// the "Explain" action from See it / History / Say it straight to the real Get it screen (no extra
+/// sheet). The phrase is explained in its OWN right — never in a source-photo's context.
 public struct ExplainRequest: Equatable, Sendable {
     public let text: String
-    public let imageData: Data?
     /// Sibling phrasings to contrast against — set when routing a per-variant "why this one?" from Say it.
     public let alternatives: [String]
-    public init(text: String, imageData: Data? = nil, alternatives: [String] = []) {
+    public init(text: String, alternatives: [String] = []) {
         self.text = text
-        self.imageData = imageData
         self.alternatives = alternatives
     }
 }

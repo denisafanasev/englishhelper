@@ -216,7 +216,7 @@ public struct InView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(Loc.t("Озвучить", "Play"))
 
-                    Button { model.startExplain(text: model.sourceText, image: nil) } label: {
+                    Button { model.startExplain(text: model.sourceText) } label: {
                         Image(systemName: "lightbulb")
                             .font(.system(size: Tokens.Icon.cardAction, weight: .medium))
                             .foregroundStyle(Tokens.Content.tertiary)
