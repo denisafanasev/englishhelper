@@ -415,10 +415,14 @@ public struct UnderstandTemplate: PromptTemplate {
         Return:
         - "studied": the text in \(studiedLanguage) (if already in \(studiedLanguage), copy it verbatim).
         - "variants": the translation(s) into \(nativeLanguage). Return MORE THAN ONE only when the
-          source GENUINELY has different translations depending on context or sense — for example a
-          single word with several distinct meanings. For an unambiguous word, or for ANY longer phrase
-          or sentence with one faithful translation, return EXACTLY ONE variant. NEVER pad with
-          near-synonyms or stylistic rewordings. Up to 5 maximum, ordered most common first.
+          source has genuinely DISTINCT meanings or senses that translate differently depending on
+          context — judged by MEANING, not by length. This applies equally to a single word (e.g.
+          "bank" = a financial institution OR a riverbank) AND to a multi-word expression or idiom
+          (e.g. "night and day" = the two times of day taken literally, vs. its idiomatic senses
+          "completely different" or "around the clock"): a phrase is NOT automatically single-sense.
+          When the text has just one faithful meaning, return EXACTLY ONE variant. NEVER pad with
+          near-synonyms, word-order swaps, or stylistic rewordings. Up to 5 maximum, ordered most
+          common first.
           Each variant is an object:
             * "text": the translation in \(nativeLanguage).
             * "context": a SHORT note in \(nativeLanguage) saying in which sense/context this translation
