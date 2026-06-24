@@ -43,4 +43,17 @@ import Foundation
         let dir = tempDir(); defer { try? FileManager.default.removeItem(at: dir) }
         #expect(SharedInbox.consume(in: dir) == nil)
     }
+
+    // MARK: Share notification copy (posted by the extension to foreground the app)
+
+    @Test func notificationCopyIsLocalizedAndKindAware() {
+        // Image vs text pick the See it / Get it wording; language selects the locale; default is English.
+        #expect(ShareNotification.text(isImage: true,  language: "ru").body == "Фото готово — нажмите, чтобы перевести")
+        #expect(ShareNotification.text(isImage: false, language: "ru").body == "Текст готов — нажмите, чтобы объяснить")
+        #expect(ShareNotification.text(isImage: true,  language: "en").body == "Photo ready — tap to translate")
+        #expect(ShareNotification.text(isImage: false, language: "de").body.contains("erklären"))
+        // Unknown language falls back to English, not empty.
+        #expect(ShareNotification.text(isImage: true, language: "zz").body == "Photo ready — tap to translate")
+        #expect(ShareNotification.text(isImage: true, language: "ru").title == "EnglishHelper")
+    }
 }

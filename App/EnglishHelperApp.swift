@@ -52,13 +52,19 @@ struct EnglishHelperApp: App {
                 network: network,
                 consumeShared: {
                     // Bridge the App-Group payload (App target) to the Presentation route type.
-                    switch SharedInbox.consume() {
+                    let payload = SharedInbox.consume()
+                    if payload != nil { ShareSupport.clearDeliveredShareNotification() }
+                    switch payload {
                     case .text(let text): return .explainText(text)
                     case .image(let data): return .explainImage(data)
                     case nil: return nil
                     }
                 }
             )
+            // Mirror the interface language to the App Group + ensure notification permission, so the
+            // Share Extension can post a tappable, localized "open EnglishHelper" notification (iOS bars
+            // the extension from foregrounding the app directly).
+            .task { await ShareSupport.prepare() }
         }
     }
 }

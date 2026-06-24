@@ -3,12 +3,15 @@
 //  EnglishHelper — Share Extension
 //
 //  Runs WITHOUT a compose UI: on launch it grabs the shared image or text, writes it to the App Group
-//  (`SharedInbox`), opens the host app via the `englishhelper://` scheme, and finishes. The app then
-//  routes it — image → See it / Explain, text → Get it / Explain.
+//  (`SharedInbox`), then posts a tappable local notification so the user can foreground EnglishHelper
+//  (iOS bars an extension from launching its host app — the old `openURL:` hack is force-failed on
+//  iOS 18+). The app consumes the App-Group payload on activation and routes it — image → See it /
+//  Explain, text → Get it / Explain.
 //
 
 import UIKit
 import UniformTypeIdentifiers
+import UserNotifications
 
 final class ShareViewController: UIViewController {
 
@@ -21,23 +24,24 @@ final class ShareViewController: UIViewController {
         let providers = (extensionContext?.inputItems as? [NSExtensionItem])?
             .compactMap(\.attachments).flatMap { $0 } ?? []
 
-        // Prefer an image; otherwise fall back to text, then a URL (stored as its string).
+        // Prefer an image; otherwise fall back to text, then a URL (stored as its string). `wroteImage`
+        // is nil when nothing usable was shared (so we don't post a spurious notification).
+        var wroteImage: Bool?
         if let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.image.identifier) }),
            let data = await loadImage(provider) {
             SharedInbox.write(.image(data), now: Date().timeIntervalSince1970)
+            wroteImage = true
         } else if let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) }),
                   let text = await loadText(provider) {
             SharedInbox.write(.text(text), now: Date().timeIntervalSince1970)
+            wroteImage = false
         } else if let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.url.identifier) }),
                   let url = await loadURL(provider) {
             SharedInbox.write(.text(url.absoluteString), now: Date().timeIntervalSince1970)
+            wroteImage = false
         }
 
-        openHostApp()
-        // CRITICAL: give iOS a beat to FOREGROUND the host app before we finish. Completing the request
-        // immediately hands the foreground back to the SOURCE app and beats the pending open — so the
-        // payload arrives but the app never comes forward. A short wait lets the app switch win.
-        try? await Task.sleep(for: .milliseconds(700))
+        if let isImage = wroteImage { await notifyHostApp(isImage: isImage) }
         extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
     }
 
@@ -66,22 +70,25 @@ final class ShareViewController: UIViewController {
         return item as? URL
     }
 
-    // MARK: Host-app launch
+    // MARK: Bring the host app forward
 
-    /// Extensions can't touch `UIApplication.shared`; walk the responder chain to a UIApplication and
-    /// invoke `openURL:` on it — the standard Share-Extension → host-app launch (foregrounds the app).
-    /// (No `extensionContext.open` fallback: for share extensions it only background-delivers the URL
-    /// without foregrounding, which is exactly the failure we're avoiding.)
-    private func openHostApp() {
-        guard let url = URL(string: "englishhelper://share") else { return }
-        let selector = NSSelectorFromString("openURL:")
-        var responder: UIResponder? = self
-        while let current = responder {
-            if let application = current as? UIApplication, application.responds(to: selector) {
-                application.perform(selector, with: url)
-                return
-            }
-            responder = current.next
-        }
+    /// iOS won't let an extension foreground its host app (the `openURL:` responder-chain hack is force-
+    /// failed on iOS 18+). Apple's sanctioned alternative: post a local notification the user taps to
+    /// open EnglishHelper, which then consumes the App-Group payload. Posts only if the app already holds
+    /// notification permission (requested by the app on launch — an extension can't reliably request it);
+    /// if not, the payload still waits in the App Group and is picked up next time the app is opened.
+    private func notifyHostApp(isImage: Bool) async {
+        let center = UNUserNotificationCenter.current()
+        let status = await center.notificationSettings().authorizationStatus
+        guard status == .authorized || status == .provisional || status == .ephemeral else { return }
+
+        let copy = ShareNotification.text(isImage: isImage, language: SharedLanguage.current())
+        let content = UNMutableNotificationContent()
+        content.title = copy.title
+        content.body = copy.body
+        content.sound = .default
+        let request = UNNotificationRequest(
+            identifier: ShareNotification.requestIdentifier, content: content, trigger: nil)
+        try? await center.add(request)
     }
 }
