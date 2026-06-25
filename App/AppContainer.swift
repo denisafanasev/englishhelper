@@ -195,7 +195,8 @@ public final class AppContainer: Sendable {
             pronounce: pronounce,
             saveExpression: saveExpression,
             studyList: studyList,
-            isConfigured: config.isClaudeConfigured
+            isConfigured: config.isClaudeConfigured,
+            longTask: LongTaskCoordinator()
         )
     }
 
@@ -207,7 +208,8 @@ public final class AppContainer: Sendable {
             pronounce: pronounce,
             saveExpression: saveExpression,
             studyList: studyList,
-            isConfigured: config.isClaudeConfigured
+            isConfigured: config.isClaudeConfigured,
+            longTask: LongTaskCoordinator()
         )
     }
 

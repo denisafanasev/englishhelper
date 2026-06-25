@@ -60,6 +60,9 @@ public final class InViewModel {
     private let saveExpression: any SaveExpressionUseCase
     private let studyList: any StudyListUseCase
     private let isConfigured: Bool
+    /// Keeps a slow explanation/translation alive briefly after backgrounding + notifies on completion.
+    /// Nil in tests/previews (then it's a transparent pass-through).
+    private let longTask: (any LongTaskCoordinating)?
 
     private var captureTask: Task<Void, Never>?
     private var requestTask: Task<Void, Never>?
@@ -74,7 +77,8 @@ public final class InViewModel {
         pronounce: any PlayPronunciationUseCase,
         saveExpression: any SaveExpressionUseCase,
         studyList: any StudyListUseCase,
-        isConfigured: Bool
+        isConfigured: Bool,
+        longTask: (any LongTaskCoordinating)? = nil
     ) {
         self.understand = understand
         self.explain = explain
@@ -83,6 +87,7 @@ public final class InViewModel {
         self.saveExpression = saveExpression
         self.studyList = studyList
         self.isConfigured = isConfigured
+        self.longTask = longTask
     }
 
     // MARK: Derived
@@ -219,12 +224,16 @@ public final class InViewModel {
             do {
                 switch mode {
                 case .translate:
-                    let result = try await self.understand(text, studiedLanguage: studiedLang, nativeLanguage: nativeLang)
+                    let result = try await withBackgroundCompletion(self.longTask, .translation) {
+                        try await self.understand(text, studiedLanguage: studiedLang, nativeLanguage: nativeLang)
+                    }
                     self.studied = result.studied         // headline + TTS
                     self.translations = result.variants   // 1–5 translations (+ context per variant)
                     self.explanation = nil
                 case .explain:
-                    let result = try await self.explain(text, studiedLanguage: studiedLang, nativeLanguage: nativeLang, image: nil, alternatives: explainAlts)
+                    let result = try await withBackgroundCompletion(self.longTask, .explanation) {
+                        try await self.explain(text, studiedLanguage: studiedLang, nativeLanguage: nativeLang, image: nil, alternatives: explainAlts)
+                    }
                     self.studied = result.studied
                     self.explanation = result
                     self.translations = []

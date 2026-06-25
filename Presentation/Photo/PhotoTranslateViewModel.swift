@@ -59,6 +59,9 @@ public final class PhotoTranslateViewModel {
     private let saveExpression: any SaveExpressionUseCase
     private let studyList: any StudyListUseCase
     private let isConfigured: Bool
+    /// Keeps a slow OCR/translate job alive briefly after backgrounding + notifies on completion. Nil in
+    /// tests/previews (then it's a transparent pass-through).
+    private let longTask: (any LongTaskCoordinating)?
 
     private var requestTask: Task<Void, Never>?
     private var playTask: Task<Void, Never>?
@@ -70,7 +73,8 @@ public final class PhotoTranslateViewModel {
         pronounce: any PlayPronunciationUseCase,
         saveExpression: any SaveExpressionUseCase,
         studyList: any StudyListUseCase,
-        isConfigured: Bool
+        isConfigured: Bool,
+        longTask: (any LongTaskCoordinating)? = nil
     ) {
         self.photoTranslate = photoTranslate
         self.photoExplain = photoExplain
@@ -78,6 +82,7 @@ public final class PhotoTranslateViewModel {
         self.saveExpression = saveExpression
         self.studyList = studyList
         self.isConfigured = isConfigured
+        self.longTask = longTask
     }
 
     /// Switch Explain/Translate. If a photo is already loaded, re-run it in the new mode; otherwise
@@ -175,9 +180,13 @@ public final class PhotoTranslateViewModel {
                 let image = RecognizableImage(data: data)
                 switch mode {
                 case .translate:
-                    self.blocks = try await self.photoTranslate(image, studiedLanguage: studied, nativeLanguage: native)
+                    self.blocks = try await withBackgroundCompletion(self.longTask, .photoTranslate) {
+                        try await self.photoTranslate(image, studiedLanguage: studied, nativeLanguage: native)
+                    }
                 case .explain:
-                    self.explanation = try await self.photoExplain(image, studiedLanguage: studied, nativeLanguage: native)
+                    self.explanation = try await withBackgroundCompletion(self.longTask, .photoExplain) {
+                        try await self.photoExplain(image, studiedLanguage: studied, nativeLanguage: native)
+                    }
                 }
                 self.resultsGeneration += 1
                 self.phase = .result
