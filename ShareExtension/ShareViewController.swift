@@ -41,7 +41,13 @@ final class ShareViewController: UIViewController {
             wroteImage = false
         }
 
-        if let isImage = wroteImage { await notifyHostApp(isImage: isImage) }
+        if let isImage = wroteImage {
+            await notifyHostApp(isImage: isImage)   // delayed fallback the user can tap if auto-open is blocked
+            openHostApp()                            // best-effort: bring EnglishHelper forward automatically
+            // Give iOS a beat to perform the app switch before we finish — completing immediately hands the
+            // foreground back to the SOURCE app and can beat the pending open.
+            try? await Task.sleep(for: .milliseconds(500))
+        }
         extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
     }
 
@@ -87,8 +93,34 @@ final class ShareViewController: UIViewController {
         content.title = copy.title
         content.body = copy.body
         content.sound = .default
+        // Fire after a short delay, NOT immediately: if the auto-open (openHostApp) succeeds, the app
+        // consumes the payload and cancels this still-PENDING notification before it shows — so a banner
+        // only appears when automatic foregrounding was actually blocked by iOS.
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 2, repeats: false)
         let request = UNNotificationRequest(
-            identifier: ShareNotification.requestIdentifier, content: content, trigger: nil)
+            identifier: ShareNotification.requestIdentifier, content: content, trigger: trigger)
         try? await center.add(request)
+    }
+
+    // MARK: Best-effort automatic foreground
+
+    /// Bring the host app forward WITHOUT a tap. iOS bars extensions from launching their host app and
+    /// FORCE-FAILS the deprecated 1-arg `openURL:` (iOS 18+); the non-deprecated
+    /// `open(_:options:completionHandler:)` is sometimes still honored via the responder chain, so we
+    /// invoke THAT selector by its IMP. If iOS blocks it too, the delayed notification is the fallback.
+    private func openHostApp() {
+        guard let url = URL(string: "englishhelper://share") else { return }
+        let selector = NSSelectorFromString("openURL:options:completionHandler:")
+        var responder: UIResponder? = self
+        while let current = responder {
+            if let app = current as? UIApplication, app.responds(to: selector) {
+                typealias OpenURLIMP = @convention(c)
+                    (NSObject, Selector, NSURL, NSDictionary, AnyObject?) -> Void
+                let openURL = unsafeBitCast(app.method(for: selector), to: OpenURLIMP.self)
+                openURL(app, selector, url as NSURL, NSDictionary(), nil)
+                return
+            }
+            responder = current.next
+        }
     }
 }

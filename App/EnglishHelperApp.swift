@@ -53,7 +53,7 @@ struct EnglishHelperApp: App {
                 consumeShared: {
                     // Bridge the App-Group payload (App target) to the Presentation route type.
                     let payload = SharedInbox.consume()
-                    if payload != nil { ShareSupport.clearDeliveredShareNotification() }
+                    if payload != nil { ShareSupport.clearShareNotification() }
                     switch payload {
                     case .text(let text): return .explainText(text)
                     case .image(let data): return .explainImage(data)

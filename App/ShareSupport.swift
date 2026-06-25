@@ -25,9 +25,12 @@ enum ShareSupport {
         }
     }
 
-    /// Remove the share notification once its payload has been consumed (so it doesn't linger).
-    static func clearDeliveredShareNotification() {
-        UNUserNotificationCenter.current()
-            .removeDeliveredNotifications(withIdentifiers: [ShareNotification.requestIdentifier])
+    /// Cancel the PENDING (delayed) share notification and clear any delivered one, once the payload has
+    /// been consumed — so when automatic foregrounding worked, the fallback banner never fires.
+    static func clearShareNotification() {
+        let center = UNUserNotificationCenter.current()
+        let ids = [ShareNotification.requestIdentifier]
+        center.removePendingNotificationRequests(withIdentifiers: ids)
+        center.removeDeliveredNotifications(withIdentifiers: ids)
     }
 }
