@@ -78,8 +78,12 @@ public final class ClaudeLLMClient: LLMClient {
         """
         var content: [ContentBlock] = []
         if let imageData = template.image(for: input) {
-            content.append(.image(mediaType: Self.mediaType(for: imageData),
-                                   base64: imageData.base64EncodedString()))
+            // Claude's vision API rejects HEIC (the default iPhone format) and oversized images, so
+            // normalize to a downscaled JPEG — covers EVERY source (camera, library, share-sheet HEIC).
+            // Falls back to the raw bytes + magic-byte media type only if it isn't a decodable image.
+            let (bytes, mediaType) = ImageNormalizer.jpegForUpload(imageData)
+                .map { ($0, "image/jpeg") } ?? (imageData, Self.mediaType(for: imageData))
+            content.append(.image(mediaType: mediaType, base64: bytes.base64EncodedString()))
         }
         content.append(.text(template.userMessage(for: input)))
 
