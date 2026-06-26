@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import WidgetKit
 import Adapters
 import Presentation
 
@@ -61,10 +62,16 @@ struct EnglishHelperApp: App {
                     }
                 }
             )
-            // Mirror the interface language to the App Group + ensure notification permission, so the
-            // Share Extension can post a tappable, localized "open EnglishHelper" notification (iOS bars
-            // the extension from foregrounding the app directly).
-            .task { await ShareSupport.prepare() }
+            .task {
+                // Mirror the interface language to the App Group + ensure notification permission, so the
+                // Share Extension can post a tappable, localized "open EnglishHelper" notification (iOS
+                // bars the extension from foregrounding the app directly).
+                await ShareSupport.prepare()
+                // Force already-placed Lock Screen widgets to re-render with this build's code. Without
+                // this they keep a CACHED render after an app update (our widgets use a `.never` refresh
+                // policy, so iOS never re-fetches their timeline on its own).
+                WidgetCenter.shared.reloadAllTimelines()
+            }
         }
     }
 }
