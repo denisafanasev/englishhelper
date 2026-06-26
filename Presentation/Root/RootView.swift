@@ -104,14 +104,17 @@ public struct RootView: View {
                     // fall through to the App-Group consume. Idempotent on purpose: iOS 26 can fire this
                     // twice per tap, and re-selecting the same tab / mode is a no-op.
                     switch url.host {
-                    case "seeit":
-                        selection = "camera"; photo.selectMode(.explain)
+                    case "seeit", "seeit-translate":
+                        selection = "camera"
+                        photo.selectMode(url.host == "seeit-translate" ? .translate : .explain)
                         if CameraPicker.isAvailable { photo.cameraTapped() }   // open the camera straight away
-                    case "getit":
-                        selection = "in"; inbound.selectMode(.explain)
+                    case "getit", "getit-translate":
+                        selection = "in"
+                        inbound.selectMode(url.host == "getit-translate" ? .translate : .explain)
                         inbound.beginVoiceInput()                              // turn the mic on for input
-                    case "sayit":
-                        selection = "out"; out.selectMode(.howToSay)
+                    case "sayit", "sayit-what":
+                        selection = "out"
+                        out.selectMode(url.host == "sayit-what" ? .whatToSay : .howToSay)
                         out.beginVoiceInput()
                     default:
                         handleShared()
