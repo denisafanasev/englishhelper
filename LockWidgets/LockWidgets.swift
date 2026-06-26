@@ -52,7 +52,11 @@ private struct WidgetFace: View {
                     .offset(x: 5, y: 5)
             }
             .widgetAccentable()
-            .containerBackground(for: .widget) { AccessoryWidgetBackground() }
+            .containerBackground(for: .widget) {
+                AccessoryWidgetBackground()
+                    // Thin circular border around the disc.
+                    .overlay { Circle().strokeBorder(.primary.opacity(0.45), lineWidth: 1.5) }
+            }
     }
 }
 
