@@ -98,7 +98,17 @@ public struct RootView: View {
                 // iOS Share sheet → scenario. The extension wakes us via the `englishhelper://` scheme;
                 // becoming active is the fallback if that launch was blocked. Single-consume either way.
                 .onOpenURL { url in
-                    if url.scheme == "englishhelper" { handleShared() }
+                    guard url.scheme == "englishhelper" else { return }
+                    // Lock Screen widgets deep-link straight to a scenario (the host carries the
+                    // destination + mode). The Share extension uses host "share" (and legacy URLs) →
+                    // fall through to the App-Group consume. Idempotent on purpose: iOS 26 can fire this
+                    // twice per tap, and re-selecting the same tab / mode is a no-op.
+                    switch url.host {
+                    case "seeit": selection = "camera"; photo.selectMode(.explain)
+                    case "getit": selection = "in";     inbound.selectMode(.explain)
+                    case "sayit": selection = "out";    out.selectMode(.howToSay)
+                    default:      handleShared()
+                    }
                 }
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .active { handleShared() }   // warm foreground (already-running app)
