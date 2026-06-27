@@ -34,9 +34,8 @@ public struct PhotoTranslateView: View {
                     .padding(Tokens.Space.s20)
                 }
             }
-            // Screen TITLE key is "Photo translation" — distinct from the camera TAB key "See it", so
-            // FR/ES/DE/IT don't render the tab verb ("Voir"/"Ver"/…) as the title.
-            .navigationTitle(Loc.t("Фото-перевод", "Photo translation"))
+            // Screen title matches the tab name ("See it" / "Смотреть") in every language.
+            .navigationTitle(Loc.t("Смотреть", "See it"))
             .settingsTrigger()
             .sheet(isPresented: $model.showCameraPriming) { primingSheet }
             .fullScreenCover(isPresented: $model.presentCamera) {
