@@ -9,136 +9,173 @@
 //    Get it · Explain      getit            Get it · Translate      getit-translate
 //    Say it · How to say   sayit            Say it · What to say    sayit-what
 //
-//  Each is a STATIC launcher (one `.never` timeline entry + a `.widgetURL`). The icon encodes TWO axes
-//  so all six are visually distinct on the Lock Screen:
-//    • INPUT MODALITY = the centered base glyph, reused from the app menu: camera / character bubble / mic.
-//    • MODE = a small corner badge: `lightbulb` (Explain / What-to-say) vs `globe` (Translate / How-to-say).
-//  Lock Screen accessory widgets render monochrome/vibrant, so these are pure SF Symbols in the
-//  foreground tint (hue is discarded anyway); the modality glyph + mode badge carry the meaning by SHAPE.
+//  The icon encodes TWO axes so all six read apart: INPUT MODALITY = the centered base glyph (camera /
+//  character bubble / mic) and MODE = a small corner glyph (lightbulb for Explain / What-to-say, globe
+//  for Translate / How-to-say).
+//
+//  Each widget is USER-CONFIGURABLE (AppIntentConfiguration): when you add or edit it you pick an
+//  appearance — Standard (frosted disc + thin ring), Bordered (bold ring), or Filled (solid disc).
+//  NOTE: the Lock Screen renders accessory widgets monochrome/vibrant, so literal colors (the black/gray
+//  of typical Home-Screen icons) are not possible here — the three styles differ by ring weight + fill.
 //
 
 import WidgetKit
 import SwiftUI
+import AppIntents
 
-private struct LockEntry: TimelineEntry { let date: Date }
+// MARK: - User-selectable appearance
 
-private struct LockProvider: TimelineProvider {
-    func placeholder(in context: Context) -> LockEntry { LockEntry(date: .now) }
-    func getSnapshot(in context: Context, completion: @escaping (LockEntry) -> Void) {
-        completion(LockEntry(date: .now))
-    }
-    func getTimeline(in context: Context, completion: @escaping (Timeline<LockEntry>) -> Void) {
-        completion(Timeline(entries: [LockEntry(date: .now)], policy: .never))   // pure launcher: never refresh
+enum WidgetStyle: String, AppEnum {
+    case standard, bordered, filled
+
+    static var typeDisplayRepresentation: TypeDisplayRepresentation { "Appearance" }
+    static var caseDisplayRepresentations: [WidgetStyle: DisplayRepresentation] {
+        [
+            .standard: DisplayRepresentation(title: "Standard", subtitle: "Frosted disc, thin ring"),
+            .bordered: DisplayRepresentation(title: "Bordered", subtitle: "Bold circular border"),
+            .filled:   DisplayRepresentation(title: "Filled", subtitle: "Solid disc"),
+        ]
     }
 }
 
-/// A circular face: the MODALITY glyph centered, with the MODE glyph as a small bottom-trailing badge
-/// over the standard translucent Lock Screen disc. `.containerBackground(for: .widget)` is required on
-/// iOS 17+. Both glyphs use `.primary` (the Lock Screen tint) so they survive monochrome desaturation.
+struct StyleIntent: WidgetConfigurationIntent {
+    static var title: LocalizedStringResource { "Appearance" }
+    static var description: IntentDescription { "Choose how the widget looks." }
+    @Parameter(title: "Appearance", default: .standard) var style: WidgetStyle
+}
+
+// MARK: - Timeline (static launcher; carries the chosen style)
+
+private struct LockEntry: TimelineEntry { let date: Date; let style: WidgetStyle }
+
+private struct LockProvider: AppIntentTimelineProvider {
+    func placeholder(in context: Context) -> LockEntry { LockEntry(date: .now, style: .standard) }
+    func snapshot(for configuration: StyleIntent, in context: Context) async -> LockEntry {
+        LockEntry(date: .now, style: configuration.style)
+    }
+    func timeline(for configuration: StyleIntent, in context: Context) async -> Timeline<LockEntry> {
+        Timeline(entries: [LockEntry(date: .now, style: configuration.style)], policy: .never)
+    }
+}
+
+// MARK: - Reusable circular face (renders per chosen style)
+
 private struct WidgetFace: View {
     let modality: String   // camera.fill / character.bubble.fill / mic.fill
     let mode: String       // lightbulb.fill (Explain / What-to-say) | globe (Translate / How-to-say)
+    let style: WidgetStyle
 
     var body: some View {
         Image(systemName: modality)
             .font(.system(size: 17, weight: .semibold))
             .foregroundStyle(.primary)
             .overlay(alignment: .bottomTrailing) {
-                Image(systemName: mode)                          // mode marker — just the glyph, no chip
+                Image(systemName: mode)
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(.primary)
                     .offset(x: 5, y: 4)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)    // fill the circular slot…
-            .overlay { Circle().strokeBorder(.primary, lineWidth: 2) }   // …so the border rings the WHOLE icon
+            .frame(maxWidth: .infinity, maxHeight: .infinity)   // fill the circular slot
+            .overlay {
+                switch style {
+                case .standard: Circle().strokeBorder(.primary, lineWidth: 1.5)
+                case .bordered: Circle().strokeBorder(.primary, lineWidth: 3)
+                case .filled:   EmptyView()                     // the fill is the look, no ring
+                }
+            }
             .widgetAccentable()
-            .containerBackground(for: .widget) { AccessoryWidgetBackground() }
+            .containerBackground(for: .widget) {
+                switch style {
+                case .filled: Circle().fill(.primary.opacity(0.45))   // solid disc
+                default:      AccessoryWidgetBackground()             // frosted disc
+                }
+            }
     }
 }
 
 // MARK: - The six widgets (each its own STABLE kind + deep link)
 
 struct SeeItExplainWidget: Widget {
-    let kind = "tech.10xt.englishhelper.widget.seeit"            // STABLE — do not change post-ship
+    let kind = "tech.10xt.englishhelper.widget.seeit"   // STABLE — do not change post-ship
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: LockProvider()) { _ in
-            WidgetFace(modality: "camera.fill", mode: "lightbulb.fill")
+        AppIntentConfiguration(kind: kind, intent: StyleIntent.self, provider: LockProvider()) { entry in
+            WidgetFace(modality: "camera.fill", mode: "lightbulb.fill", style: entry.style)
                 .widgetURL(URL(string: "englishhelper://seeit"))
         }
         .configurationDisplayName("See it · Explain")
         .description("Camera → explain what it shows.")
         .supportedFamilies([.accessoryCircular])
-        .contentMarginsDisabled()   // let the border ring reach the disc edge
+        .contentMarginsDisabled()
     }
 }
 
 struct SeeItTranslateWidget: Widget {
     let kind = "tech.10xt.englishhelper.widget.seeit.translate"
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: LockProvider()) { _ in
-            WidgetFace(modality: "camera.fill", mode: "globe")
+        AppIntentConfiguration(kind: kind, intent: StyleIntent.self, provider: LockProvider()) { entry in
+            WidgetFace(modality: "camera.fill", mode: "globe", style: entry.style)
                 .widgetURL(URL(string: "englishhelper://seeit-translate"))
         }
         .configurationDisplayName("See it · Translate")
         .description("Camera → translate the text in it.")
         .supportedFamilies([.accessoryCircular])
-        .contentMarginsDisabled()   // let the border ring reach the disc edge
+        .contentMarginsDisabled()
     }
 }
 
 struct GetItExplainWidget: Widget {
     let kind = "tech.10xt.englishhelper.widget.getit"
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: LockProvider()) { _ in
-            WidgetFace(modality: "character.bubble.fill", mode: "lightbulb.fill")
+        AppIntentConfiguration(kind: kind, intent: StyleIntent.self, provider: LockProvider()) { entry in
+            WidgetFace(modality: "character.bubble.fill", mode: "lightbulb.fill", style: entry.style)
                 .widgetURL(URL(string: "englishhelper://getit"))
         }
         .configurationDisplayName("Get it · Explain")
         .description("Explain a word or phrase.")
         .supportedFamilies([.accessoryCircular])
-        .contentMarginsDisabled()   // let the border ring reach the disc edge
+        .contentMarginsDisabled()
     }
 }
 
 struct GetItTranslateWidget: Widget {
     let kind = "tech.10xt.englishhelper.widget.getit.translate"
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: LockProvider()) { _ in
-            WidgetFace(modality: "character.bubble.fill", mode: "globe")
+        AppIntentConfiguration(kind: kind, intent: StyleIntent.self, provider: LockProvider()) { entry in
+            WidgetFace(modality: "character.bubble.fill", mode: "globe", style: entry.style)
                 .widgetURL(URL(string: "englishhelper://getit-translate"))
         }
         .configurationDisplayName("Get it · Translate")
         .description("Translate a word or phrase.")
         .supportedFamilies([.accessoryCircular])
-        .contentMarginsDisabled()   // let the border ring reach the disc edge
+        .contentMarginsDisabled()
     }
 }
 
 struct SayItHowWidget: Widget {
     let kind = "tech.10xt.englishhelper.widget.sayit"
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: LockProvider()) { _ in
-            WidgetFace(modality: "mic.fill", mode: "globe")
+        AppIntentConfiguration(kind: kind, intent: StyleIntent.self, provider: LockProvider()) { entry in
+            WidgetFace(modality: "mic.fill", mode: "globe", style: entry.style)
                 .widgetURL(URL(string: "englishhelper://sayit"))
         }
         .configurationDisplayName("Say it · How to say")
         .description("Learn how to say something.")
         .supportedFamilies([.accessoryCircular])
-        .contentMarginsDisabled()   // let the border ring reach the disc edge
+        .contentMarginsDisabled()
     }
 }
 
 struct SayItWhatWidget: Widget {
     let kind = "tech.10xt.englishhelper.widget.sayit.what"
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: LockProvider()) { _ in
-            WidgetFace(modality: "mic.fill", mode: "lightbulb.fill")
+        AppIntentConfiguration(kind: kind, intent: StyleIntent.self, provider: LockProvider()) { entry in
+            WidgetFace(modality: "mic.fill", mode: "lightbulb.fill", style: entry.style)
                 .widgetURL(URL(string: "englishhelper://sayit-what"))
         }
         .configurationDisplayName("Say it · What to say")
         .description("Ideas for what to say in a situation.")
         .supportedFamilies([.accessoryCircular])
-        .contentMarginsDisabled()   // let the border ring reach the disc edge
+        .contentMarginsDisabled()
     }
 }
 
