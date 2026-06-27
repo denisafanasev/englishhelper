@@ -2,6 +2,41 @@
 
 Release notes for EnglishHelper, written for the people who use it.
 
+## 1.3.1 — 2026-06-27
+
+**Lock Screen widgets.** Add EnglishHelper to your Lock Screen for one-tap access to a scenario — no
+unlocking and tapping through tabs. There are six, one per scenario: **See it · Explain**, **See it ·
+Translate**, **Get it · Explain**, **Get it · Translate**, **Say it · How to say**, and **Say it ·
+What to say**. Tapping one opens the app straight into that scenario with the **camera ready** (See
+it) or the **mic already listening** (Get it / Say it). Each carries its own icon — the scenario's
+camera / speech-bubble / mic glyph plus a small badge (a lightbulb for Explain and What-to-say, a
+globe for Translate and How-to-say) — so the six are easy to tell apart. To add them: lock the phone,
+touch and hold the Lock Screen, tap **Customize**, tap a widget slot, and pick **EnglishHelper**.
+
+**Any photo works now, including HEIC.** A photo shared or picked in **See it** could fail with an
+error when it was in iPhone's default HEIC format. Every photo is now converted to a supported format
+(and downscaled, so it uploads faster) before it's sent — so recognition and translation work no
+matter where the photo came from.
+
+**Walk away during a long request.** When a recognition or explanation takes a while, you no longer
+have to keep the app open and wait. Leave it, and you'll get a notification the moment the result is
+ready — tap it to come back to the result on the same screen.
+
+**Smarter translation variants.** **Get it → Translate** now gives more than one translation only when
+a word or phrase genuinely has different meanings depending on context (like an idiom that's both
+literal and figurative), each with a short note on which sense it is — instead of padding the list
+with near-synonyms.
+
+**Fixes**
+
+- **Switching Explain ↔ Translate after an error now retries** the same photo or text, instead of
+  leaving the screen stuck on the error.
+- **Explaining a phrase from a "See it" card** now explains just that phrase on its own, not the whole
+  photo it came from.
+- **Your per-scenario model choices now take effect** — plain Translate runs on the faster model as
+  intended, and long photo translations are no longer cut short.
+- **Sharing into the app** is more reliable at bringing EnglishHelper to the front.
+
 ## 1.3.0 — 2026-06-21
 
 **Share straight into the app.** EnglishHelper now shows up in the iOS Share sheet, so you can send
