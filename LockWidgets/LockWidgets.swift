@@ -41,22 +41,18 @@ private struct WidgetFace: View {
 
     var body: some View {
         Image(systemName: modality)
-            .font(.system(size: 18, weight: .semibold))
+            .font(.system(size: 17, weight: .semibold))
             .foregroundStyle(.primary)
             .overlay(alignment: .bottomTrailing) {
-                Image(systemName: mode)
-                    .font(.system(size: 11, weight: .bold))
+                Image(systemName: mode)                          // mode marker — just the glyph, no chip
+                    .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(.primary)
-                    .padding(2.5)
-                    .background(.thinMaterial, in: Circle())   // a small frosted chip so the badge reads
-                    .offset(x: 5, y: 5)
+                    .offset(x: 5, y: 4)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)    // fill the circular slot…
+            .overlay { Circle().strokeBorder(.primary, lineWidth: 2) }   // …so the border rings the WHOLE icon
             .widgetAccentable()
-            .containerBackground(for: .widget) {
-                AccessoryWidgetBackground()
-                    // Thin circular border around the disc.
-                    .overlay { Circle().strokeBorder(.primary.opacity(0.45), lineWidth: 1.5) }
-            }
+            .containerBackground(for: .widget) { AccessoryWidgetBackground() }
     }
 }
 
@@ -72,6 +68,7 @@ struct SeeItExplainWidget: Widget {
         .configurationDisplayName("See it · Explain")
         .description("Camera → explain what it shows.")
         .supportedFamilies([.accessoryCircular])
+        .contentMarginsDisabled()   // let the border ring reach the disc edge
     }
 }
 
@@ -85,6 +82,7 @@ struct SeeItTranslateWidget: Widget {
         .configurationDisplayName("See it · Translate")
         .description("Camera → translate the text in it.")
         .supportedFamilies([.accessoryCircular])
+        .contentMarginsDisabled()   // let the border ring reach the disc edge
     }
 }
 
@@ -98,6 +96,7 @@ struct GetItExplainWidget: Widget {
         .configurationDisplayName("Get it · Explain")
         .description("Explain a word or phrase.")
         .supportedFamilies([.accessoryCircular])
+        .contentMarginsDisabled()   // let the border ring reach the disc edge
     }
 }
 
@@ -111,6 +110,7 @@ struct GetItTranslateWidget: Widget {
         .configurationDisplayName("Get it · Translate")
         .description("Translate a word or phrase.")
         .supportedFamilies([.accessoryCircular])
+        .contentMarginsDisabled()   // let the border ring reach the disc edge
     }
 }
 
@@ -124,6 +124,7 @@ struct SayItHowWidget: Widget {
         .configurationDisplayName("Say it · How to say")
         .description("Learn how to say something.")
         .supportedFamilies([.accessoryCircular])
+        .contentMarginsDisabled()   // let the border ring reach the disc edge
     }
 }
 
@@ -137,6 +138,7 @@ struct SayItWhatWidget: Widget {
         .configurationDisplayName("Say it · What to say")
         .description("Ideas for what to say in a situation.")
         .supportedFamilies([.accessoryCircular])
+        .contentMarginsDisabled()   // let the border ring reach the disc edge
     }
 }
 
