@@ -79,6 +79,25 @@ public struct RequestHistoryInteractor: RequestHistoryUseCase {
     }
 }
 
+// MARK: - Translation cache admin (Settings: stats + clear)
+
+public protocol TranslationCacheAdminUseCase: Sendable {
+    func stats() async -> TranslationCacheStats
+    func clear() async
+}
+
+public struct TranslationCacheAdminInteractor: TranslationCacheAdminUseCase {
+    /// Optional so the app still builds without a cache (mock boot / tests) — then stats are zero and
+    /// clear is a no-op.
+    private let cache: (any TranslationCache)?
+    public init(cache: (any TranslationCache)?) { self.cache = cache }
+
+    public func stats() async -> TranslationCacheStats {
+        await cache?.statistics() ?? TranslationCacheStats(entryCount: 0, hitCount: 0)
+    }
+    public func clear() async { await cache?.clear() }
+}
+
 // MARK: - Export deck
 
 public protocol ExportDeckUseCase: Sendable {

@@ -11,6 +11,7 @@ import DesignSystem
 
 public struct SettingsView: View {
     @State private var model: SettingsViewModel
+    @State private var showClearCacheConfirm = false
     private let theme: ThemeStore
     private let language: LanguageStore
     private let studied: StudiedLanguageStore
@@ -58,6 +59,7 @@ public struct SettingsView: View {
                         studiedCard(studied: $studied.language)
                         targetCard(target: $target.language)
                         themeCard(theme: $theme.preference)
+                        cacheCard
                         infoCard
                     }
                     .padding(Tokens.Space.s20)
@@ -71,6 +73,7 @@ public struct SettingsView: View {
                 }
             }
             .task { await model.check() }
+            .task { await model.loadCacheStats() }
         }
     }
 
@@ -268,6 +271,40 @@ public struct SettingsView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Tokens.Space.s16)
         .glassPanel(cornerRadius: Tokens.Radius.card)
+    }
+
+    // MARK: Translation cache
+
+    private var cacheCard: some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.s12) {
+            sectionTitle(Loc.t("Кэш переводов", "Translation cache"))
+            infoRow(Loc.t("В кэше", "Stored"), "\(model.cacheStats.entryCount)")
+            Divider().overlay(Tokens.Hairline.default)
+            infoRow(Loc.t("Взято из кэша", "Served from cache"), "\(model.cacheStats.hitCount)")
+            Divider().overlay(Tokens.Hairline.default)
+            Button { showClearCacheConfirm = true } label: {
+                Text(Loc.t("Очистить кэш", "Clear cache"))
+                    .textStyle(Tokens.Text.body)
+                    .foregroundStyle(model.cacheStats.entryCount == 0 ? Tokens.Content.tertiary : Tokens.Signal.error)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            .disabled(model.cacheStats.entryCount == 0)
+            Text(Loc.t("Повторные переводы одного и того же текста берутся из кэша, а не из модели.",
+                       "Repeat translations of the same text are served from the cache, not the model."))
+                .textStyle(Tokens.Text.footnote)
+                .foregroundStyle(Tokens.Content.tertiary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Tokens.Space.s16)
+        .glassPanel(cornerRadius: Tokens.Radius.card)
+        .confirmationDialog(
+            Loc.t("Очистить кэш переводов?", "Clear the translation cache?"),
+            isPresented: $showClearCacheConfirm, titleVisibility: .visible
+        ) {
+            Button(Loc.t("Очистить", "Clear"), role: .destructive) { Task { await model.clearCache() } }
+            Button(Loc.t("Отмена", "Cancel"), role: .cancel) {}
+        }
     }
 
     // MARK: Info

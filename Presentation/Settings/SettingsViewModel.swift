@@ -18,19 +18,31 @@ public final class SettingsViewModel {
     public let appVersion: String
     public let modelName: String
     public let fastModelName: String
+    /// Translation-cache usage shown in Settings (entries stored + times served from cache).
+    public private(set) var cacheStats = TranslationCacheStats(entryCount: 0, hitCount: 0)
 
     private let connectionHealth: any ConnectionHealthUseCase
+    private let cacheAdmin: any TranslationCacheAdminUseCase
 
     public init(
         connectionHealth: any ConnectionHealthUseCase,
+        cacheAdmin: any TranslationCacheAdminUseCase,
         appVersion: String,
         modelName: String,
         fastModelName: String
     ) {
         self.connectionHealth = connectionHealth
+        self.cacheAdmin = cacheAdmin
         self.appVersion = appVersion
         self.modelName = modelName
         self.fastModelName = fastModelName
+    }
+
+    public func loadCacheStats() async { cacheStats = await cacheAdmin.stats() }
+
+    public func clearCache() async {
+        await cacheAdmin.clear()
+        cacheStats = await cacheAdmin.stats()
     }
 
     /// Probe BOTH models concurrently and surface each status independently.

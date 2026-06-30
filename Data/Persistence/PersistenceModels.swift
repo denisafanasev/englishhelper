@@ -43,6 +43,21 @@ public final class ExpressionModel {
     }
 }
 
+/// A cached text-translation request: `key` is `Domain.TranslationCacheKey`, `value` is the JSON of the
+/// scenario's typed result. Lets repeat translations of the same input skip the model entirely.
+@Model
+public final class CachedTranslationModel {
+    @Attribute(.unique) public var key: String
+    public var value: Data
+    public var createdAt: Date
+
+    public init(key: String, value: Data, createdAt: Date = Date()) {
+        self.key = key
+        self.value = value
+        self.createdAt = createdAt
+    }
+}
+
 @Model
 public final class HistoryModel {
     @Attribute(.unique) public var id: UUID

@@ -49,6 +49,7 @@ public final class AppContainer: Sendable {
     public let pronounce: any PlayPronunciationUseCase
     public let connectionHealth: any ConnectionHealthUseCase
     public let understand: any UnderstandUseCase
+    public let cacheAdmin: any TranslationCacheAdminUseCase   // translation-cache stats + clear (Settings)
     public let explainExpression: any ExplainExpressionUseCase
 
     public init(
@@ -61,7 +62,8 @@ public final class AppContainer: Sendable {
         textRecognizer: any TextRecognizing,
         expressions: any ExpressionRepository,
         history: any HistoryRepository,
-        exporter: any DeckExporting
+        exporter: any DeckExporting,
+        cache: (any TranslationCache)? = nil
     ) {
         self.config = config
         self.usingFallbackStore = usingFallbackStore
@@ -76,9 +78,9 @@ public final class AppContainer: Sendable {
 
         // Wire use cases onto the ports.
         // "Say it" phrase generation routes to the user-selected model (default Sonnet).
-        self.howToSay = HowToSayInteractor(llm: llm, history: history,
+        self.howToSay = HowToSayInteractor(llm: llm, history: history, cache: cache,
                                            tier: { LLMModelChoice.currentSayIt.tier })
-        self.whatToSay = WhatToSayInteractor(llm: llm, history: history,
+        self.whatToSay = WhatToSayInteractor(llm: llm, history: history, cache: cache,
                                              tier: { LLMModelChoice.currentSayIt.tier })
         self.photoTranslate = PhotoTranslateInteractor(llm: llm, history: history)   // LLM vision (no local OCR)
         self.photoExplain = PhotoExplainInteractor(llm: llm)                          // "See it" Explain mode
@@ -88,7 +90,7 @@ public final class AppContainer: Sendable {
         self.exportDeck = ExportDeckInteractor(repository: expressions, exporter: exporter)
         // Anki exporter is pure (no deps), built here at the composition root.
         self.exportAnkiDeck = ExportDeckInteractor(repository: expressions, exporter: AnkiExporter())
-        self.regenerateHowToSay = RegenerateHowToSayInteractor(llm: llm, history: history,
+        self.regenerateHowToSay = RegenerateHowToSayInteractor(llm: llm, history: history, cache: cache,
                                                                tier: { LLMModelChoice.currentSayIt.tier })
         self.saveExpression = SaveExpressionInteractor(
             enrich: EnrichExpressionInteractor(llm: llm), repository: expressions
@@ -99,10 +101,11 @@ public final class AppContainer: Sendable {
         self.connectionHealth = ConnectionHealthInteractor(llm: llm)
         // Route translate / explain to the user-selected model (live read each request). Defaults:
         // translate → Haiku (speed), explain → Sonnet (quality).
-        self.understand = UnderstandInteractor(llm: llm, history: history,
+        self.understand = UnderstandInteractor(llm: llm, history: history, cache: cache,
                                                tier: { LLMModelChoice.currentTranslate.tier })
         self.explainExpression = ExplainExpressionInteractor(llm: llm,
                                                              tier: { LLMModelChoice.currentExplain.tier })
+        self.cacheAdmin = TranslationCacheAdminInteractor(cache: cache)
     }
 
     /// v1: the whole graph on LIVE adapters. Swapping any engine is exactly ONE line below
@@ -133,7 +136,9 @@ public final class AppContainer: Sendable {
             textRecognizer: VisionTextRecognizer(),         // ← swap OCR engine here (when OCR is used)
             expressions: SwiftDataExpressionRepository(modelContainer: modelContainer),
             history: SwiftDataHistoryRepository(modelContainer: modelContainer),
-            exporter: AlgoAppXMLExporter()
+            exporter: AlgoAppXMLExporter(),
+            // Persistent translation cache: repeat text translations skip the model (Say it + Get-it Translate).
+            cache: SwiftDataTranslationCache(modelContainer: modelContainer)
         )
     }
 
@@ -238,6 +243,7 @@ public final class AppContainer: Sendable {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
         return SettingsViewModel(
             connectionHealth: connectionHealth,
+            cacheAdmin: cacheAdmin,
             appVersion: version,
             modelName: config.claudeModel,
             fastModelName: config.claudeFastModel
