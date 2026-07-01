@@ -39,6 +39,15 @@ public protocol PromptTemplate<Input, Output>: Sendable {
     /// Optional image to attach to the user turn (for multimodal templates). Default: none.
     func image(for input: Input) -> Data?
 
+    /// Per-template tuning — these MUST be protocol requirements (not extension-only), or a concrete
+    /// template's override is shadowed by the extension default when accessed through the generic
+    /// adapter (`run<Template>`): Swift statically dispatches extension-only members, so e.g. a photo
+    /// template's larger `maxOutputTokens` or a translate template's `.fast` `modelTier` would be
+    /// silently ignored on the wire. Declared here (dynamic dispatch) with defaults in the extension.
+    var maxOutputTokens: Int { get }
+    var prefersFastResponse: Bool { get }
+    var modelTier: ModelTier { get }
+
     /// Decode the model's raw JSON response text into the typed `Output`.
     /// Throws `LLMError.invalidOutput` if the response violates the schema.
     func decode(_ rawJSON: String) throws -> Output

@@ -34,7 +34,7 @@ public final class InViewModel {
     public private(set) var mode: Mode = .explain
     public var source: String = ""                       // editable transcript / typed input
     public private(set) var studied: String?             // input rendered in the studied language (headline + TTS)
-    public private(set) var translations: [String] = []  // Translate mode: 3–5 native renderings (the lines below)
+    public private(set) var translations: [TranslationVariant] = []  // Translate mode: 1–5 translations + context
     public private(set) var explanation: ExpressionExplanation?   // Explain mode result (native)
     public private(set) var errorMessage: String?
     /// A SAVE failure shown independently of `phase` (the result stays on screen); `errorMessage`
@@ -49,8 +49,6 @@ public final class InViewModel {
     /// Bumped on every new result so an in-flight save can tell "user un-saved" from "result was
     /// regenerated" and not silently delete a just-bookmarked expression.
     private var resultsGeneration = 0
-    private var explainImage: Data?          // photo context for an Explain routed from See it
-    private var explainImageText: String?    // the source text that photo context belongs to
     private var explainAlternatives: [String] = []   // sibling variants to contrast (Say it "why this?")
     private var explainAlternativesText: String?     // the source text those alternatives belong to
 
@@ -62,6 +60,9 @@ public final class InViewModel {
     private let saveExpression: any SaveExpressionUseCase
     private let studyList: any StudyListUseCase
     private let isConfigured: Bool
+    /// Keeps a slow explanation/translation alive briefly after backgrounding + notifies on completion.
+    /// Nil in tests/previews (then it's a transparent pass-through).
+    private let longTask: (any LongTaskCoordinating)?
 
     private var captureTask: Task<Void, Never>?
     private var requestTask: Task<Void, Never>?
@@ -76,7 +77,8 @@ public final class InViewModel {
         pronounce: any PlayPronunciationUseCase,
         saveExpression: any SaveExpressionUseCase,
         studyList: any StudyListUseCase,
-        isConfigured: Bool
+        isConfigured: Bool,
+        longTask: (any LongTaskCoordinating)? = nil
     ) {
         self.understand = understand
         self.explain = explain
@@ -85,6 +87,7 @@ public final class InViewModel {
         self.saveExpression = saveExpression
         self.studyList = studyList
         self.isConfigured = isConfigured
+        self.longTask = longTask
     }
 
     // MARK: Derived
@@ -119,6 +122,15 @@ public final class InViewModel {
                 showMicPriming = true
             }
         }
+    }
+
+    /// Start voice input WITHOUT toggling — used by the Lock Screen widget deep link so the mic comes on
+    /// the moment the app opens. Idempotent (guards `.listening`) because iOS 26 can deliver the widget
+    /// URL twice; the toggle `micTapped` would otherwise start-then-stop. Shows priming first if needed.
+    public func beginVoiceInput() {
+        guard phase != .listening else { return }
+        if UserDefaults.standard.bool(forKey: primingDefaultsKey) { startListening() }
+        else { showMicPriming = true }
     }
 
     public func confirmPriming() {
@@ -209,9 +221,8 @@ public final class InViewModel {
         let studiedLang = StudiedLanguage.current.promptName
         let nativeLang = TargetLanguage.current.promptName
         let mode = self.mode
-        // Use the routed photo context / sibling-variant context only while the input still matches
-        // what each was captured for (a user edit of `source` invalidates them).
-        let explainImg = (mode == .explain && explainImageText == text) ? explainImage : nil
+        // Use the routed sibling-variant context only while the input still matches what it was
+        // captured for (a user edit of `source` invalidates it).
         let explainAlts = (mode == .explain && explainAlternativesText == text) ? explainAlternatives : []
         requestTask?.cancel()
         phase = .processing
@@ -222,12 +233,16 @@ public final class InViewModel {
             do {
                 switch mode {
                 case .translate:
-                    let result = try await self.understand(text, studiedLanguage: studiedLang, nativeLanguage: nativeLang)
+                    let result = try await withBackgroundCompletion(self.longTask, .translation) {
+                        try await self.understand(text, studiedLanguage: studiedLang, nativeLanguage: nativeLang)
+                    }
                     self.studied = result.studied         // headline + TTS
-                    self.translations = result.natives    // 3–5 native renderings
+                    self.translations = result.variants   // 1–5 translations (+ context per variant)
                     self.explanation = nil
                 case .explain:
-                    let result = try await self.explain(text, studiedLanguage: studiedLang, nativeLanguage: nativeLang, image: explainImg, alternatives: explainAlts)
+                    let result = try await withBackgroundCompletion(self.longTask, .explanation) {
+                        try await self.explain(text, studiedLanguage: studiedLang, nativeLanguage: nativeLang, image: nil, alternatives: explainAlts)
+                    }
                     self.studied = result.studied
                     self.explanation = result
                     self.translations = []
@@ -249,13 +264,12 @@ public final class InViewModel {
         }
     }
 
-    /// Open this screen in Explain mode for an externally-supplied phrase (routed from See it /
-    /// History), optionally with a photo as visual context, and run it immediately.
-    public func startExplain(text: String, image: Data?, alternatives: [String] = []) {
+    /// Open this screen in Explain mode for an externally-supplied phrase (routed from See it / History
+    /// / Say it) and run it immediately. The phrase is explained on its own — no source-photo context;
+    /// `alternatives` (sibling Say-it phrasings) is the only extra context, used to contrast registers.
+    public func startExplain(text: String, alternatives: [String] = []) {
         mode = .explain
         source = text
-        explainImage = image
-        explainImageText = image == nil ? nil : text
         explainAlternatives = alternatives
         explainAlternativesText = alternatives.isEmpty ? nil : text
         submit()
@@ -266,14 +280,15 @@ public final class InViewModel {
     public func selectMode(_ newMode: Mode) {
         guard newMode != mode else { return }
         mode = newMode
-        if canSubmit, phase == .result || phase == .processing {
+        // Re-run the SAME input in the new mode — including after a FAILURE (e.g. the model was
+        // unavailable in the previous mode), so switching mode retries instead of staying stuck.
+        if canSubmit, phase == .result || phase == .processing || phase == .failed {
             submit()
         } else {
             studied = nil
             translations = []
             explanation = nil
-            // Leaving results OR a failure: don't keep a stale result/error (whose Retry would re-run
-            // the NEW mode) on screen — drop back to idle.
+            // Nothing to re-run (no input): drop any stale result/error back to idle.
             if phase == .result || phase == .failed {
                 phase = .idle
                 errorMessage = nil
@@ -356,7 +371,7 @@ public final class InViewModel {
             // We study the STUDIED-language rendering (the headline), with the native translation as
             // its gloss. In Explain mode there's no direct gloss, so enrich derives it.
             let en = studied
-            let knownRU = translations.first
+            let knownRU = translations.first?.text
             let generation = resultsGeneration
             Task { [weak self] in
                 guard let self else { return }
@@ -391,8 +406,6 @@ public final class InViewModel {
         isPlaying = false
         isSaved = false
         savedExpressionID = nil
-        explainImage = nil
-        explainImageText = nil
         explainAlternatives = []
         explainAlternativesText = nil
     }

@@ -17,10 +17,30 @@ import Presentation
     @Test func healthOkOnMock() async {
         let vm = SettingsViewModel(
             connectionHealth: ConnectionHealthInteractor(llm: MockLLMClient()),
+            cacheAdmin: TranslationCacheAdminInteractor(cache: nil),
             appVersion: "1.0", modelName: "claude-sonnet-4-6", fastModelName: "claude-haiku-4-5"
         )
         await vm.check()
         #expect(vm.health == .ok)
+    }
+
+    @Test func cacheStatsLoadAndClear() async {
+        let cache = MockTranslationCache()
+        await cache.setValue(Data([1]), forKey: "a")
+        await cache.setValue(Data([2]), forKey: "b")
+        _ = await cache.value(forKey: "a")   // one hit
+        let vm = SettingsViewModel(
+            connectionHealth: ConnectionHealthInteractor(llm: MockLLMClient()),
+            cacheAdmin: TranslationCacheAdminInteractor(cache: cache),
+            appVersion: "1.0", modelName: "m", fastModelName: "h"
+        )
+        await vm.loadCacheStats()
+        #expect(vm.cacheStats.entryCount == 2)
+        #expect(vm.cacheStats.hitCount == 1)
+
+        await vm.clearCache()
+        #expect(vm.cacheStats.entryCount == 0)   // emptied
+        #expect(vm.cacheStats.hitCount == 0)     // hit counter reset
     }
 
     @Test func healthFailedWhenNotConfigured() async {
@@ -28,6 +48,7 @@ import Presentation
             connectionHealth: ConnectionHealthInteractor(
                 llm: StubLLMClient(behavior: .failure(.notConfigured), latency: .milliseconds(1))
             ),
+            cacheAdmin: TranslationCacheAdminInteractor(cache: nil),
             appVersion: "1.0", modelName: "m", fastModelName: "h"
         )
         await vm.check()

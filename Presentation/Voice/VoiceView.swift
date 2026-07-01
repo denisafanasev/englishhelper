@@ -36,9 +36,8 @@ public struct VoiceView: View {
                 }
                 .scrollDismissesKeyboard(.interactively)
             }
-            // Screen TITLE key is "How to say" — distinct from the Voice TAB key "Say it", so FR/ES/DE/IT
-            // render the descriptive title rather than the short tab verb ("Dire"/"Decir"/…).
-            .navigationTitle(Loc.t("Как сказать", "How to say"))
+            // Screen title matches the tab name ("Say it" / "Сказать") in every language.
+            .navigationTitle(Loc.t("Сказать", "Say it"))
             .settingsTrigger()
             .sheet(isPresented: $model.showMicPriming) { primingSheet }
             .alert(Loc.t("Сохранение", "Saving"), isPresented: saveErrorBinding) {

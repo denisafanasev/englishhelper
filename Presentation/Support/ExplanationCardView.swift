@@ -37,41 +37,41 @@ struct ExplanationCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s16) {
-            // Title + icon actions (Play · Copy · Save) in the header row, like the phrase cards.
-            HStack(alignment: .top) {
-                Text(studied)
-                    .textStyle(Tokens.Text.headline)
-                    .foregroundStyle(Tokens.Content.primary)
-                    .fixedSize(horizontal: false, vertical: true)
+            // Mode tag (left) + action icons (right) on their own row above the studied headline, which
+            // sits full-width below — symmetric with the Translate card.
+            HStack(spacing: Tokens.Space.s16) {
+                CardTagView(Loc.t("Объяснение", "Explanation", "Explication", "Explicación", "Erklärung", "Spiegazione"))
                 Spacer(minLength: Tokens.Space.s8)
-                HStack(spacing: Tokens.Space.s16) {
-                    if let onPlay, !studied.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Button { onPlay() } label: {
-                            Image(systemName: isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2")
-                                .font(.system(size: Tokens.Icon.cardAction, weight: .medium))
-                                .symbolEffect(.variableColor.iterative, isActive: isPlaying)
-                                .foregroundStyle(isPlaying ? Tokens.Content.primary : Tokens.Content.tertiary)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(Loc.t("Озвучить", "Play"))
+                if let onPlay, !studied.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Button { onPlay() } label: {
+                        Image(systemName: isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2")
+                            .font(.system(size: Tokens.Icon.cardAction, weight: .medium))
+                            .symbolEffect(.variableColor.iterative, isActive: isPlaying)
+                            .foregroundStyle(isPlaying ? Tokens.Content.primary : Tokens.Content.tertiary)
                     }
-                    // Copy the studied-language text (the headline expression).
-                    CopyButton(studied, style: .icon,
-                               accessibilityLabel: Loc.t("Скопировать выражение", "Copy expression"))
-
-                    if let isSaved, let onToggleSave {
-                        Button { onToggleSave() } label: {
-                            Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
-                                .font(.system(size: Tokens.Icon.cardActionProminent, weight: .medium))
-                                .foregroundStyle(isSaved ? Tokens.Content.primary : Tokens.Content.tertiary)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(isSaved
-                            ? Loc.t("Убрать из изучаемого", "Remove from study list")
-                            : Loc.t("Сохранить в изучаемое", "Save to study list"))
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Loc.t("Озвучить", "Play"))
+                }
+                CopyButton(studied, style: .icon,
+                           accessibilityLabel: Loc.t("Скопировать выражение", "Copy expression"))
+                if let isSaved, let onToggleSave {
+                    Button { onToggleSave() } label: {
+                        Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
+                            .font(.system(size: Tokens.Icon.cardActionProminent, weight: .medium))
+                            .foregroundStyle(isSaved ? Tokens.Content.primary : Tokens.Content.tertiary)
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(isSaved
+                        ? Loc.t("Убрать из изучаемого", "Remove from study list")
+                        : Loc.t("Сохранить в изучаемое", "Save to study list"))
                 }
             }
+
+            Text(studied)
+                .textStyle(Tokens.Text.headline)
+                .foregroundStyle(Tokens.Content.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
 
             Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)
 

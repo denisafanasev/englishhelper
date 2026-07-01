@@ -197,64 +197,79 @@ public struct InView: View {
     }
 
     /// Translate mode: the studied-language rendering is the headline (play + bookmark + the saved
-    /// study item); 3–5 native renderings sit below as the "understanding" lines (first = primary).
-    private func translationCard(_ natives: [String]) -> some View {
+    /// study item); below it sit the translation(s) — each in the main colour with a dimmed context
+    /// note (a single line for an unambiguous word or a phrase; several when a word has distinct senses).
+    private func translationCard(_ variants: [TranslationVariant]) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s12) {
-            // Studied source + icon actions (Play · Copy · Save) in the header row, like the phrase cards.
-            HStack(alignment: .top) {
-                Text(model.sourceText)
-                    .textStyle(Tokens.Text.headline)
-                    .foregroundStyle(Tokens.Content.primary)
-                    .fixedSize(horizontal: false, vertical: true)
+            // Mode tag (left) + action icons (right) on their own row above the source text, so the
+            // source text below keeps the FULL card width — same layout as the generation cards.
+            HStack(spacing: Tokens.Space.s16) {
+                CardTagView(Loc.t("Перевод", "Translation", "Traduction", "Traducción", "Übersetzung", "Traduzione"))
                 Spacer(minLength: Tokens.Space.s8)
-                HStack(spacing: Tokens.Space.s16) {
-                    if !model.sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Button { model.play() } label: {
-                            Image(systemName: model.isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2")
-                                .font(.system(size: Tokens.Icon.cardAction, weight: .medium))
-                                .symbolEffect(.variableColor.iterative, isActive: model.isPlaying)
-                                .foregroundStyle(model.isPlaying ? Tokens.Content.primary : Tokens.Content.tertiary)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(Loc.t("Озвучить", "Play"))
-
-                        Button { model.startExplain(text: model.sourceText, image: nil) } label: {
-                            Image(systemName: "lightbulb")
-                                .font(.system(size: Tokens.Icon.cardAction, weight: .medium))
-                                .foregroundStyle(Tokens.Content.tertiary)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(Loc.t("Объяснить", "Explain"))
-
-                        CopyButton(model.sourceText, style: .icon,
-                                   accessibilityLabel: Loc.t("Скопировать выражение", "Copy expression"))
-                    }
-                    Button { model.toggleSave() } label: {
-                        Image(systemName: model.isSaved ? "bookmark.fill" : "bookmark")
-                            .font(.system(size: Tokens.Icon.cardActionProminent, weight: .medium))
-                            .foregroundStyle(model.isSaved ? Tokens.Content.primary : Tokens.Content.tertiary)
+                if !model.sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Button { model.play() } label: {
+                        Image(systemName: model.isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2")
+                            .font(.system(size: Tokens.Icon.cardAction, weight: .medium))
+                            .symbolEffect(.variableColor.iterative, isActive: model.isPlaying)
+                            .foregroundStyle(model.isPlaying ? Tokens.Content.primary : Tokens.Content.tertiary)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(model.isSaved
-                        ? Loc.t("Убрать из изучаемого", "Remove from study list")
-                        : Loc.t("Сохранить в изучаемое", "Save to study list"))
+                    .accessibilityLabel(Loc.t("Озвучить", "Play"))
+
+                    Button { model.startExplain(text: model.sourceText) } label: {
+                        Image(systemName: "lightbulb")
+                            .font(.system(size: Tokens.Icon.cardAction, weight: .medium))
+                            .foregroundStyle(Tokens.Content.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Loc.t("Объяснить", "Explain"))
+
+                    CopyButton(model.sourceText, style: .icon,
+                               accessibilityLabel: Loc.t("Скопировать выражение", "Copy expression"))
                 }
+                Button { model.toggleSave() } label: {
+                    Image(systemName: model.isSaved ? "bookmark.fill" : "bookmark")
+                        .font(.system(size: Tokens.Icon.cardActionProminent, weight: .medium))
+                        .foregroundStyle(model.isSaved ? Tokens.Content.primary : Tokens.Content.tertiary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(model.isSaved
+                    ? Loc.t("Убрать из изучаемого", "Remove from study list")
+                    : Loc.t("Сохранить в изучаемое", "Save to study list"))
             }
+
+            Text(model.sourceText)
+                .textStyle(Tokens.Text.headline)
+                .foregroundStyle(Tokens.Content.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
 
             Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)
 
-            // 3–5 native renderings of the meaning — the first is the primary (most faithful); the
-            // rest are alternative phrasings, dimmed. Each can be copied on its own.
-            VStack(alignment: .leading, spacing: Tokens.Space.s12) {
-                ForEach(Array(natives.enumerated()), id: \.offset) { index, native in
-                    HStack(alignment: .top, spacing: Tokens.Space.s8) {
-                        Text(native)
-                            .textStyle(Tokens.Text.body)
-                            .foregroundStyle(index == 0 ? Tokens.Content.primary : Tokens.Content.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Spacer(minLength: Tokens.Space.s8)
-                        CopyButton(native, style: .icon,
-                                   accessibilityLabel: Loc.t("Скопировать перевод", "Copy translation"))
+            // Each translation in the main colour, with a dimmed context note below saying which sense
+            // it fits. A single translation (unambiguous word / phrase) shows no context note. Each
+            // translation is individually copyable; a hairline separates multiple senses.
+            VStack(alignment: .leading, spacing: Tokens.Space.s16) {
+                ForEach(Array(variants.enumerated()), id: \.offset) { index, variant in
+                    VStack(alignment: .leading, spacing: Tokens.Space.s4) {
+                        HStack(alignment: .top, spacing: Tokens.Space.s8) {
+                            Text(variant.text)
+                                .textStyle(Tokens.Text.body)
+                                .foregroundStyle(Tokens.Content.primary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: Tokens.Space.s8)
+                            CopyButton(variant.text, style: .icon,
+                                       accessibilityLabel: Loc.t("Скопировать перевод", "Copy translation"))
+                        }
+                        if !variant.context.isEmpty {
+                            Text(variant.context)
+                                .textStyle(Tokens.Text.footnote)
+                                .foregroundStyle(Tokens.Content.tertiary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    if index < variants.count - 1 {
+                        Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)
                     }
                 }
             }

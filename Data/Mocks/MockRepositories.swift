@@ -6,6 +6,7 @@
 //
 
 import Domain   // NB: no `import Foundation` — it would make `Expression` ambiguous with Foundation.Expression (Predicate).
+import struct Foundation.Data   // just `Data` (for the translation cache) — avoids the `Expression` clash above.
 
 public actor MockExpressionRepository: ExpressionRepository {
     private var items: [Expression]
@@ -73,4 +74,21 @@ public actor MockHistoryRepository: HistoryRepository {
     public func recent(limit: Int) async throws -> [HistoryEntry] {
         Array(entries.sorted { $0.createdAt > $1.createdAt }.prefix(limit))
     }
+}
+
+/// In-memory `TranslationCache` for tests/previews — same contract as the SwiftData one without a store.
+public actor MockTranslationCache: TranslationCache {
+    private var store: [String: Data] = [:]
+    private var hits = 0
+    public init() {}
+    public func value(forKey key: String) async -> Data? {
+        guard let value = store[key] else { return nil }
+        hits += 1
+        return value
+    }
+    public func setValue(_ value: Data, forKey key: String) async { store[key] = value }
+    public func statistics() async -> TranslationCacheStats {
+        TranslationCacheStats(entryCount: store.count, hitCount: hits)
+    }
+    public func clear() async { store.removeAll(); hits = 0 }
 }

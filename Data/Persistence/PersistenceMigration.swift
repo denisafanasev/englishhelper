@@ -11,15 +11,26 @@
 import Foundation
 import SwiftData
 
-/// v1 — the current shape of `ExpressionModel` + `HistoryModel`.
+/// v1 — `ExpressionModel` + `HistoryModel`.
 public enum AppSchemaV1: VersionedSchema {
     public static var versionIdentifier: Schema.Version { Schema.Version(1, 0, 0) }
     public static var models: [any PersistentModel.Type] { [ExpressionModel.self, HistoryModel.self] }
 }
 
-/// Migration plan across schema versions. Append a new `AppSchemaV2` and a `MigrationStage`
+/// v2 — adds `CachedTranslationModel` (the translation cache). Adding a new entity is additive, so the
+/// V1→V2 stage is lightweight (SwiftData just creates the new table; existing data is untouched).
+public enum AppSchemaV2: VersionedSchema {
+    public static var versionIdentifier: Schema.Version { Schema.Version(2, 0, 0) }
+    public static var models: [any PersistentModel.Type] {
+        [ExpressionModel.self, HistoryModel.self, CachedTranslationModel.self]
+    }
+}
+
+/// Migration plan across schema versions. Append a new `AppSchemaVn` and a `MigrationStage`
 /// (lightweight or custom) for every breaking change — never just bump the models.
 public enum AppMigrationPlan: SchemaMigrationPlan {
-    public static var schemas: [any VersionedSchema.Type] { [AppSchemaV1.self] }
-    public static var stages: [MigrationStage] { [] }
+    public static var schemas: [any VersionedSchema.Type] { [AppSchemaV1.self, AppSchemaV2.self] }
+    public static var stages: [MigrationStage] {
+        [.lightweight(fromVersion: AppSchemaV1.self, toVersion: AppSchemaV2.self)]
+    }
 }

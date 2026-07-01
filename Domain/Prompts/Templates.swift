@@ -18,15 +18,29 @@ public struct HowToSayResult: Codable, Sendable, Equatable {
 
 /// `{ studied, native }` — a faithful rendering of the input in BOTH the studied language (the
 /// card headline + TTS) and the native language (the understanding line). "Get it" / Translate.
+/// One translation of the input into the native language, with the context/sense it fits.
+public struct TranslationVariant: Codable, Sendable, Equatable {
+    /// The translation in the native language (shown in the main text colour).
+    public let text: String
+    /// A short note on when/in what sense this translation applies (shown dimmed under the text).
+    /// Empty when there is only a single translation (an unambiguous word or a longer phrase).
+    public let context: String
+    public init(text: String, context: String) {
+        self.text = text
+        self.context = context
+    }
+}
+
 public struct Understanding: Codable, Sendable, Equatable {
     /// The input rendered in the STUDIED language (headline + spoken).
     public let studied: String
-    /// 3–5 distinct natural renderings of the meaning in the NATIVE language (different valid
-    /// translations / phrasings). At least one; the first is the primary (most faithful).
-    public let natives: [String]
-    public init(studied: String, natives: [String]) {
+    /// 1–5 translations into the NATIVE language. MORE THAN ONE only when the source genuinely has
+    /// different context/sense-dependent translations (e.g. a single word with several meanings);
+    /// an unambiguous word or a longer phrase yields exactly one.
+    public let variants: [TranslationVariant]
+    public init(studied: String, variants: [TranslationVariant]) {
         self.studied = studied
-        self.natives = natives
+        self.variants = variants
     }
 }
 
@@ -399,28 +413,38 @@ public struct UnderstandTemplate: PromptTemplate {
         or in ANY other language — detect the source language automatically. Stay FAITHFUL to the exact
         meaning and register; do NOT change the register or add commentary.
         Return:
-        - "studied": the text in \(studiedLanguage) (if the input is already in \(studiedLanguage),
-          copy it verbatim). Translate from the ORIGINAL.
-        - "natives": 3 to 5 DISTINCT natural renderings of the same meaning in \(nativeLanguage) —
-          different valid phrasings or synonyms a native speaker might use — ordered with the most
-          faithful/literal FIRST, then more idiomatic alternatives. Each must preserve the meaning and
-          register. Only return fewer than 3 if the text genuinely has no other natural rendering.
-          Do NOT pad with near-identical duplicates.
+        - "studied": the text in \(studiedLanguage) (if already in \(studiedLanguage), copy it verbatim).
+        - "variants": the translation(s) into \(nativeLanguage). Return MORE THAN ONE only when the
+          source has genuinely DISTINCT meanings or senses that translate differently depending on
+          context — judged by MEANING, not by length. This applies equally to a single word (e.g.
+          "bank" = a financial institution OR a riverbank) AND to a multi-word expression or idiom
+          (e.g. "night and day" = the two times of day taken literally, vs. its idiomatic senses
+          "completely different" or "around the clock"): a phrase is NOT automatically single-sense.
+          When the text has just one faithful meaning, return EXACTLY ONE variant. NEVER pad with
+          near-synonyms, word-order swaps, or stylistic rewordings. Up to 5 maximum, ordered most
+          common first.
+          Each variant is an object:
+            * "text": the translation in \(nativeLanguage).
+            * "context": a SHORT note in \(nativeLanguage) saying in which sense/context this translation
+              applies, so the user can pick the right one. Set "context" to "" (empty) when there is
+              only ONE variant.
         \(plainTextRule)
         """
     }
 
     public var outputJSONSchema: String {
-        #"{"type":"object","properties":{"studied":{"type":"string"},"natives":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":5}},"required":["studied","natives"]}"#
+        #"{"type":"object","properties":{"studied":{"type":"string"},"variants":{"type":"array","items":{"type":"object","properties":{"text":{"type":"string"},"context":{"type":"string"}},"required":["text","context"]},"minItems":1,"maxItems":5}},"required":["studied","variants"]}"#
     }
 
     public func userMessage(for input: String) -> String { input }
 
     public func decode(_ rawJSON: String) throws -> Understanding {
         let raw = try decodeJSON(Understanding.self, from: rawJSON)
-        let natives = raw.natives.map(PlainText.clean).filter { !$0.isEmpty }
-        guard !natives.isEmpty else { throw LLMError.invalidOutput("understand: no native rendering") }
-        return Understanding(studied: PlainText.clean(raw.studied), natives: natives)
+        let variants = raw.variants
+            .map { TranslationVariant(text: PlainText.clean($0.text), context: PlainText.clean($0.context)) }
+            .filter { !$0.text.isEmpty }
+        guard !variants.isEmpty else { throw LLMError.invalidOutput("understand: no translation") }
+        return Understanding(studied: PlainText.clean(raw.studied), variants: variants)
     }
 }
 

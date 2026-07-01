@@ -98,7 +98,27 @@ public struct RootView: View {
                 // iOS Share sheet → scenario. The extension wakes us via the `englishhelper://` scheme;
                 // becoming active is the fallback if that launch was blocked. Single-consume either way.
                 .onOpenURL { url in
-                    if url.scheme == "englishhelper" { handleShared() }
+                    guard url.scheme == "englishhelper" else { return }
+                    // Lock Screen widgets deep-link straight to a scenario (the host carries the
+                    // destination + mode). The Share extension uses host "share" (and legacy URLs) →
+                    // fall through to the App-Group consume. Idempotent on purpose: iOS 26 can fire this
+                    // twice per tap, and re-selecting the same tab / mode is a no-op.
+                    switch url.host {
+                    case "seeit", "seeit-translate":
+                        selection = "camera"
+                        photo.selectMode(url.host == "seeit-translate" ? .translate : .explain)
+                        if CameraPicker.isAvailable { photo.cameraTapped() }   // open the camera straight away
+                    case "getit", "getit-translate":
+                        selection = "in"
+                        inbound.selectMode(url.host == "getit-translate" ? .translate : .explain)
+                        inbound.beginVoiceInput()                              // turn the mic on for input
+                    case "sayit", "sayit-what":
+                        selection = "out"
+                        out.selectMode(url.host == "sayit-what" ? .whatToSay : .howToSay)
+                        out.beginVoiceInput()
+                    default:
+                        handleShared()
+                    }
                 }
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .active { handleShared() }   // warm foreground (already-running app)
@@ -116,7 +136,7 @@ public struct RootView: View {
                 .onChange(of: ui.pendingExplain) { _, request in
                     guard let request else { return }
                     selection = "in"
-                    inbound.startExplain(text: request.text, image: request.imageData, alternatives: request.alternatives)
+                    inbound.startExplain(text: request.text, alternatives: request.alternatives)
                     ui.pendingExplain = nil
                 }
                 .sheet(isPresented: $ui.showSettings) {
@@ -151,7 +171,7 @@ public struct RootView: View {
         switch route {
         case .explainText(let text):
             selection = "in"
-            inbound.startExplain(text: text, image: nil)
+            inbound.startExplain(text: text)
         case .explainImage(let data):
             selection = "camera"
             photo.selectMode(.explain)

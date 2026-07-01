@@ -28,17 +28,28 @@ public extension HowToSayUseCase {
 public struct HowToSayInteractor: HowToSayUseCase {
     private let llm: LLMClient
     private let history: HistoryRepository
+    /// Reuses an earlier result for the SAME intent+tone+languages instead of re-asking the model. Nil
+    /// disables caching (tests / back-compat).
+    private let cache: (any TranslationCache)?
     /// Resolves the model tier for "Say it" generation at call time (reads the user's Settings choice).
     private let tier: @Sendable () -> ModelTier
 
-    public init(llm: LLMClient, history: HistoryRepository,
+    public init(llm: LLMClient, history: HistoryRepository, cache: (any TranslationCache)? = nil,
                 tier: @escaping @Sendable () -> ModelTier = { .standard }) {
         self.llm = llm
         self.history = history
+        self.cache = cache
         self.tier = tier
     }
 
     public func callAsFunction(_ intent: String, tone: Register, studiedLanguage: String, nativeLanguage: String) async throws -> [PhraseVariant] {
+        let key = TranslationCacheKey.make(kind: .howToSay, input: intent, tone: tone,
+                                           studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage)
+        // Cache hit → return the earlier result, no model call.
+        if let cached = await cache?.value(forKey: key),
+           let variants = try? JSONDecoder().decode([PhraseVariant].self, from: cached), !variants.isEmpty {
+            return variants
+        }
         let result = try await llm.run(
             HowToSayTemplate(tone: tone, studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage, tier: tier()), input: intent
         )
@@ -49,6 +60,7 @@ public struct HowToSayInteractor: HowToSayUseCase {
         try? await history.append(
             HistoryEntry(inputText: intent, result: .howToSay(result.variants))
         )
+        if let data = try? JSONEncoder().encode(result.variants) { await cache?.setValue(data, forKey: key) }
         return result.variants
     }
 }
@@ -73,13 +85,17 @@ public extension RegenerateHowToSayUseCase {
 public struct RegenerateHowToSayInteractor: RegenerateHowToSayUseCase {
     private let llm: LLMClient
     private let history: HistoryRepository
+    /// Regenerate NEVER reads the cache (the user explicitly wants a fresh set), but it OVERWRITES it so
+    /// re-entering the same intent later shows this latest set instead of re-asking the model.
+    private let cache: (any TranslationCache)?
     /// Resolves the model tier for "Say it" generation at call time (reads the user's Settings choice).
     private let tier: @Sendable () -> ModelTier
 
-    public init(llm: LLMClient, history: HistoryRepository,
+    public init(llm: LLMClient, history: HistoryRepository, cache: (any TranslationCache)? = nil,
                 tier: @escaping @Sendable () -> ModelTier = { .standard }) {
         self.llm = llm
         self.history = history
+        self.cache = cache
         self.tier = tier
     }
 
@@ -93,6 +109,11 @@ public struct RegenerateHowToSayInteractor: RegenerateHowToSayUseCase {
         try? await history.append(
             HistoryEntry(inputText: intent, result: .howToSay(result.variants))
         )
+        if let data = try? JSONEncoder().encode(result.variants) {
+            let key = TranslationCacheKey.make(kind: .howToSay, input: intent, tone: tone,
+                                               studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage)
+            await cache?.setValue(data, forKey: key)
+        }
         return result.variants
     }
 }
@@ -118,17 +139,27 @@ public extension WhatToSayUseCase {
 public struct WhatToSayInteractor: WhatToSayUseCase {
     private let llm: LLMClient
     private let history: HistoryRepository
+    /// Reuses an earlier set for the SAME situation+tone+languages on the initial request; `regenerate`
+    /// always skips the lookup (but still overwrites the cache with the fresh set). Nil disables caching.
+    private let cache: (any TranslationCache)?
     /// Resolves the model tier for "Say it" generation at call time (reads the user's Settings choice).
     private let tier: @Sendable () -> ModelTier
 
-    public init(llm: LLMClient, history: HistoryRepository,
+    public init(llm: LLMClient, history: HistoryRepository, cache: (any TranslationCache)? = nil,
                 tier: @escaping @Sendable () -> ModelTier = { .standard }) {
         self.llm = llm
         self.history = history
+        self.cache = cache
         self.tier = tier
     }
 
     public func callAsFunction(_ situation: String, tone: Register, studiedLanguage: String, nativeLanguage: String, regenerate: Bool) async throws -> [PhraseVariant] {
+        let key = TranslationCacheKey.make(kind: .whatToSay, input: situation, tone: tone,
+                                           studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage)
+        if !regenerate, let cached = await cache?.value(forKey: key),
+           let variants = try? JSONDecoder().decode([PhraseVariant].self, from: cached), !variants.isEmpty {
+            return variants
+        }
         // On regenerate, nudge for a different set (kept in English so it doesn't read as part of the
         // situation). History records the situation as its own `.whatToSay` kind.
         let input = regenerate
@@ -140,6 +171,7 @@ public struct WhatToSayInteractor: WhatToSayUseCase {
         try? await history.append(
             HistoryEntry(inputText: situation, result: .whatToSay(result.variants))
         )
+        if let data = try? JSONEncoder().encode(result.variants) { await cache?.setValue(data, forKey: key) }
         return result.variants
     }
 }
@@ -190,18 +222,29 @@ public protocol UnderstandUseCase: Sendable {
 public struct UnderstandInteractor: UnderstandUseCase {
     private let llm: LLMClient
     private let history: HistoryRepository
+    /// Reuses an earlier translation of the SAME text+languages instead of re-asking the model. The
+    /// FULL `Understanding` (all variants + context) is cached, unlike the lossy history entry. Nil
+    /// disables caching.
+    private let cache: (any TranslationCache)?
     /// Resolves the model tier for translation at call time (reads the user's Settings choice). Default
     /// keeps the fast model (Haiku); the App wires a live provider so the setting takes effect.
     private let tier: @Sendable () -> ModelTier
 
-    public init(llm: LLMClient, history: HistoryRepository,
+    public init(llm: LLMClient, history: HistoryRepository, cache: (any TranslationCache)? = nil,
                 tier: @escaping @Sendable () -> ModelTier = { .fast }) {
         self.llm = llm
         self.history = history
+        self.cache = cache
         self.tier = tier
     }
 
     public func callAsFunction(_ text: String, studiedLanguage: String, nativeLanguage: String) async throws -> Understanding {
+        let key = TranslationCacheKey.make(kind: .translate, input: text, tone: nil,
+                                           studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage)
+        if let cached = await cache?.value(forKey: key),
+           let understanding = try? JSONDecoder().decode(Understanding.self, from: cached), !understanding.variants.isEmpty {
+            return understanding
+        }
         let result = try await llm.run(
             UnderstandTemplate(studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage, tier: tier()), input: text
         )
@@ -209,7 +252,8 @@ public struct UnderstandInteractor: UnderstandUseCase {
         // card headlines, what TTS speaks in the studied language, and what saving files as the
         // study-card front), with the native translation as the result. Falls back to the raw input.
         let studied = result.studied.isEmpty ? text : result.studied
-        try? await history.append(HistoryEntry(inputText: studied, result: .translate(ru: result.natives.first ?? "")))
+        try? await history.append(HistoryEntry(inputText: studied, result: .translate(ru: result.variants.first?.text ?? "")))
+        if let data = try? JSONEncoder().encode(result) { await cache?.setValue(data, forKey: key) }
         return result
     }
 }

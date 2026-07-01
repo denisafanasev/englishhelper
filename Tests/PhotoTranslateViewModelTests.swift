@@ -108,6 +108,18 @@ import Presentation
         #expect(vm.blocks.isEmpty == false)
         #expect(vm.imageData == image)   // still the same photo
     }
+
+    /// Switching mode after a FAILURE must re-run the same photo (not stay stuck on the error).
+    @Test func switchingModeAfterFailureReRunsOnTheSamePhoto() async throws {
+        let vm = makeVM(llm: FlakyLLM(failuresBeforeSuccess: 1))   // default mode Explain → first run fails
+        vm.didPickFromLibrary(Data([0x09]))
+        try await waitUntil { vm.phase == .failed }
+        #expect(vm.phase == .failed)
+        vm.selectMode(.translate)                                  // switch → must retry the same photo
+        try await waitUntil { vm.phase == .result }
+        #expect(vm.phase == .result)
+        #expect(vm.blocks.isEmpty == false)
+    }
 }
 
 /// Always fails with a connection error — exercises the "photo kept + retry offered" path.

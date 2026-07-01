@@ -17,7 +17,7 @@ public struct AppConfig: Sendable {
     public let claudeFastModel: String   // fast tier (Haiku) — used for plain translation, for speed
     public let claudeBaseURL: URL
 
-    public static let defaultModel = "claude-sonnet-4-6"
+    public static let defaultModel = "claude-sonnet-5"
     public static let defaultFastModel = "claude-haiku-4-5"
     public static let defaultBaseURL = URL(string: "https://api.anthropic.com")!
 

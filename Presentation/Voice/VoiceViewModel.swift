@@ -118,6 +118,16 @@ public final class VoiceViewModel {
         }
     }
 
+    /// Start voice input WITHOUT toggling — used by the Lock Screen widget deep link so the mic comes on
+    /// the moment the app opens. Idempotent (guards `.listening`) because iOS 26 can deliver the widget
+    /// URL twice; the toggle `micTapped` would otherwise start-then-stop. Shows the priming sheet first
+    /// if the mic hasn't been primed yet.
+    public func beginVoiceInput() {
+        guard phase != .listening else { return }
+        if UserDefaults.standard.bool(forKey: primingDefaultsKey) { startListening() }
+        else { showMicPriming = true }
+    }
+
     public func confirmPriming() {
         UserDefaults.standard.set(true, forKey: primingDefaultsKey)
         showMicPriming = false

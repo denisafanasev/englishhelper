@@ -102,4 +102,15 @@ import Presentation
         try await waitUntil { vm.isSaved(variant) }
         #expect(vm.isSaved(variant))
     }
+
+    /// The Say-it Lock Screen widget calls beginVoiceInput on open; it must START the mic (not toggle)
+    /// and survive iOS 26's double-delivered deep link — a second call must NOT turn the mic back off.
+    @Test func beginVoiceInputStartsMicAndIsIdempotent() {
+        UserDefaults.standard.set(true, forKey: "didPrimeMic")   // primed → starts directly, no priming sheet
+        let vm = makeVM()
+        vm.beginVoiceInput()
+        #expect(vm.isListening)                                   // mic on
+        vm.beginVoiceInput()                                      // second (double-fire) must be a no-op
+        #expect(vm.isListening)
+    }
 }

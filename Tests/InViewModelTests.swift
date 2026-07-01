@@ -47,13 +47,14 @@ import Presentation
         UserDefaults.standard.set("english", forKey: "studiedLanguage")
         let vm = makeVM()
         vm.selectMode(.translate)                            // default is now Explain; test Translate
-        vm.source = "Could you give me a hand?"
+        vm.source = "bank"
         vm.submit()
         try await waitUntil { vm.phase == .result }
         #expect(vm.phase == .result)
-        #expect(vm.studied == "Could you give me a hand?")   // headline = studied rendering
-        #expect(vm.translations.count == 3)                  // 3–5 native renderings (mock returns 3)
-        #expect(vm.translations.first == "Не могли бы вы мне помочь?")   // first = primary translation
+        #expect(vm.studied == "bank")                        // headline = studied rendering
+        #expect(vm.translations.count == 2)                  // a word with two senses → two variants
+        #expect(vm.translations.first?.text == "банк")       // first translation
+        #expect(vm.translations.first?.context == "финансовое учреждение")   // with its context note
     }
 
     @Test func understandTemplateIsFaithfulStudiedPlusNative() {
@@ -103,16 +104,16 @@ import Presentation
         let list = StudyListInteractor(repository: repo)
         var stored: [Domain.Expression] = []
         let clock = ContinuousClock(); let start = clock.now
-        while !stored.contains(where: { $0.en == "Could you give me a hand?" }) {
+        while !stored.contains(where: { $0.en == "bank" }) {
             if clock.now - start > .seconds(2) { break }
             try await Task.sleep(for: .milliseconds(10))
             stored = (try? await list.list()) ?? []
         }
-        // Front = the studied rendering (mock "Could you give me a hand?") — NOT the raw input
-        // "Bonjour le monde" nor the native gloss "Это тестовый перевод.".
-        #expect(stored.contains { $0.en == "Could you give me a hand?" })
+        // Front = the studied rendering (mock "bank") — NOT the raw input "Bonjour le monde" nor a
+        // native gloss ("банк").
+        #expect(stored.contains { $0.en == "bank" })
         #expect(!stored.contains { $0.en == "Bonjour le monde" })
-        #expect(!stored.contains { $0.en == "Это тестовый перевод." })
+        #expect(!stored.contains { $0.en == "банк" })
     }
 
     // MARK: Explain mode
@@ -187,5 +188,56 @@ import Presentation
             stored = (try? await list.list()) ?? []
         }
         #expect(stored.contains { $0.en == "give me a hand" })
+    }
+
+    /// Switching mode after a FAILURE must re-run the same input (not stay stuck on the error).
+    @Test func switchingModeAfterFailureReRunsOnTheSameInput() async throws {
+        UserDefaults.standard.set("russian", forKey: "targetLanguage")
+        UserDefaults.standard.set("english", forKey: "studiedLanguage")
+        let vm = makeVM(llm: FlakyUnderstandLLM(failuresBeforeSuccess: 1))   // default mode Explain → first run fails
+        vm.source = "bank"
+        vm.submit()
+        try await waitUntil { vm.phase == .failed }
+        #expect(vm.phase == .failed)
+        vm.selectMode(.translate)                                            // switch → must retry the input
+        try await waitUntil { vm.phase == .result }
+        #expect(vm.phase == .result)
+        #expect(vm.translations.isEmpty == false)
+    }
+
+    /// Regression: explaining a phrase routed from a See it card must NOT carry the source photo — the
+    /// explanation should generalise (what the phrase means on its own), not describe the whole photo.
+    @Test func startExplainCarriesNoPhotoContext() async throws {
+        UserDefaults.standard.set("russian", forKey: "targetLanguage")
+        UserDefaults.standard.set("english", forKey: "studiedLanguage")
+        let spy = ExplainImageSpyLLM()
+        let vm = makeVM(llm: spy)
+        vm.startExplain(text: "NAUGHTY BOY")          // as if tapped from a See it / Translate block
+        try await waitUntil { vm.phase == .result }
+        #expect(vm.phase == .result)
+        #expect(vm.explanation != nil)
+        #expect(spy.explainHadImage == false)         // no image attached → explained broadly, not in-photo
+    }
+}
+
+/// Records whether the Explain template carried an attached image, then defers to the mock for a valid
+/// response — proves the See it → Explain handoff sends just the phrase, WITHOUT the source photo.
+private final class ExplainImageSpyLLM: LLMClient, @unchecked Sendable {
+    nonisolated(unsafe) private(set) var explainHadImage: Bool?
+    private let backing = MockLLMClient()
+    func run<Template: PromptTemplate>(_ template: Template, input: Template.Input) async throws -> Template.Output {
+        if template.id == "explainExpression" { explainHadImage = template.image(for: input) != nil }
+        return try await backing.run(template, input: input)
+    }
+}
+
+/// Fails once (the previous-mode error), then returns a valid translation — verifies that switching
+/// mode after a failure re-runs the request on the same input.
+private final class FlakyUnderstandLLM: LLMClient, @unchecked Sendable {
+    nonisolated(unsafe) private var remaining: Int
+    init(failuresBeforeSuccess: Int) { self.remaining = failuresBeforeSuccess }
+    func run<Template: PromptTemplate>(_ template: Template, input: Template.Input) async throws -> Template.Output {
+        if remaining > 0 { remaining -= 1; throw LLMError.offline }
+        return try template.decode(#"{"studied":"bank","variants":[{"text":"банк","context":""}]}"#)
     }
 }

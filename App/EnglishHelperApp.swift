@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import WidgetKit
 import Adapters
 import Presentation
 
@@ -52,13 +53,25 @@ struct EnglishHelperApp: App {
                 network: network,
                 consumeShared: {
                     // Bridge the App-Group payload (App target) to the Presentation route type.
-                    switch SharedInbox.consume() {
+                    let payload = SharedInbox.consume()
+                    if payload != nil { ShareSupport.clearShareNotification() }
+                    switch payload {
                     case .text(let text): return .explainText(text)
                     case .image(let data): return .explainImage(data)
                     case nil: return nil
                     }
                 }
             )
+            .task {
+                // Mirror the interface language to the App Group + ensure notification permission, so the
+                // Share Extension can post a tappable, localized "open EnglishHelper" notification (iOS
+                // bars the extension from foregrounding the app directly).
+                await ShareSupport.prepare()
+                // Force already-placed Lock Screen widgets to re-render with this build's code. Without
+                // this they keep a CACHED render after an app update (our widgets use a `.never` refresh
+                // policy, so iOS never re-fetches their timeline on its own).
+                WidgetCenter.shared.reloadAllTimelines()
+            }
         }
     }
 }
