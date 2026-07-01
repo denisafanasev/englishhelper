@@ -1,41 +1,93 @@
-# EnglishHelper
+# Gist
 
-A personal-use iOS app for learning a language from your own — capture phrases by **voice**,
-**text**, or **camera**, get natural phrasings, translations, and plain-language explanations from
-Claude, and collect the keepers into a flat study list you export to an external SRS app (AlgoApp).
+**Not just a translator — a companion for actually living in another language.**
+
+A word-for-word translator answers one narrow question: *what does this mean?* But being dropped into
+a language — as a traveller, an expat, or anyone studying in an immersion setting — throws harder
+questions at you all day: *What is this sign telling me? Did I understand that correctly? How do I say
+this without sounding like a phrasebook?* Gist turns your phone into a quiet assistant for
+exactly those moments. It **reads the world around you**, **explains what things really mean** (not
+just their dictionary gloss), and **hands you natural ways to say what you want** — then quietly
+remembers the phrases worth keeping, so the language you meet in the wild becomes the language you
+actually learn.
 
 Built originally for learning **English from Russian**; the studied and native languages are now
-configurable, so it works between any pair of the supported languages.
+configurable, so it works between any pair of the six supported languages.
 
 - **Platform:** iOS 26 · Swift 6 · SwiftUI · SwiftData · async/await + actors · Xcode 26
-- **Online-first.** The LLM is **Claude** (via the Anthropic Messages API).
-- **Design:** monochrome "Liquid Glass"; system colors are functional signals only (success / error / warning).
+- **Powered by Claude** (Anthropic Messages API) — online-first.
+- **Design:** monochrome "Liquid Glass"; color is reserved for functional signals (success / error / warning).
 
 See `CLAUDE.md` for the full architecture map and `CHANGELOG.md` for release history.
 
 ---
 
+## Why it's more than a translator
+
+Living in a language is three problems, not one — and the app is built around exactly those three.
+Each is a tab, and each works whether you're online at a café or you just need a quick answer on the
+street:
+
+- 👁️ **See it — read the world.** You can *see* the words but not understand them. Point the camera
+  (or pick a photo) at a **sign, menu, label, or page**; the text is recognised and the translation is
+  drawn right over the image, where it is. Tap any phrase to have it **explained** in plain language,
+  or saved.
+- 🧠 **Get it — understand what reached you.** You *heard* or *read* something and want to be sure.
+  Type it, or **dictate** it in the language you're learning. **Translate** gives a faithful meaning;
+  **Explain** tells you what it *really* says — how formal or blunt it sounds, when people actually use
+  it, and a familiar comparison so it clicks.
+- 💬 **Say it — put words in your mouth.** You need to *speak*. Say or type the thought in your own
+  language and get **three natural phrasings** to choose from. Or describe the **situation** —
+  "ordering coffee", "apologising for being late", "haggling at a market" — and get the handful of
+  phrases that situation actually calls for. Pick a **tone** (Polite / Casual / Slang) to match the room.
+
+Every result can be **spoken aloud** in the language you're studying — so you can hear it before you
+say it — and any phrase worth keeping is **one tap** from your personal study list.
+
+---
+
 ## What it does
 
-On first launch a short **onboarding** screen lets you pick three languages — **interface**,
-**studied** (the one you're learning), and **native** (the one explanations and translations come in).
-All three are changeable later in Settings. After that the app opens on five tabs:
+On first launch a short **onboarding** lets you pick three languages — **interface**, **studied** (the
+one you're learning), and **native** (the one translations and explanations come in). All three are
+changeable later in Settings. Then the app opens on five tabs:
 
 | Tab | What it's for |
 |---|---|
 | **Сказать / Say it** *(center, default)* | Speak or type a thought in your native language → get **3** natural phrasings ("How to say"), or describe a **situation** → get the 3–10 most useful phrases for it ("What to say"). Pick a tone (Polite / Casual / Slang); tap a card to hear it; bookmark to save. |
 | **Понять / Get it** | Type or dictate an expression in the studied language. **Translate** gives a faithful meaning; **Explain** breaks down what it means, how formal or blunt it sounds, where it's used, and a familiar comparison. |
-| **Смотреть / See it** | Point the camera (or pick a photo) at a sign, menu, or page → on-device OCR → translation drawn over the image. |
-| **Изучаю / Study** | Your flat study list. Add manually, mark learned, swipe to delete, and **export to AlgoApp** via the system share sheet. |
+| **Смотреть / See it** | Point the camera (or pick a photo) at a sign, menu, or page → on-device text recognition → translation drawn over the image. Explain or save any phrase from the result. |
+| **Изучаю / Study** | Your flat study list. Add manually, mark learned, swipe to delete, and **export to AlgoApp** (your SRS app) via the system share sheet. |
 | **История / History** | A chronological log of every request; tap an entry to see the full result, replay it, copy, or explain. |
 
 A **Settings** sheet (gear, top-right of every screen) covers a live Claude connection check, the
 three language pickers, the appearance theme, and app/model info.
 
+### Little things that make it feel like an assistant
+
+- **Hear it before you say it.** Every phrase plays back in the studied language with one tap.
+- **Save the keepers.** Bookmark any card; it lands in **Study** and exports to your SRS app.
+- **Walk away during a long request.** Leave the app mid-recognition or mid-explanation and get a
+  **notification** the moment the result is ready.
+- **Instant, offline repeats.** Ask for the same translation or phrasing again and it comes straight
+  from an on-device **cache** — no wait, no connection needed. (Asking for *fresh* variants still
+  goes to Claude.)
+- **One tap from the Lock Screen.** Six **widgets**, one per scenario, deep-link straight into the app
+  with the **camera ready** (See it) or the **mic already listening** (Get it / Say it).
+- **Share a photo straight in.** Send an image to Gist from Photos or any app to translate it.
+- **Light / dark / system** theme, and a live check that Claude is reachable.
+
 ### Supported languages
 
 Russian · English · French · Spanish · German · Italian — available for the **interface**, as the
 **studied** language, and as the **native** language (translations / generation / explanations / speech).
+
+### Under the hood
+
+Language work runs on **Claude Sonnet 5** for everything but plain translation, which uses the faster
+**Claude Haiku** tier for speed; you can override the model per scenario in Settings. Text recognition
+(**See it**) and speech both run **on-device**. The app is online-first — it needs a connection to
+reach Claude — but cached translations and saved phrases stay available offline.
 
 ---
 
@@ -71,6 +123,10 @@ typed decoder), so adding a feature means adding a template — the LLM adapter 
 
 The Xcode project is generated from `project.yml` (the `.xcodeproj` is gitignored).
 
+> **Public vs. internal name.** The app ships publicly as **Gist** (its display name / App Store name).
+> The Xcode project, scheme, module, and bundle identifier keep the original internal name
+> **EnglishHelper** — so the commands below and the paths in *Project layout* still reference `EnglishHelper`.
+
 ```sh
 cp Secrets.example.xcconfig Secrets.xcconfig   # first time only — then fill in CLAUDE_API_KEY
 brew install xcodegen                           # if needed
@@ -92,7 +148,7 @@ xcodebuild test  -scheme EnglishHelper -destination 'platform=iOS Simulator,name
 
 `AppConfig` reads `CLAUDE_API_KEY` and `CLAUDE_MODEL` from the app's Info.plist, populated at build
 time from `Secrets.xcconfig` (gitignored; layered in via `Config/Base.xcconfig` with `#include?`).
-The base URL defaults to `https://api.anthropic.com`; the model defaults to `claude-sonnet-4-6`.
+The base URL defaults to `https://api.anthropic.com`; the model defaults to `claude-sonnet-5`.
 **A key embedded in a built app is extractable** — fine for personal/dev use; production would proxy
 Claude through a backend.
 
@@ -142,6 +198,6 @@ CHANGELOG.md     user-facing release notes
 
 ## Status
 
-**v1.2.5** — six interface/studied/native languages (RU · EN · FR · ES · DE · IT), first-launch
-language onboarding, unified card action rows, and a denser type scale. 71 tests green; builds and
-runs on iOS 26.
+**v1.3.1 (build 6)** — Lock Screen widgets (one per scenario, deep-linking straight into the camera
+or a live mic), an offline translation cache with reuse stats, per-scenario model choice, and the
+standard tier upgraded to **Claude Sonnet 5**. Builds and runs on iOS 26.

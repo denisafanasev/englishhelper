@@ -316,6 +316,8 @@ public struct SettingsView: View {
             Divider().overlay(Tokens.Hairline.default)
             infoRow(Loc.t("Модель", "Model"), model.modelName)
             Divider().overlay(Tokens.Hairline.default)
+            infoRow(Loc.t("Быстрая модель", "Fast model"), model.fastModelName)
+            Divider().overlay(Tokens.Hairline.default)
             infoRow(Loc.t("Голос озвучки", "Speech voice"), studied.language.title)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
