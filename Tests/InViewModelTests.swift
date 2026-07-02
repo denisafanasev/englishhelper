@@ -12,7 +12,11 @@ import Domain
 import Adapters
 import Presentation
 
-@Suite @MainActor struct InViewModelTests {
+@Suite(.serialized) @MainActor struct InViewModelTests {
+
+    /// The mode is persisted so the screen reopens as last used; each test starts from the default,
+    /// not whatever a previous test (or app run on this simulator) left behind.
+    init() { UserDefaults.standard.removeObject(forKey: "getItMode") }
 
     private func makeVM(
         llm: any LLMClient = MockLLMClient(),
@@ -114,6 +118,43 @@ import Presentation
         #expect(stored.contains { $0.en == "bank" })
         #expect(!stored.contains { $0.en == "Bonjour le monde" })
         #expect(!stored.contains { $0.en == "банк" })
+    }
+
+    // MARK: State preservation (leave / return)
+
+    /// Leaving the screen with a result on screen drops an edit the user never submitted, so on
+    /// return the input matches the visible result. The result itself is untouched.
+    @Test func leavingScreenRevertsUnsubmittedEdit() async throws {
+        UserDefaults.standard.set("russian", forKey: "targetLanguage")
+        UserDefaults.standard.set("english", forKey: "studiedLanguage")
+        let vm = makeVM()
+        vm.selectMode(.translate)
+        vm.source = "bank"
+        vm.submit()
+        try await waitUntil { vm.phase == .result }
+
+        vm.source = "river"                     // edited, never submitted
+        vm.screenDisappeared()                  // ← tab switched away
+
+        #expect(vm.source == "bank")
+        #expect(vm.phase == .result)
+        #expect(vm.translations.first?.text == "банк")
+    }
+
+    /// With nothing generated there is nothing to mismatch — a draft survives leaving the screen.
+    @Test func leavingScreenKeepsDraftWhenNothingGenerated() {
+        let vm = makeVM()
+        vm.source = "draft text"
+        vm.screenDisappeared()
+        #expect(vm.source == "draft text")
+        #expect(vm.phase == .idle)
+    }
+
+    /// The chosen mode is persisted: a fresh view model (next launch) starts in the last-used mode.
+    @Test func modePersistsAcrossInstances() {
+        let vm = makeVM()
+        vm.selectMode(.translate)
+        #expect(makeVM().mode == .translate)
     }
 
     // MARK: Explain mode

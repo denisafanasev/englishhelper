@@ -30,14 +30,24 @@ struct EnglishHelperApp: App {
             Task { @MainActor in networkUI.update(isOnline: online, isConstrained: constrained) }
         }
         let probe = reachability
-        do {
-            container = try AppContainer.bootLive(
-                config: config,
-                isReachable: { [weak probe] in probe?.isReachable ?? true }
-            )
-        } catch {
-            container = AppContainer.bootMock(config: config)
+        if Self.isUITest {
+            container = AppContainer.bootUITestStubs(config: config)
+        } else {
+            do {
+                container = try AppContainer.bootLive(
+                    config: config,
+                    isReachable: { [weak probe] in probe?.isReachable ?? true }
+                )
+            } catch {
+                container = AppContainer.bootMock(config: config)
+            }
         }
+    }
+
+    /// True when launched by the XCUITest suite (`-uiTestStubs`): boot deterministic stubs and skip
+    /// the launch side effects that could pop system dialogs mid-test (notification permission).
+    private static var isUITest: Bool {
+        ProcessInfo.processInfo.arguments.contains("-uiTestStubs")
     }
 
     var body: some Scene {
@@ -63,6 +73,7 @@ struct EnglishHelperApp: App {
                 }
             )
             .task {
+                guard !Self.isUITest else { return }   // no permission prompts under XCUITest
                 // Mirror the interface language to the App Group + ensure notification permission, so the
                 // Share Extension can post a tappable, localized "open EnglishHelper" notification (iOS
                 // bars the extension from foregrounding the app directly).

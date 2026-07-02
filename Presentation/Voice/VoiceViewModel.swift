@@ -24,11 +24,19 @@ public final class VoiceViewModel {
             case .whatToSay: Loc.t("Что сказать", "What to say", "Quoi dire", "Qué decir", "Was sagen", "Cosa dire")
             }
         }
+        /// Last-used mode, persisted so the screen comes back the way the user left it (like tone).
+        static let storageKey = "sayItMode"
+        static var current: Mode {
+            Mode(rawValue: UserDefaults.standard.string(forKey: storageKey) ?? "") ?? .howToSay
+        }
     }
 
     // UI state
     public private(set) var phase: Phase = .idle
-    public private(set) var mode: Mode = .howToSay   // only selectMode mutates, preserving its re-run logic
+    /// Only selectMode mutates (preserving its re-run logic); persisted like tone.
+    public private(set) var mode: Mode = Mode.current {
+        didSet { UserDefaults.standard.set(mode.rawValue, forKey: Mode.storageKey) }
+    }
     public var intent: String = ""                       // editable transcript / typed input
     /// Tone/register for the generated phrases — chosen on-screen, persisted (shared with the
     /// "Понять" compose path via `ToneOfVoice.current`).
@@ -46,6 +54,9 @@ public final class VoiceViewModel {
 
     private var savedVariantIDs: Set<UUID> = []           // optimistic "saved" flag (instant UI)
     private var savedExpressionIDs: [UUID: UUID] = [:]    // variant.id → stored Expression.id
+    /// The input the on-screen variants were generated from — restored on leaving the screen so an
+    /// edit the user never submitted can't sit above results it doesn't match.
+    private var generatedIntent: String?
     /// Bumped on every new result set; lets an in-flight save tell "user un-saved" from "results
     /// were regenerated" so a regenerate can't silently delete a phrase the user just bookmarked.
     private var resultsGeneration = 0
@@ -140,6 +151,7 @@ public final class VoiceViewModel {
         errorMessage = nil
         isOffline = false
         variants = []
+        generatedIntent = nil
         intent = ""
         phase = .listening
         captureTask = Task { [weak self] in
@@ -214,9 +226,9 @@ public final class VoiceViewModel {
         let tone = self.tone.register
         switch mode {
         case .howToSay:
-            run { try await self.howToSay(text, tone: tone, studiedLanguage: studied, nativeLanguage: native) }
+            run(input: text) { try await self.howToSay(text, tone: tone, studiedLanguage: studied, nativeLanguage: native) }
         case .whatToSay:
-            run { try await self.whatToSay(text, tone: tone, studiedLanguage: studied, nativeLanguage: native) }
+            run(input: text) { try await self.whatToSay(text, tone: tone, studiedLanguage: studied, nativeLanguage: native) }
         }
     }
 
@@ -228,9 +240,9 @@ public final class VoiceViewModel {
         let tone = self.tone.register
         switch mode {
         case .howToSay:
-            run { try await self.regenerateHowToSay(text, tone: tone, studiedLanguage: studied, nativeLanguage: native) }
+            run(input: text) { try await self.regenerateHowToSay(text, tone: tone, studiedLanguage: studied, nativeLanguage: native) }
         case .whatToSay:
-            run { try await self.whatToSay(text, tone: tone, studiedLanguage: studied, nativeLanguage: native, regenerate: true) }
+            run(input: text) { try await self.whatToSay(text, tone: tone, studiedLanguage: studied, nativeLanguage: native, regenerate: true) }
         }
     }
 
@@ -250,10 +262,19 @@ public final class VoiceViewModel {
         } else if phase == .results || phase == .processing || phase == .failed {
             requestTask?.cancel()             // no input to re-run with → drop stale/in-flight/errored results
             variants = []
+            generatedIntent = nil
             errorMessage = nil                // a stale error's Retry would otherwise re-run the NEW mode
             isOffline = false
             phase = .idle
         }
+    }
+
+    /// The screen is leaving (tab switch / navigation away). An edit the user typed but never
+    /// submitted is dropped, so on return the input still matches the results on screen — the only
+    /// way to generate for the new text is to actually press the button.
+    public func screenDisappeared() {
+        guard phase == .results, let generatedIntent, intent != generatedIntent else { return }
+        intent = generatedIntent
     }
 
     /// Pick a tone from the on-screen selector. With variants already shown (or in flight),
@@ -265,7 +286,7 @@ public final class VoiceViewModel {
         if canSubmit, phase == .results || phase == .processing { submit() }
     }
 
-    private func run(_ operation: @escaping () async throws -> [PhraseVariant]) {
+    private func run(input: String, _ operation: @escaping () async throws -> [PhraseVariant]) {
         requestTask?.cancel()
         phase = .processing
         errorMessage = nil
@@ -275,6 +296,7 @@ public final class VoiceViewModel {
             do {
                 let result = try await operation()
                 self.variants = result
+                self.generatedIntent = input
                 self.savedVariantIDs = []
                 self.savedExpressionIDs = [:]
                 self.resultsGeneration += 1
@@ -392,6 +414,7 @@ public final class VoiceViewModel {
         captureTask?.cancel(); requestTask?.cancel(); playTask?.cancel()
         phase = .idle
         variants = []
+        generatedIntent = nil
         intent = ""
         errorMessage = nil
         playingVariantID = nil

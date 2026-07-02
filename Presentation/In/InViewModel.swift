@@ -26,12 +26,19 @@ public final class InViewModel {
             case .explain: Loc.t("Объяснение", "Explain")
             }
         }
+        /// Last-used mode, persisted so the screen comes back the way the user left it.
+        static let storageKey = "getItMode"
+        static var current: Mode {
+            Mode(rawValue: UserDefaults.standard.string(forKey: storageKey) ?? "") ?? .explain
+        }
     }
 
     // UI state
     public private(set) var phase: Phase = .idle
-    /// Mutated only via `selectMode`/`startExplain` so the re-run/reset logic isn't bypassed.
-    public private(set) var mode: Mode = .explain
+    /// Mutated only via `selectMode`/`startExplain` so the re-run/reset logic isn't bypassed; persisted.
+    public private(set) var mode: Mode = Mode.current {
+        didSet { UserDefaults.standard.set(mode.rawValue, forKey: Mode.storageKey) }
+    }
     public var source: String = ""                       // editable transcript / typed input
     public private(set) var studied: String?             // input rendered in the studied language (headline + TTS)
     public private(set) var translations: [TranslationVariant] = []  // Translate mode: 1–5 translations + context
@@ -46,6 +53,9 @@ public final class InViewModel {
     public var showMicPriming = false
 
     private var savedExpressionID: UUID?
+    /// The input the on-screen result was generated from — restored on leaving the screen so an
+    /// edit the user never submitted can't sit above a result it doesn't match.
+    private var generatedSource: String?
     /// Bumped on every new result so an in-flight save can tell "user un-saved" from "result was
     /// regenerated" and not silently delete a just-bookmarked expression.
     private var resultsGeneration = 0
@@ -147,6 +157,7 @@ public final class InViewModel {
         studied = nil
         translations = []
         explanation = nil
+        generatedSource = nil
         source = ""
         phase = .listening
         captureTask = Task { [weak self] in
@@ -247,6 +258,7 @@ public final class InViewModel {
                     self.explanation = result
                     self.translations = []
                 }
+                self.generatedSource = text
                 self.isSaved = false
                 self.savedExpressionID = nil
                 self.resultsGeneration += 1
@@ -288,6 +300,7 @@ public final class InViewModel {
             studied = nil
             translations = []
             explanation = nil
+            generatedSource = nil
             // Nothing to re-run (no input): drop any stale result/error back to idle.
             if phase == .result || phase == .failed {
                 phase = .idle
@@ -295,6 +308,14 @@ public final class InViewModel {
                 isOffline = false
             }
         }
+    }
+
+    /// The screen is leaving (tab switch / navigation away). An edit the user typed but never
+    /// submitted is dropped, so on return the input still matches the result on screen — the only
+    /// way to run the new text is to actually press the button.
+    public func screenDisappeared() {
+        guard phase == .result, let generatedSource, source != generatedSource else { return }
+        source = generatedSource
     }
 
     private func handleRequestError(_ error: Error) {
@@ -401,6 +422,7 @@ public final class InViewModel {
         studied = nil
         translations = []
         explanation = nil
+        generatedSource = nil
         source = ""
         errorMessage = nil
         isPlaying = false

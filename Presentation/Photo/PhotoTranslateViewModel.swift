@@ -25,11 +25,18 @@ public final class PhotoTranslateViewModel {
             case .translate: Loc.t("Перевод", "Translate")
             }
         }
+        /// Last-used mode, persisted so the screen comes back the way the user left it.
+        static let storageKey = "seeItMode"
+        static var current: Mode {
+            Mode(rawValue: UserDefaults.standard.string(forKey: storageKey) ?? "") ?? .explain
+        }
     }
 
     public private(set) var phase: Phase = .idle
-    /// Mutated only via `selectMode` so the re-run logic isn't bypassed.
-    public private(set) var mode: Mode = .explain
+    /// Mutated only via `selectMode` so the re-run logic isn't bypassed; persisted.
+    public private(set) var mode: Mode = Mode.current {
+        didSet { UserDefaults.standard.set(mode.rawValue, forKey: Mode.storageKey) }
+    }
     public private(set) var imageData: Data?
     public private(set) var blocks: [TranslatedBlock] = []          // Translate mode result
     public private(set) var explanation: SceneExplanation?          // Explain mode result

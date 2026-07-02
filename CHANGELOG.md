@@ -9,6 +9,13 @@ does: help you catch the gist of the world around you and say what you mean, in 
 languages, not just English. It's the same app underneath — your saved phrases, history, and
 settings are untouched; only the name on your Home screen changes.
 
+**Screens keep their state.** Switch tabs freely: every screen now comes back exactly as you left
+it — the generated phrases or translation still on screen, the text they were made from, and your
+chosen mode (How to say / What to say, Explain / Translate) and tone. Modes now also survive an app
+restart, like the tone always has. And if you edited the input but never pressed the button, the
+edit is dropped when you leave — so what's in the field always matches the results below it, and a
+new set is generated only when you actually ask for one.
+
 **Lock Screen widgets.** Add Gist It to your Lock Screen for one-tap access to a scenario — no
 unlocking and tapping through tabs. There are six, one per scenario: **See it · Explain**, **See it ·
 Translate**, **Get it · Explain**, **Get it · Translate**, **Say it · How to say**, and **Say it ·

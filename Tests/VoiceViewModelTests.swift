@@ -11,7 +11,11 @@ import Domain
 import Adapters
 import Presentation
 
-@Suite @MainActor struct VoiceViewModelTests {
+@Suite(.serialized) @MainActor struct VoiceViewModelTests {
+
+    /// The mode is persisted (like tone) so the screen reopens as last used; each test starts from
+    /// the default, not whatever a previous test (or app run on this simulator) left behind.
+    init() { UserDefaults.standard.removeObject(forKey: "sayItMode") }
 
     private func makeVM(llm: any LLMClient = MockLLMClient(), isConfigured: Bool = true) -> VoiceViewModel {
         let history = MockHistoryRepository()
@@ -101,6 +105,42 @@ import Presentation
         vm.toggleSave(variant)
         try await waitUntil { vm.isSaved(variant) }
         #expect(vm.isSaved(variant))
+    }
+
+    // MARK: State preservation (leave / return)
+
+    /// Leaving the screen with results on screen drops an edit the user never submitted, so on
+    /// return the input matches the visible variants. The results themselves are untouched — the
+    /// only way to generate for the new text is to actually press the button.
+    @Test func leavingScreenRevertsUnsubmittedEdit() async throws {
+        let vm = makeVM()
+        vm.intent = "как сказать спасибо"
+        vm.submit()
+        try await waitUntil { vm.phase == .results }
+        let shown = vm.variants.map(\.en)
+
+        vm.intent = "совсем другой текст"      // edited, never submitted
+        vm.screenDisappeared()                  // ← tab switched away
+
+        #expect(vm.intent == "как сказать спасибо")
+        #expect(vm.phase == .results)
+        #expect(vm.variants.map(\.en) == shown)
+    }
+
+    /// With nothing generated there is nothing to mismatch — a draft survives leaving the screen.
+    @Test func leavingScreenKeepsDraftWhenNothingGenerated() {
+        let vm = makeVM()
+        vm.intent = "черновик"
+        vm.screenDisappeared()
+        #expect(vm.intent == "черновик")
+        #expect(vm.phase == .idle)
+    }
+
+    /// The chosen mode is persisted: a fresh view model (next launch) starts in the last-used mode.
+    @Test func modePersistsAcrossInstances() {
+        let vm = makeVM()
+        vm.selectMode(.whatToSay)
+        #expect(makeVM().mode == .whatToSay)
     }
 
     /// The Say-it Lock Screen widget calls beginVoiceInput on open; it must START the mic (not toggle)

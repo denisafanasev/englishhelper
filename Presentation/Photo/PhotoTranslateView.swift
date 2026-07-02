@@ -110,8 +110,12 @@ public struct PhotoTranslateView: View {
             PhotoTranslateViewModel.Mode.allCases,
             selected: model.mode,
             label: { $0.title },
+            accessibilityID: "seeit.mode",
             onSelect: { model.selectMode($0) }
         )
+        // `.contain` keeps each segment's OWN label (a bare container label would overwrite
+        // every segment as "Mode", leaving VoiceOver users unable to tell the options apart).
+        .accessibilityElement(children: .contain)
         .accessibilityLabel(Loc.t("Режим", "Mode"))
     }
 

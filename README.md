@@ -198,7 +198,8 @@ CHANGELOG.md     user-facing release notes
 
 ## Status
 
-**v1.3.1 (build 8)** — the app now ships publicly as **Gist It** (renamed from EnglishHelper);
+**v1.3.1 (build 9)** — the app now ships publicly as **Gist It** (renamed from EnglishHelper);
 Lock Screen widgets (one per scenario, deep-linking straight into the camera or a live mic), an
-offline translation cache with reuse stats, per-scenario model choice, and the standard tier
-upgraded to **Claude Sonnet 5**. Builds and runs on iOS 26.
+offline translation cache with reuse stats, per-scenario model choice, the standard tier upgraded
+to **Claude Sonnet 5**, and per-screen state preservation across tab switches (results, input,
+mode, tone — covered by an XCUITest suite). Builds and runs on iOS 26.

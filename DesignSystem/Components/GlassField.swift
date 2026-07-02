@@ -10,11 +10,14 @@ import SwiftUI
 public struct GlassField: View {
     private let placeholder: String
     @Binding private var text: String
+    private let accessibilityID: String?
     private let onSubmit: () -> Void
 
-    public init(_ placeholder: String, text: Binding<String>, onSubmit: @escaping () -> Void = {}) {
+    public init(_ placeholder: String, text: Binding<String>,
+                accessibilityID: String? = nil, onSubmit: @escaping () -> Void = {}) {
         self.placeholder = placeholder
         self._text = text
+        self.accessibilityID = accessibilityID
         self.onSubmit = onSubmit
     }
 
@@ -26,6 +29,7 @@ public struct GlassField: View {
                 .lineLimit(1...4)
                 .submitLabel(.go)
                 .onSubmit(onSubmit)
+                .accessibilityIdentifier(accessibilityID ?? "")
 
             // Clear-all affordance: appears once there's text, wipes the field to start fresh.
             if !text.isEmpty {
