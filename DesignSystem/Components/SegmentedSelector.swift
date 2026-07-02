@@ -17,17 +17,22 @@ public struct SegmentedSelector<Option: Hashable>: View {
     private let options: [Option]
     private let selected: Option
     private let label: (Option) -> String
+    /// Optional stable prefix for per-segment accessibility identifiers
+    /// ("sayit.mode" → "sayit.mode.howToSay") — labels are localized, so tests address by ID.
+    private let accessibilityID: String?
     private let onSelect: (Option) -> Void
 
     public init(
         _ options: [Option],
         selected: Option,
         label: @escaping (Option) -> String,
+        accessibilityID: String? = nil,
         onSelect: @escaping (Option) -> Void
     ) {
         self.options = options
         self.selected = selected
         self.label = label
+        self.accessibilityID = accessibilityID
         self.onSelect = onSelect
     }
 
@@ -52,6 +57,7 @@ public struct SegmentedSelector<Option: Hashable>: View {
                         .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier(accessibilityID.map { "\($0).\(option)" } ?? "")
                 .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
             }
         }

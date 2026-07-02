@@ -138,7 +138,8 @@ Build / test from the CLI:
 
 ```sh
 xcodebuild -scheme EnglishHelper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
-xcodebuild test  -scheme EnglishHelper -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+xcodebuild test  -scheme EnglishHelper        -destination 'platform=iOS Simulator,name=iPhone 17 Pro'  # unit tests (fast)
+xcodebuild test  -scheme EnglishHelperUITests -destination 'platform=iOS Simulator,name=iPhone 17 Pro'  # XCUI suite (slow; drives the real app on stubs)
 ```
 
 > The live mic→speech path and the camera capture path are **device-only** (no mic/camera on the
@@ -198,7 +199,11 @@ CHANGELOG.md     user-facing release notes
 
 ## Status
 
-**v1.3.1 (build 8)** — the app now ships publicly as **Gist It** (renamed from EnglishHelper);
+**v1.3.1 (build 9)** — the app now ships publicly as **Gist It** (renamed from EnglishHelper);
 Lock Screen widgets (one per scenario, deep-linking straight into the camera or a live mic), an
-offline translation cache with reuse stats, per-scenario model choice, and the standard tier
-upgraded to **Claude Sonnet 5**. Builds and runs on iOS 26.
+offline translation cache with reuse stats, per-scenario model choice, the standard tier upgraded
+to **Claude Sonnet 5**, and per-screen state preservation across tab switches (results, input,
+mode, tone — covered by an XCUITest suite). The LLM path now **streams** (bounded time-to-first-byte
++ idle-bounded chunks, per-attempt reachability re-checks), the SwiftData store opens **off the main
+thread** behind the launch screen, and routed actions (widgets / Share sheet / "Explain" buttons)
+never overwrite the user's saved screen modes. Builds and runs on iOS 26.

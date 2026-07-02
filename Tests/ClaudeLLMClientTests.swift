@@ -74,6 +74,24 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
         )
     }
 
+    /// A canned SSE (Server-Sent Events) body — the streaming Messages API's 200 response shape.
+    /// The text is split into two `content_block_delta` events to prove the client ACCUMULATES
+    /// deltas rather than reading just one.
+    private func sse(_ text: String, stopReason: String = "end_turn") throws -> Data {
+        var lines = ["event: message_start", #"data: {"type":"message_start"}"#, ""]
+        let mid = text.index(text.startIndex, offsetBy: text.count / 2)
+        for part in [String(text[..<mid]), String(text[mid...])] where !part.isEmpty {
+            let delta = try JSONSerialization.data(withJSONObject: [
+                "type": "content_block_delta", "index": 0,
+                "delta": ["type": "text_delta", "text": part],
+            ])
+            lines += ["event: content_block_delta", "data: " + String(decoding: delta, as: UTF8.self), ""]
+        }
+        lines += ["event: message_delta", #"data: {"type":"message_delta","delta":{"stop_reason":"\#(stopReason)"}}"#, ""]
+        lines += ["event: message_stop", #"data: {"type":"message_stop"}"#, ""]
+        return Data(lines.joined(separator: "\n").utf8)
+    }
+
     @Test func retriesThenThrowsOverloadedOn529() async {
         StubURLProtocol.statusCode = 529
         StubURLProtocol.callCount = 0
@@ -104,12 +122,10 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
         let real = #"{"variants":[{"en":"How much does this cost?","register":"formal","context_ru":"Уточнить цену"},{"en":"Do you accept cards?","register":"formal","context_ru":"Способ оплаты"},{"en":"Could I have a receipt?","register":"formal","context_ru":"Попросить чек"}]}"#
         let schemaEcho = #"{"variants":{"type":"array","minItems":3},"required":["variants"]}"#
         let modelText = "\(schemaEcho)\n\nHmm, \"Покупка\" is very general. Let me list useful phrases.\n\n\(real)"
-        let envelope = try JSONSerialization.data(
-            withJSONObject: ["content": [["type": "text", "text": modelText]]])
 
         StubURLProtocol.statusCode = 200
         StubURLProtocol.callCount = 0
-        StubURLProtocol.responseBody = envelope
+        StubURLProtocol.responseBody = try sse(modelText)
         defer { StubURLProtocol.responseBody = nil; StubURLProtocol.statusCode = 529 }
 
         let client = makeClient()
@@ -124,11 +140,9 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
     /// A transient transport blip (e.g. the connection drops mid-request) must be RETRIED with backoff,
     /// not surfaced immediately — so a momentary mobile-network hiccup recovers silently.
     @Test func retriesTransientTransportErrorThenSucceeds() async throws {
-        let envelope = try JSONSerialization.data(
-            withJSONObject: ["content": [["type": "text", "text": #"{"ok":true}"#]]])
         StubURLProtocol.statusCode = 200
         StubURLProtocol.callCount = 0
-        StubURLProtocol.responseBody = envelope
+        StubURLProtocol.responseBody = try sse(#"{"ok":true}"#)
         StubURLProtocol.failCode = .networkConnectionLost
         StubURLProtocol.failTimes = 2                 // first 2 attempts drop, 3rd succeeds
         defer {
@@ -161,10 +175,8 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
     /// not support the effort parameter"), which would break EVERY request routed to the fast model
     /// (plain translate defaults to Haiku). Sonnet (and other reasoning tiers) still receive it.
     @Test func omitsEffortForHaikuButSendsItForSonnet() async throws {
-        let envelope = try JSONSerialization.data(
-            withJSONObject: ["content": [["type": "text", "text": #"{"ok":true}"#]]])
         StubURLProtocol.statusCode = 200
-        StubURLProtocol.responseBody = envelope
+        StubURLProtocol.responseBody = try sse(#"{"ok":true}"#)
         defer {
             StubURLProtocol.responseBody = nil; StubURLProtocol.statusCode = 529; StubURLProtocol.lastBody = nil
         }
@@ -200,10 +212,8 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
     /// the client statically dispatched to the defaults (2048 / true) and ignored EVERY override — which
     /// silently capped the photo translator's output budget and forced it to low effort.
     @Test func honorsPerTemplateTuningOverridesThroughClient() async throws {
-        let envelope = try JSONSerialization.data(
-            withJSONObject: ["content": [["type": "text", "text": #"{"ok":true}"#]]])
         StubURLProtocol.statusCode = 200
-        StubURLProtocol.responseBody = envelope
+        StubURLProtocol.responseBody = try sse(#"{"ok":true}"#)
         StubURLProtocol.callCount = 0; StubURLProtocol.lastBody = nil
         defer {
             StubURLProtocol.responseBody = nil; StubURLProtocol.statusCode = 529; StubURLProtocol.lastBody = nil
@@ -216,6 +226,21 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
         #expect(json["max_tokens"] as? Int == 7777)            // override honored (was hard-capped at 2048)
         let effort = (json["output_config"] as? [String: Any])?["effort"] as? String
         #expect(effort == "medium")                            // prefersFastResponse=false honored (was "low")
+        #expect(json["stream"] as? Bool == true)               // every request streams (idle-bounded timeout)
+    }
+
+    /// A streamed answer cut off by the output-token budget must surface as the actionable
+    /// `.responseTooLong`, not a generic parse failure — the stop reason arrives in `message_delta`.
+    @Test func streamedMaxTokensStopSurfacesAsResponseTooLong() async throws {
+        StubURLProtocol.statusCode = 200
+        StubURLProtocol.callCount = 0
+        StubURLProtocol.responseBody = try sse(#"{"truncated…"#, stopReason: "max_tokens")
+        defer { StubURLProtocol.responseBody = nil; StubURLProtocol.statusCode = 529 }
+
+        let client = makeClient()
+        await #expect(throws: LLMError.responseTooLong) {
+            _ = try await client.run(HealthCheckTemplate(), input: ())
+        }
     }
 }
 

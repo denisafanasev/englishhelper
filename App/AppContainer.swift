@@ -162,6 +162,24 @@ public final class AppContainer: Sendable {
         }
     }
 
+    /// UI tests (`-uiTestStubs` launch flag): the whole graph on deterministic STUB adapters whose
+    /// latency makes any spurious re-request VISIBLE as the processing state, plus in-memory
+    /// repositories — History then shows exactly one row per real LLM request, so a hidden
+    /// regeneration can't slip past a test. No network, no permissions, no translation cache.
+    public static func bootUITestStubs(config: AppConfig = .load()) -> AppContainer {
+        AppContainer(
+            config: config,
+            llm: StubLLMClient(latency: .milliseconds(800)),
+            speechRecognizer: StubSpeechRecognizing(),
+            speechRecognizerEN: StubSpeechRecognizing(),
+            speechSynthesizer: StubSpeechSynthesizing(),
+            textRecognizer: StubTextRecognizing(),
+            expressions: MockExpressionRepository(),
+            history: MockHistoryRepository(),
+            exporter: MockDeckExporting()
+        )
+    }
+
     /// Previews / tests / offline fallback: the whole graph on mocks. No network, no permissions.
     public static func bootMock(config: AppConfig = .load()) -> AppContainer {
         AppContainer(

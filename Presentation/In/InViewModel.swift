@@ -26,12 +26,20 @@ public final class InViewModel {
             case .explain: Loc.t("Объяснение", "Explain")
             }
         }
+        /// Last-used mode, persisted so the screen comes back the way the user left it.
+        static let storageKey = "getItMode"
+        static var current: Mode {
+            Mode(rawValue: Prefs.store.string(forKey: storageKey) ?? "") ?? .explain
+        }
     }
 
     // UI state
     public private(set) var phase: Phase = .idle
-    /// Mutated only via `selectMode`/`startExplain` so the re-run/reset logic isn't bypassed.
-    public private(set) var mode: Mode = .explain
+    /// Mutated only via `selectMode`/`routeMode`/`startExplain` so the re-run/reset logic isn't
+    /// bypassed. Persisted ONLY by `selectMode` (an explicit tap on the on-screen selector) — a
+    /// routed change (Explain from a card/History, Share Extension, widget deep link) is
+    /// session-only, so it can never silently overwrite the user's saved preference.
+    public private(set) var mode: Mode = Mode.current
     public var source: String = ""                       // editable transcript / typed input
     public private(set) var studied: String?             // input rendered in the studied language (headline + TTS)
     public private(set) var translations: [TranslationVariant] = []  // Translate mode: 1–5 translations + context
@@ -46,6 +54,9 @@ public final class InViewModel {
     public var showMicPriming = false
 
     private var savedExpressionID: UUID?
+    /// The input the on-screen result was generated from — restored on leaving the screen so an
+    /// edit the user never submitted can't sit above a result it doesn't match.
+    private var generatedSource: String?
     /// Bumped on every new result so an in-flight save can tell "user un-saved" from "result was
     /// regenerated" and not silently delete a just-bookmarked expression.
     private var resultsGeneration = 0
@@ -116,7 +127,7 @@ public final class InViewModel {
         case .listening:
             stopListening()
         default:
-            if UserDefaults.standard.bool(forKey: primingDefaultsKey) {
+            if Prefs.store.bool(forKey: primingDefaultsKey) {
                 startListening()
             } else {
                 showMicPriming = true
@@ -129,12 +140,12 @@ public final class InViewModel {
     /// URL twice; the toggle `micTapped` would otherwise start-then-stop. Shows priming first if needed.
     public func beginVoiceInput() {
         guard phase != .listening else { return }
-        if UserDefaults.standard.bool(forKey: primingDefaultsKey) { startListening() }
+        if Prefs.store.bool(forKey: primingDefaultsKey) { startListening() }
         else { showMicPriming = true }
     }
 
     public func confirmPriming() {
-        UserDefaults.standard.set(true, forKey: primingDefaultsKey)
+        Prefs.store.set(true, forKey: primingDefaultsKey)
         showMicPriming = false
         startListening()
     }
@@ -147,6 +158,7 @@ public final class InViewModel {
         studied = nil
         translations = []
         explanation = nil
+        generatedSource = nil
         source = ""
         phase = .listening
         captureTask = Task { [weak self] in
@@ -247,6 +259,7 @@ public final class InViewModel {
                     self.explanation = result
                     self.translations = []
                 }
+                self.generatedSource = text
                 self.isSaved = false
                 self.savedExpressionID = nil
                 self.resultsGeneration += 1
@@ -275,26 +288,60 @@ public final class InViewModel {
         submit()
     }
 
-    /// Switch the Translate/Explain mode. With a result already shown (or in flight), re-run the
-    /// same input in the new mode so you see it both ways; otherwise just remember the choice.
-    public func selectMode(_ newMode: Mode) {
+    /// Switch the Translate/Explain mode from the ON-SCREEN selector — remembered across launches.
+    public func selectMode(_ newMode: Mode) { applyMode(newMode, persist: true) }
+
+    /// Programmatic mode change (widget deep link, shared-in text). Same behavior, but SESSION-ONLY:
+    /// a routed action must never overwrite the mode the user explicitly chose on the selector.
+    public func routeMode(_ newMode: Mode) { applyMode(newMode, persist: false) }
+
+    /// With a result already shown (or in flight), re-run the same input in the new mode so you see
+    /// it both ways; otherwise just remember the choice.
+    private func applyMode(_ newMode: Mode, persist: Bool) {
         guard newMode != mode else { return }
         mode = newMode
+        if persist { Prefs.store.set(newMode.rawValue, forKey: Mode.storageKey) }
+        // Re-run the input the result was GENERATED from, not an edited-but-unsubmitted draft —
+        // running new text happens only via the button. (A deliberately CLEARED field falls through
+        // to the reset branch instead of resurrecting deleted text.)
+        if phase == .result, canSubmit, let generatedSource { source = generatedSource }
         // Re-run the SAME input in the new mode — including after a FAILURE (e.g. the model was
         // unavailable in the previous mode), so switching mode retries instead of staying stuck.
         if canSubmit, phase == .result || phase == .processing || phase == .failed {
             submit()
         } else {
+            requestTask?.cancel()   // an in-flight old-mode result must not land under the new mode
             studied = nil
             translations = []
             explanation = nil
-            // Nothing to re-run (no input): drop any stale result/error back to idle.
-            if phase == .result || phase == .failed {
+            generatedSource = nil
+            // Nothing to re-run (no input): drop any stale result/in-flight/error back to idle.
+            if phase == .result || phase == .processing || phase == .failed {
                 phase = .idle
                 errorMessage = nil
                 isOffline = false
             }
         }
+    }
+
+    /// The screen is leaving (tab switch / navigation away). Stops anything that must not keep
+    /// running from a hidden tab, then drops an edit the user typed but never submitted, so on
+    /// return the input still matches the result on screen — the only way to run the new text is to
+    /// actually press the button.
+    public func screenDisappeared() {
+        // The mic must never keep recording from a hidden tab — and unlike stopListening(), leaving
+        // must NOT auto-submit: no LLM request may fire from a screen the user isn't on.
+        if phase == .listening {
+            captureTask?.cancel()
+            captureTask = nil
+            phase = .idle
+        }
+        stopPlayback()
+        // Trimmed comparison: `generatedSource` stores the trimmed submit text, so a whitespace-only
+        // difference (e.g. dictation's trailing space) must not count as an edit.
+        guard phase == .result, let generatedSource,
+              source.trimmingCharacters(in: .whitespacesAndNewlines) != generatedSource else { return }
+        source = generatedSource
     }
 
     private func handleRequestError(_ error: Error) {
@@ -401,6 +448,7 @@ public final class InViewModel {
         studied = nil
         translations = []
         explanation = nil
+        generatedSource = nil
         source = ""
         errorMessage = nil
         isPlaying = false

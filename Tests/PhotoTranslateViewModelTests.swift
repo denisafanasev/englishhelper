@@ -11,7 +11,11 @@ import Domain
 import Adapters
 import Presentation
 
-@Suite @MainActor struct PhotoTranslateViewModelTests {
+@Suite(.serialized) @MainActor struct PhotoTranslateViewModelTests {
+
+    /// The mode is persisted so the screen reopens as last used; each test starts from the default,
+    /// not whatever a previous test (or app run on this simulator) left behind.
+    init() { UserDefaults.standard.removeObject(forKey: "seeItMode") }
 
     private func makeVM(llm: any LLMClient = MockLLMClient()) -> PhotoTranslateViewModel {
         let repo = MockExpressionRepository(seed: [])
@@ -34,6 +38,22 @@ import Presentation
             if clock.now - start > timeout { return }
             try await Task.sleep(for: .milliseconds(10))
         }
+    }
+
+    /// The chosen mode is persisted: a fresh view model (next launch) starts in the last-used mode.
+    @Test func modePersistsAcrossInstances() {
+        let vm = makeVM()
+        vm.selectMode(.translate)
+        #expect(makeVM().mode == .translate)
+    }
+
+    /// A ROUTED mode change (shared-in image, widget deep link) applies for the session but must
+    /// never overwrite the persisted selector choice — only an explicit on-screen tap does.
+    @Test func routedModeIsSessionOnly() {
+        let vm = makeVM()
+        vm.routeMode(.translate)
+        #expect(vm.mode == .translate)          // applied now…
+        #expect(makeVM().mode == .explain)      // …but the next launch keeps the saved default
     }
 
     /// Explain is the default mode — a photo yields a scene explanation, not text blocks.

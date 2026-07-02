@@ -14,17 +14,20 @@ public struct EHButton: View {
     private let icon: String?
     private let kind: Kind
     private let fillWidth: Bool
+    private let accessibilityID: String?
     private let action: () -> Void
     /// `.buttonStyle(.plain)` doesn't dim on `.disabled()`, so read the environment and dim ourselves —
     /// otherwise a disabled primary button looks fully active (a silent dead button).
     @Environment(\.isEnabled) private var isEnabled
 
     public init(_ title: String, icon: String? = nil, kind: Kind = .primary,
-                fillWidth: Bool = false, action: @escaping () -> Void) {
+                fillWidth: Bool = false, accessibilityID: String? = nil,
+                action: @escaping () -> Void) {
         self.title = title
         self.icon = icon
         self.kind = kind
         self.fillWidth = fillWidth
+        self.accessibilityID = accessibilityID
         self.action = action
     }
 
@@ -50,6 +53,7 @@ public struct EHButton: View {
         }
         .buttonStyle(.plain)
         .opacity(isEnabled ? 1 : 0.4)
+        .accessibilityIdentifier(accessibilityID ?? "")
     }
 
     private var foreground: Color {

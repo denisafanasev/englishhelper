@@ -34,6 +34,9 @@ public struct InView: View {
             }
             .navigationTitle(Loc.t("Понять", "Get it"))
             .settingsTrigger()
+            // Leaving the screen (tab switch) drops an input edit the user never submitted, so the
+            // field still matches the on-screen result when they come back.
+            .onDisappear { model.screenDisappeared() }
             .sheet(isPresented: $model.showMicPriming) { primingSheet }
             .alert(Loc.t("Сохранение", "Saving"), isPresented: saveErrorBinding) {
                 Button("OK", role: .cancel) {}
@@ -60,11 +63,16 @@ public struct InView: View {
                 InViewModel.Mode.allCases,
                 selected: model.mode,
                 label: { $0.title },
+                accessibilityID: "getit.mode",
                 onSelect: { model.selectMode($0) }
             )
+            // `.contain` keeps each segment's OWN label (a bare container label would overwrite
+            // every segment as "Mode", leaving VoiceOver users unable to tell the options apart).
+            .accessibilityElement(children: .contain)
             .accessibilityLabel(Loc.t("Режим", "Mode"))
 
-            GlassField(Loc.t("Текст на изучаемом языке", "Text in the language you're learning"), text: $model.source) {
+            GlassField(Loc.t("Текст на изучаемом языке", "Text in the language you're learning"),
+                       text: $model.source, accessibilityID: "getit.input") {
                 fieldFocused = false
                 model.submit()
             }
@@ -86,7 +94,8 @@ public struct InView: View {
                     .foregroundStyle(Tokens.Content.tertiary)
             }
 
-            EHButton(actionTitle, icon: actionIcon, kind: .primary, fillWidth: true) {
+            EHButton(actionTitle, icon: actionIcon, kind: .primary, fillWidth: true,
+                     accessibilityID: "getit.action") {
                 fieldFocused = false
                 model.submit()
             }

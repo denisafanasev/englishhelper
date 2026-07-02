@@ -52,11 +52,12 @@ public final class ClaudeLLMClient: LLMClient {
         // Flaky cellular (tower handoffs, tunnels, weak signal) drops the path for a second or two,
         // then recovers. `waitsForConnectivity = true` lets URLSession quietly PAUSE and RESUME across
         // those blips instead of failing the instant the path drops — the single biggest lever for
-        // "get a result on a bad link". The per-REQUEST `request.timeoutInterval` (30s text / 90s
-        // photo) is still the response-START deadline (fast feedback); `timeoutIntervalForResource` is
-        // just the outer ceiling for the whole transfer, raised so a long photo job that survives a few
-        // blips isn't cut off mid-recovery. A TRULY-offline device is short-circuited before we wait
-        // at all (see the `isReachable` pre-check in `send`), so waiting-for-connectivity never hangs.
+        // "get a result on a bad link". CAVEAT: while waiting for connectivity the per-request
+        // timeout does NOT run, so `send` bounds time-to-response-start with its OWN deadline
+        // (`withDeadline`) — without it a link that dropped right at send time could sit in
+        // "processing" for the full resource timeout. `timeoutIntervalForResource` is the outer
+        // ceiling for the whole transfer. A TRULY-offline device is short-circuited before every
+        // attempt (the `isReachable` check in `send`), so waiting-for-connectivity never hangs.
         config.timeoutIntervalForRequest = 90
         config.timeoutIntervalForResource = 600
         config.waitsForConnectivity = true
@@ -99,8 +100,9 @@ public final class ClaudeLLMClient: LLMClient {
         // The `effort` knob is only honoured by the reasoning-capable tiers (Opus / Sonnet 4.6+). Haiku
         // 4.5 hard-REJECTS it with HTTP 400 "This model does not support the effort parameter", which
         // would 400 EVERY request routed to the fast model (plain translate defaults to Haiku) — so omit
-        // `output_config` entirely whenever the resolved model is Haiku.
-        let supportsEffort = !modelName.localizedCaseInsensitiveContains("haiku")
+        // `output_config` entirely whenever the resolved model is Haiku. Locale-independent compare:
+        // a machine identifier must match the same way on a Turkish-locale device (dotless-I casing).
+        let supportsEffort = !modelName.lowercased().contains("haiku")
         let body = RequestBody(
             model: modelName,
             max_tokens: template.maxOutputTokens,
@@ -127,18 +129,12 @@ public final class ClaudeLLMClient: LLMClient {
             request.httpBody = bodyData
         }
 
-        let data = try await send(request)
+        let message = try await send(request, fast: fast)
 
-        let decoded: MessagesResponse
-        do {
-            decoded = try JSONDecoder().decode(MessagesResponse.self, from: data)
-        } catch {
-            throw LLMError.invalidOutput("unparseable API envelope: \(error)")
-        }
         // The model hit its output-token budget and the JSON is truncated mid-stream — surface a
         // clear, actionable error instead of a generic "couldn't parse the response".
-        if decoded.stop_reason == "max_tokens" { throw LLMError.responseTooLong }
-        let text = decoded.content.compactMap(\.text).joined()
+        if message.stopReason == "max_tokens" { throw LLMError.responseTooLong }
+        let text = message.text
         guard !text.isEmpty else { throw LLMError.invalidOutput("empty model response") }
 
         // The model can wrap the answer in a preamble before the real object — markdown fences, a
@@ -157,29 +153,73 @@ public final class ClaudeLLMClient: LLMClient {
         throw lastError
     }
 
-    /// Sends the request, retrying TRANSIENT failures — both transport-level (a dropped connection,
-    /// DNS/host hiccup, TLS reset) and HTTP 429 / 529 / 5xx — with exponential backoff. Mobile networks
-    /// blip constantly (cell handoff, weak signal), so a momentary failure recovers silently instead of
-    /// surfacing as a hard "Service unavailable"; only a SUSTAINED failure (retries exhausted) is shown.
-    private func send(_ request: URLRequest) async throws -> Data {
-        // Fast-offline: with no network path at all, fail immediately rather than letting
-        // `waitsForConnectivity` wait (up to the resource timeout) for a connection that isn't coming.
-        // A flaky-but-present link reports reachable and is handled by waits-for-connectivity + retries.
-        if let isReachable, !isReachable() { throw LLMError.offline }
+    /// The assembled result of one streamed Messages call.
+    private struct StreamedMessage {
+        let text: String
+        let stopReason: String?
+    }
+
+    /// Sends the request (streaming) and assembles the response, retrying TRANSIENT failures — both
+    /// transport-level (a dropped connection, DNS/host hiccup, TLS reset, a stream cut mid-answer)
+    /// and HTTP 429 / 529 / 5xx — with exponential backoff. Mobile networks blip constantly (cell
+    /// handoff, weak signal), so a momentary failure recovers silently instead of surfacing as a hard
+    /// "Service unavailable"; only a SUSTAINED failure (retries exhausted) is shown.
+    private func send(_ request: URLRequest, fast: Bool) async throws -> StreamedMessage {
         var attempt = 0
         while true {
+            // Fast-offline, re-checked before EVERY attempt (not just the first): with no network
+            // path, fail immediately rather than letting `waitsForConnectivity` wait for a connection
+            // that isn't coming — the UI's reconnect auto-retry replays the request when it returns.
+            if let isReachable, !isReachable() { throw LLMError.offline }
             // A superseded request cancels its Task; surface that as the dedicated case so callers
             // never show it as a failure (URLError(.cancelled) below covers the in-flight case).
             if Task.isCancelled { throw LLMError.cancelled }
-            let data: Data
-            let response: URLResponse
             do {
-                (data, response) = try await session.data(for: request)
+                // Streaming, with time-to-response-start explicitly bounded. `waitsForConnectivity`
+                // SUSPENDS the per-request timeout while (re)establishing a link, so without this
+                // deadline a drop right at send time could sit in "processing" for the entire
+                // resource timeout (10 min). Once the response starts, chunks arrive continuously and
+                // `request.timeoutInterval` bounds the idle gap BETWEEN chunks — so a slow-but-alive
+                // generation is never killed for taking long overall (the old non-streaming request
+                // counted the whole server-side generation as idle time and timed out healthy calls).
+                let session = self.session
+                let (bytes, response) = try await Self.withDeadline(seconds: fast ? 30 : 90) {
+                    try await session.bytes(for: request)
+                }
+                guard let http = response as? HTTPURLResponse else {
+                    throw LLMError.requestFailed("no HTTP response")
+                }
+                if (200..<300).contains(http.statusCode) {
+                    return try await Self.readStream(bytes)
+                }
+
+                // Error status: drain a bounded slice of the body for classification/detail.
+                var body = Data()
+                for try await byte in bytes {
+                    body.append(byte)
+                    if body.count >= 4096 { break }
+                }
+                // 401 (missing/invalid key) and 403 (revoked/forbidden key) both mean "fix your key".
+                if http.statusCode == 401 || http.statusCode == 403 { throw LLMError.notConfigured }
+                let isOverload = http.statusCode == 429 || http.statusCode == 529
+                let isRetryable = isOverload || http.statusCode >= 500
+                if isRetryable && attempt < maxRetries {
+                    attempt += 1
+                    try await backoff(attempt: attempt, response: http)
+                    continue
+                }
+                if isOverload { throw LLMError.overloaded }
+                // Bound the echoed API error body: it can be large and may contain request content.
+                let detail = (String(data: body, encoding: .utf8) ?? "").prefix(200)
+                throw LLMError.requestFailed("HTTP \(http.statusCode): \(detail)")
             } catch is CancellationError {
                 throw LLMError.cancelled
+            } catch let error as LLMError {
+                throw error
             } catch let error as URLError {
                 if error.code == .cancelled { throw LLMError.cancelled }   // deliberate supersede
-                // Retry a transient transport failure before giving up; only map the FINAL one.
+                // Retry a transient transport failure before giving up (including a stream that died
+                // mid-answer); only map the FINAL one.
                 if Self.isRetryableTransport(error.code), attempt < maxRetries {
                     attempt += 1
                     try await backoff(attempt: attempt, response: nil)
@@ -191,26 +231,54 @@ public final class ClaudeLLMClient: LLMClient {
             } catch {
                 throw LLMError.requestFailed(error.localizedDescription)
             }
-
-            guard let http = response as? HTTPURLResponse else {
-                throw LLMError.requestFailed("no HTTP response")
-            }
-            if (200..<300).contains(http.statusCode) { return data }
-            // 401 (missing/invalid key) and 403 (revoked/forbidden key) both mean "fix your key".
-            if http.statusCode == 401 || http.statusCode == 403 { throw LLMError.notConfigured }
-
-            let isOverload = http.statusCode == 429 || http.statusCode == 529
-            let isRetryable = isOverload || http.statusCode >= 500
-            if isRetryable && attempt < maxRetries {
-                attempt += 1
-                try await backoff(attempt: attempt, response: http)
-                continue
-            }
-            if isOverload { throw LLMError.overloaded }
-            // Bound the echoed API error body: it can be large and may contain request content.
-            let detail = (String(data: data, encoding: .utf8) ?? "").prefix(200)
-            throw LLMError.requestFailed("HTTP \(http.statusCode): \(detail)")
         }
+    }
+
+    /// Runs `operation` with a hard wall-clock deadline. Fires `LLMError.timedOut` if the deadline
+    /// passes first — used to bound time-to-response-start, which `waitsForConnectivity` otherwise
+    /// leaves unbounded (it suspends the per-request timeout while a link is re-established).
+    private static func withDeadline<T: Sendable>(
+        seconds: Double,
+        _ operation: @escaping @Sendable () async throws -> T
+    ) async throws -> T {
+        try await withThrowingTaskGroup(of: T?.self) { group in
+            group.addTask { try await operation() }
+            group.addTask {
+                // A cancelled sleep must NOT masquerade as a deadline hit — checked below.
+                try? await Task.sleep(for: .seconds(seconds))
+                return nil
+            }
+            defer { group.cancelAll() }
+            guard let first = try await group.next(), let value = first else {
+                if Task.isCancelled { throw LLMError.cancelled }   // superseded, not timed out
+                throw LLMError.timedOut
+            }
+            return value
+        }
+    }
+
+    /// Assembles the streamed SSE response: accumulates `content_block_delta` text and captures the
+    /// final `stop_reason`. A server-sent `error` event surfaces as `.requestFailed`.
+    private static func readStream(_ bytes: URLSession.AsyncBytes) async throws -> StreamedMessage {
+        var text = ""
+        var stopReason: String?
+        for try await line in bytes.lines {
+            guard line.hasPrefix("data:") else { continue }
+            let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
+            guard let data = payload.data(using: .utf8),
+                  let event = try? JSONDecoder().decode(StreamEvent.self, from: data) else { continue }
+            switch event.type {
+            case "content_block_delta":
+                if let chunk = event.delta?.text { text += chunk }
+            case "message_delta":
+                if let reason = event.delta?.stop_reason { stopReason = reason }
+            case "error":
+                throw LLMError.requestFailed(event.error?.message ?? "stream error")
+            default:
+                break   // message_start / content_block_start / content_block_stop / ping / message_stop
+            }
+        }
+        return StreamedMessage(text: text, stopReason: stopReason)
     }
 
     /// Wait before a retry: honor `Retry-After` if present (HTTP retries), else exponential backoff.
@@ -301,6 +369,9 @@ public final class ClaudeLLMClient: LLMClient {
         let thinking: Thinking?
         /// Output config — currently just `effort` (low for fast text, medium for vision/long tasks).
         let output_config: OutputConfig?
+        /// Always stream: chunks arriving continuously turn the per-request timeout into an
+        /// inter-chunk IDLE bound, so a long-but-healthy generation is never killed for total time.
+        let stream = true
         struct Message: Encodable { let role: String; let content: [ContentBlock] }
         struct Thinking: Encodable { let type: String }
         struct OutputConfig: Encodable { let effort: String }
@@ -330,9 +401,16 @@ public final class ClaudeLLMClient: LLMClient {
         }
     }
 
-    private struct MessagesResponse: Decodable {
-        let content: [Block]
-        let stop_reason: String?
-        struct Block: Decodable { let type: String; let text: String? }
+    /// One SSE event from the streaming Messages API (only the fields we consume).
+    private struct StreamEvent: Decodable {
+        let type: String
+        let delta: Delta?
+        let error: APIError?
+        struct Delta: Decodable {
+            let type: String?
+            let text: String?          // content_block_delta (text_delta)
+            let stop_reason: String?   // message_delta
+        }
+        struct APIError: Decodable { let type: String?; let message: String? }
     }
 }

@@ -44,7 +44,8 @@ public struct HowToSayInteractor: HowToSayUseCase {
 
     public func callAsFunction(_ intent: String, tone: Register, studiedLanguage: String, nativeLanguage: String) async throws -> [PhraseVariant] {
         let key = TranslationCacheKey.make(kind: .howToSay, input: intent, tone: tone,
-                                           studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage)
+                                           studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage,
+                                           tier: tier())
         // Cache hit → return the earlier result, no model call.
         if let cached = await cache?.value(forKey: key),
            let variants = try? JSONDecoder().decode([PhraseVariant].self, from: cached), !variants.isEmpty {
@@ -111,7 +112,8 @@ public struct RegenerateHowToSayInteractor: RegenerateHowToSayUseCase {
         )
         if let data = try? JSONEncoder().encode(result.variants) {
             let key = TranslationCacheKey.make(kind: .howToSay, input: intent, tone: tone,
-                                               studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage)
+                                               studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage,
+                                               tier: tier())
             await cache?.setValue(data, forKey: key)
         }
         return result.variants
@@ -155,7 +157,8 @@ public struct WhatToSayInteractor: WhatToSayUseCase {
 
     public func callAsFunction(_ situation: String, tone: Register, studiedLanguage: String, nativeLanguage: String, regenerate: Bool) async throws -> [PhraseVariant] {
         let key = TranslationCacheKey.make(kind: .whatToSay, input: situation, tone: tone,
-                                           studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage)
+                                           studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage,
+                                           tier: tier())
         if !regenerate, let cached = await cache?.value(forKey: key),
            let variants = try? JSONDecoder().decode([PhraseVariant].self, from: cached), !variants.isEmpty {
             return variants
@@ -240,7 +243,8 @@ public struct UnderstandInteractor: UnderstandUseCase {
 
     public func callAsFunction(_ text: String, studiedLanguage: String, nativeLanguage: String) async throws -> Understanding {
         let key = TranslationCacheKey.make(kind: .translate, input: text, tone: nil,
-                                           studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage)
+                                           studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage,
+                                           tier: tier())
         if let cached = await cache?.value(forKey: key),
            let understanding = try? JSONDecoder().decode(Understanding.self, from: cached), !understanding.variants.isEmpty {
             return understanding

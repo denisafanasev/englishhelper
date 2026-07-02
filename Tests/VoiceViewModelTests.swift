@@ -11,7 +11,14 @@ import Domain
 import Adapters
 import Presentation
 
-@Suite @MainActor struct VoiceViewModelTests {
+@Suite(.serialized) @MainActor struct VoiceViewModelTests {
+
+    /// The mode/tone are persisted so the screen reopens as last used; each test starts from the
+    /// defaults, not whatever a previous test (or app run on this simulator) left behind.
+    init() {
+        UserDefaults.standard.removeObject(forKey: "sayItMode")
+        UserDefaults.standard.removeObject(forKey: "toneOfVoice")
+    }
 
     private func makeVM(llm: any LLMClient = MockLLMClient(), isConfigured: Bool = true) -> VoiceViewModel {
         let history = MockHistoryRepository()
@@ -101,6 +108,95 @@ import Presentation
         vm.toggleSave(variant)
         try await waitUntil { vm.isSaved(variant) }
         #expect(vm.isSaved(variant))
+    }
+
+    // MARK: State preservation (leave / return)
+
+    /// Leaving the screen with results on screen drops an edit the user never submitted, so on
+    /// return the input matches the visible variants. The results themselves are untouched — the
+    /// only way to generate for the new text is to actually press the button.
+    @Test func leavingScreenRevertsUnsubmittedEdit() async throws {
+        let vm = makeVM()
+        vm.intent = "как сказать спасибо"
+        vm.submit()
+        try await waitUntil { vm.phase == .results }
+        let shown = vm.variants.map(\.en)
+
+        vm.intent = "совсем другой текст"      // edited, never submitted
+        vm.screenDisappeared()                  // ← tab switched away
+
+        #expect(vm.intent == "как сказать спасибо")
+        #expect(vm.phase == .results)
+        #expect(vm.variants.map(\.en) == shown)
+    }
+
+    /// With nothing generated there is nothing to mismatch — a draft survives leaving the screen.
+    @Test func leavingScreenKeepsDraftWhenNothingGenerated() {
+        let vm = makeVM()
+        vm.intent = "черновик"
+        vm.screenDisappeared()
+        #expect(vm.intent == "черновик")
+        #expect(vm.phase == .idle)
+    }
+
+    /// The chosen mode is persisted: a fresh view model (next launch) starts in the last-used mode.
+    @Test func modePersistsAcrossInstances() {
+        let vm = makeVM()
+        vm.selectMode(.whatToSay)
+        #expect(makeVM().mode == .whatToSay)
+    }
+
+    /// A ROUTED mode change (widget deep link) applies for the session but must never overwrite the
+    /// persisted selector choice — only an explicit on-screen tap does.
+    @Test func routedModeIsSessionOnly() {
+        let vm = makeVM()
+        vm.routeMode(.whatToSay)
+        #expect(vm.mode == .whatToSay)          // applied now…
+        #expect(makeVM().mode == .howToSay)     // …but the next launch keeps the saved default
+    }
+
+    /// A whitespace-only difference (e.g. dictation's trailing space) is NOT an edit — leaving the
+    /// screen must not silently rewrite the field.
+    @Test func leavingScreenIgnoresWhitespaceOnlyDifference() async throws {
+        let vm = makeVM()
+        vm.intent = "как сказать спасибо"
+        vm.submit()
+        try await waitUntil { vm.phase == .results }
+
+        vm.intent = "как сказать спасибо "      // trailing space only
+        vm.screenDisappeared()
+        #expect(vm.intent == "как сказать спасибо ")   // untouched — not a real edit
+    }
+
+    /// Leaving the tab mid-listening must stop the mic WITHOUT auto-submitting: no request may fire
+    /// from a screen the user isn't on (stopListening's auto-submit is for the mic button only).
+    @Test func leavingScreenStopsListeningWithoutSubmitting() async throws {
+        UserDefaults.standard.set(true, forKey: "didPrimeMic")
+        let vm = makeVM()
+        vm.beginVoiceInput()
+        #expect(vm.isListening)
+
+        vm.screenDisappeared()
+        #expect(!vm.isListening)
+        #expect(vm.phase == .idle)
+        try await Task.sleep(for: .milliseconds(100))   // the cancelled capture must not resurface
+        #expect(vm.phase == .idle)
+        #expect(vm.variants.isEmpty)                    // …and nothing was submitted
+    }
+
+    /// Changing the tone with results on screen re-runs the input the results were GENERATED from —
+    /// an edited-but-unsubmitted draft is never sent (generation for new text is button-only).
+    @Test func toneChangeRerunsGeneratedInputNotDraft() async throws {
+        let vm = makeVM()
+        vm.intent = "как сказать спасибо"
+        vm.submit()
+        try await waitUntil { vm.phase == .results }
+
+        vm.intent = "черновик без кнопки"       // edited, never submitted
+        vm.selectTone(.formal)
+        #expect(vm.intent == "как сказать спасибо")   // draft dropped — the generated input re-runs
+        try await waitUntil { vm.phase == .results }
+        #expect(vm.phase == .results)
     }
 
     /// The Say-it Lock Screen widget calls beginVoiceInput on open; it must START the mic (not toggle)

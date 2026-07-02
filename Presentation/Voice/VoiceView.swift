@@ -39,6 +39,9 @@ public struct VoiceView: View {
             // Screen title matches the tab name ("Say it" / "Сказать") in every language.
             .navigationTitle(Loc.t("Сказать", "Say it"))
             .settingsTrigger()
+            // Leaving the screen (tab switch) drops an input edit the user never submitted, so the
+            // field still matches the on-screen results when they come back.
+            .onDisappear { model.screenDisappeared() }
             .sheet(isPresented: $model.showMicPriming) { primingSheet }
             .alert(Loc.t("Сохранение", "Saving"), isPresented: saveErrorBinding) {
                 Button("OK", role: .cancel) {}
@@ -64,11 +67,15 @@ public struct VoiceView: View {
                 VoiceViewModel.Mode.allCases,
                 selected: model.mode,
                 label: { $0.title },
+                accessibilityID: "sayit.mode",
                 onSelect: { model.selectMode($0) }
             )
+            // `.contain` keeps each segment's OWN label (a bare container label would overwrite
+            // every segment as "Mode", leaving VoiceOver users unable to tell the options apart).
+            .accessibilityElement(children: .contain)
             .accessibilityLabel(Loc.t("Режим", "Mode"))
 
-            GlassField(fieldPrompt, text: $model.intent) {
+            GlassField(fieldPrompt, text: $model.intent, accessibilityID: "sayit.input") {
                 fieldFocused = false
                 model.pick()
             }
@@ -92,7 +99,8 @@ public struct VoiceView: View {
                 }
             }
 
-            EHButton(actionTitle, icon: actionIcon, kind: .primary, fillWidth: true) {
+            EHButton(actionTitle, icon: actionIcon, kind: .primary, fillWidth: true,
+                     accessibilityID: "sayit.action") {
                 fieldFocused = false
                 model.pick()
             }
@@ -102,8 +110,10 @@ public struct VoiceView: View {
                 ToneOfVoice.allCases,
                 selected: model.tone,
                 label: { $0.shortTitle },
+                accessibilityID: "sayit.tone",
                 onSelect: { model.selectTone($0) }
             )
+            .accessibilityElement(children: .contain)
             .accessibilityLabel(Loc.t("Тон фраз", "Phrase tone"))
         }
     }
