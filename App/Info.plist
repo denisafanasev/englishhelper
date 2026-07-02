@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>Gist</string>
+	<string>Gist It</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -44,7 +44,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>The camera lets you point at English text to translate it instantly.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Gist listens through the microphone to hear what you want to say.</string>
+	<string>Gist It listens through the microphone to hear what you want to say.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Pick a photo containing English text to translate it.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

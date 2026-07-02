@@ -17,7 +17,7 @@ import Presentation
         #expect(LongTaskKind.explanation.notification(language: "ru").body == "Объяснение готово — откройте, чтобы посмотреть")
         #expect(LongTaskKind.photoTranslate.notification(language: "en").body == "Translation ready — open to view")
         #expect(LongTaskKind.photoExplain.notification(language: "zz").body == "Explanation ready — open to view")  // fallback
-        #expect(LongTaskKind.translation.notification(language: "ru").title == "EnglishHelper")
+        #expect(LongTaskKind.translation.notification(language: "ru").title == "Gist It")
     }
 
     @Test func wrapperBeginsThenEndsSuccessfullyOnSuccess() async throws {

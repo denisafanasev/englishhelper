@@ -1,11 +1,11 @@
-# Gist
+# Gist It
 
 **Not just a translator — a companion for actually living in another language.**
 
 A word-for-word translator answers one narrow question: *what does this mean?* But being dropped into
 a language — as a traveller, an expat, or anyone studying in an immersion setting — throws harder
 questions at you all day: *What is this sign telling me? Did I understand that correctly? How do I say
-this without sounding like a phrasebook?* Gist turns your phone into a quiet assistant for
+this without sounding like a phrasebook?* Gist It turns your phone into a quiet assistant for
 exactly those moments. It **reads the world around you**, **explains what things really mean** (not
 just their dictionary gloss), and **hands you natural ways to say what you want** — then quietly
 remembers the phrases worth keeping, so the language you meet in the wild becomes the language you
@@ -74,7 +74,7 @@ three language pickers, the appearance theme, and app/model info.
   goes to Claude.)
 - **One tap from the Lock Screen.** Six **widgets**, one per scenario, deep-link straight into the app
   with the **camera ready** (See it) or the **mic already listening** (Get it / Say it).
-- **Share a photo straight in.** Send an image to Gist from Photos or any app to translate it.
+- **Share a photo straight in.** Send an image to Gist It from Photos or any app to translate it.
 - **Light / dark / system** theme, and a live check that Claude is reachable.
 
 ### Supported languages
@@ -123,7 +123,7 @@ typed decoder), so adding a feature means adding a template — the LLM adapter 
 
 The Xcode project is generated from `project.yml` (the `.xcodeproj` is gitignored).
 
-> **Public vs. internal name.** The app ships publicly as **Gist** (its display name / App Store name).
+> **Public vs. internal name.** The app ships publicly as **Gist It** (its display name / App Store name).
 > The Xcode project, scheme, module, and bundle identifier keep the original internal name
 > **EnglishHelper** — so the commands below and the paths in *Project layout* still reference `EnglishHelper`.
 
@@ -198,6 +198,7 @@ CHANGELOG.md     user-facing release notes
 
 ## Status
 
-**v1.3.1 (build 6)** — Lock Screen widgets (one per scenario, deep-linking straight into the camera
-or a live mic), an offline translation cache with reuse stats, per-scenario model choice, and the
-standard tier upgraded to **Claude Sonnet 5**. Builds and runs on iOS 26.
+**v1.3.1 (build 8)** — the app now ships publicly as **Gist It** (renamed from EnglishHelper);
+Lock Screen widgets (one per scenario, deep-linking straight into the camera or a live mic), an
+offline translation cache with reuse stats, per-scenario model choice, and the standard tier
+upgraded to **Claude Sonnet 5**. Builds and runs on iOS 26.

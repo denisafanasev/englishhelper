@@ -1,10 +1,15 @@
 # What's New
 
-Release notes for EnglishHelper, written for the people who use it.
+Release notes for **Gist It** (formerly EnglishHelper), written for the people who use it.
 
-## 1.3.1 — 2026-06-30
+## 1.3.1 — 2026-07-02
 
-**Lock Screen widgets.** Add EnglishHelper to your Lock Screen for one-tap access to a scenario — no
+**A new name: Gist It.** EnglishHelper is now **Gist It** — a name that finally fits what the app
+does: help you catch the gist of the world around you and say what you mean, in any of its six
+languages, not just English. It's the same app underneath — your saved phrases, history, and
+settings are untouched; only the name on your Home screen changes.
+
+**Lock Screen widgets.** Add Gist It to your Lock Screen for one-tap access to a scenario — no
 unlocking and tapping through tabs. There are six, one per scenario: **See it · Explain**, **See it ·
 Translate**, **Get it · Explain**, **Get it · Translate**, **Say it · How to say**, and **Say it ·
 What to say**. Tapping one opens the app straight into that scenario with the **camera ready** (See
@@ -12,7 +17,7 @@ it) or the **mic already listening** (Get it / Say it). Each carries its own ico
 camera / speech-bubble / mic glyph plus a small badge (a lightbulb for Explain and What-to-say, a
 globe for Translate and How-to-say) — so the six are easy to tell apart. The look is yours to pick —
 **Standard**, **Bordered**, or **Filled** — when you add or edit a widget. To add them: lock the
-phone, touch and hold the Lock Screen, tap **Customize**, tap a widget slot, and pick **EnglishHelper**.
+phone, touch and hold the Lock Screen, tap **Customize**, tap a widget slot, and pick **Gist It**.
 
 **Any photo works now, including HEIC.** A photo shared or picked in **See it** could fail with an
 error when it was in iPhone's default HEIC format. Every photo is now converted to a supported format
@@ -48,7 +53,7 @@ models are in play.
   photo it came from.
 - **Your per-scenario model choices now take effect** — plain Translate runs on the faster model as
   intended, and long photo translations are no longer cut short.
-- **Sharing into the app** is more reliable at bringing EnglishHelper to the front.
+- **Sharing into the app** is more reliable at bringing Gist It to the front.
 
 ## 1.3.0 — 2026-06-21
 
