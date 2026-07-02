@@ -20,7 +20,7 @@ public enum ShareNotification {
     /// (title, body) for a freshly-shared item. `isImage` picks the See it / Get it wording; `language`
     /// is the app's interface language (mirrored into the App Group), falling back to English.
     public static func text(isImage: Bool, language: String) -> (title: String, body: String) {
-        let title = "EnglishHelper"
+        let title = "Gist It"
         let body: String
         switch language {
         case "ru": body = isImage ? "Фото готово — нажмите, чтобы перевести"

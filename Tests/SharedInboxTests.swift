@@ -54,6 +54,6 @@ import Foundation
         #expect(ShareNotification.text(isImage: false, language: "de").body.contains("erklären"))
         // Unknown language falls back to English, not empty.
         #expect(ShareNotification.text(isImage: true, language: "zz").body == "Photo ready — tap to translate")
-        #expect(ShareNotification.text(isImage: true, language: "ru").title == "EnglishHelper")
+        #expect(ShareNotification.text(isImage: true, language: "ru").title == "Gist It")
     }
 }

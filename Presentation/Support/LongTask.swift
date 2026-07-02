@@ -17,7 +17,7 @@ public enum LongTaskKind: String, Sendable, CaseIterable {
 
     /// Localized (title, body) for the completion notification. `language` is the app interface language.
     public func notification(language: String) -> (title: String, body: String) {
-        let title = "EnglishHelper"
+        let title = "Gist It"
         let isTranslate = (self == .photoTranslate || self == .translation)
         let body: String
         switch language {
