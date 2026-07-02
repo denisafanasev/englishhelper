@@ -12,9 +12,24 @@ settings are untouched; only the name on your Home screen changes.
 **Screens keep their state.** Switch tabs freely: every screen now comes back exactly as you left
 it — the generated phrases or translation still on screen, the text they were made from, and your
 chosen mode (How to say / What to say, Explain / Translate) and tone. Modes now also survive an app
-restart, like the tone always has. And if you edited the input but never pressed the button, the
-edit is dropped when you leave — so what's in the field always matches the results below it, and a
-new set is generated only when you actually ask for one.
+restart, like the tone always has — and only the mode you pick on the screen itself is remembered:
+opening something via a widget, the Share sheet, or an "Explain" button doesn't change your saved
+choice. If you edited the input but never pressed the button, the edit is dropped when you leave —
+so what's in the field always matches the results below it, and a new set is generated only when
+you actually ask for one. Leaving a screen mid-dictation now also switches the microphone off.
+
+**Much steadier on a weak mobile signal.** The connection layer was reworked around bad-network
+reality: answers now **stream** from the model, so a long answer is never cut off just for taking
+its time (previously a slow photo translation could hit a timeout and be retried at full cost); a
+connection that drops right as you ask now fails fast with a clear message — no more sitting on
+"processing" for minutes — and the app **re-checks the network before every retry** instead of
+retrying into a dead link. The moment you're back online, your last request still re-runs itself.
+
+**Faster app start.** The app's storage now opens in the background during launch instead of
+blocking the first screen — startup stays instant even as your history and study list grow.
+
+**Model switch respects the cache.** If you change the model for a scenario in Settings, repeated
+requests are answered by that model — not by cached results from the previous one.
 
 **Lock Screen widgets.** Add Gist It to your Lock Screen for one-tap access to a scenario — no
 unlocking and tapping through tabs. There are six, one per scenario: **See it · Explain**, **See it ·

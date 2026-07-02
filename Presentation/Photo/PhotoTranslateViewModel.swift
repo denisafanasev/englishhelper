@@ -28,15 +28,16 @@ public final class PhotoTranslateViewModel {
         /// Last-used mode, persisted so the screen comes back the way the user left it.
         static let storageKey = "seeItMode"
         static var current: Mode {
-            Mode(rawValue: UserDefaults.standard.string(forKey: storageKey) ?? "") ?? .explain
+            Mode(rawValue: Prefs.store.string(forKey: storageKey) ?? "") ?? .explain
         }
     }
 
     public private(set) var phase: Phase = .idle
-    /// Mutated only via `selectMode` so the re-run logic isn't bypassed; persisted.
-    public private(set) var mode: Mode = Mode.current {
-        didSet { UserDefaults.standard.set(mode.rawValue, forKey: Mode.storageKey) }
-    }
+    /// Mutated only via `selectMode`/`routeMode` so the re-run logic isn't bypassed. Persisted ONLY
+    /// by `selectMode` (an explicit tap on the on-screen selector) — a routed change (shared-in
+    /// image, widget deep link) is session-only, so it can never silently overwrite the user's
+    /// saved preference.
+    public private(set) var mode: Mode = Mode.current
     public private(set) var imageData: Data?
     public private(set) var blocks: [TranslatedBlock] = []          // Translate mode result
     public private(set) var explanation: SceneExplanation?          // Explain mode result
@@ -92,11 +93,19 @@ public final class PhotoTranslateViewModel {
         self.longTask = longTask
     }
 
-    /// Switch Explain/Translate. If a photo is already loaded, re-run it in the new mode; otherwise
-    /// just remember the choice for the next photo. Mirrors Get-it's mode switch.
-    public func selectMode(_ newMode: Mode) {
+    /// Switch Explain/Translate from the ON-SCREEN selector — remembered across launches.
+    public func selectMode(_ newMode: Mode) { applyMode(newMode, persist: true) }
+
+    /// Programmatic mode change (shared-in image, widget deep link). Same behavior, but
+    /// SESSION-ONLY: a routed action must never overwrite the user's saved selector choice.
+    public func routeMode(_ newMode: Mode) { applyMode(newMode, persist: false) }
+
+    /// If a photo is already loaded, re-run it in the new mode; otherwise just remember the choice
+    /// for the next photo. Mirrors Get-it's mode switch.
+    private func applyMode(_ newMode: Mode, persist: Bool) {
         guard newMode != mode else { return }
         mode = newMode
+        if persist { Prefs.store.set(newMode.rawValue, forKey: Mode.storageKey) }
         // Re-run the SAME photo in the new mode — including after a FAILURE (e.g. the model was
         // unavailable in the previous mode), so switching mode retries instead of staying stuck.
         if let data = imageData, phase == .result || phase == .processing || phase == .failed {
@@ -111,7 +120,7 @@ public final class PhotoTranslateViewModel {
     // MARK: Camera priming
 
     public func cameraTapped() {
-        if UserDefaults.standard.bool(forKey: primingDefaultsKey) {
+        if Prefs.store.bool(forKey: primingDefaultsKey) {
             presentCamera = true
         } else {
             showCameraPriming = true
@@ -119,7 +128,7 @@ public final class PhotoTranslateViewModel {
     }
 
     public func confirmCameraPriming() {
-        UserDefaults.standard.set(true, forKey: primingDefaultsKey)
+        Prefs.store.set(true, forKey: primingDefaultsKey)
         showCameraPriming = false
         presentCamera = true
     }

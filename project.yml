@@ -159,16 +159,29 @@ targets:
       - target: EnglishHelper
 
 schemes:
+  # Default dev-loop scheme: UNIT tests only, so `xcodebuild test -scheme EnglishHelper` stays a
+  # seconds-long check. The XCUI suite (5 full app launches with latency stubs) lives in its own
+  # scheme below — run it explicitly: `xcodebuild test -scheme EnglishHelperUITests …`.
   EnglishHelper:
     build:
       targets:
         EnglishHelper: all
         EnglishHelperTests: [test]
-        EnglishHelperUITests: [test]
     run:
       config: Debug
     test:
       config: Debug
       targets:
         - EnglishHelperTests
+
+  EnglishHelperUITests:
+    build:
+      targets:
+        EnglishHelper: all
+        EnglishHelperUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
         - EnglishHelperUITests

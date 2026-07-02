@@ -27,21 +27,21 @@ public final class VoiceViewModel {
         /// Last-used mode, persisted so the screen comes back the way the user left it (like tone).
         static let storageKey = "sayItMode"
         static var current: Mode {
-            Mode(rawValue: UserDefaults.standard.string(forKey: storageKey) ?? "") ?? .howToSay
+            Mode(rawValue: Prefs.store.string(forKey: storageKey) ?? "") ?? .howToSay
         }
     }
 
     // UI state
     public private(set) var phase: Phase = .idle
-    /// Only selectMode mutates (preserving its re-run logic); persisted like tone.
-    public private(set) var mode: Mode = Mode.current {
-        didSet { UserDefaults.standard.set(mode.rawValue, forKey: Mode.storageKey) }
-    }
+    /// Mutated only via selectMode/routeMode (preserving the re-run logic). Persisted ONLY by
+    /// `selectMode` (an explicit tap on the on-screen selector) — a routed change (widget deep link)
+    /// is session-only, so it can never silently overwrite the user's saved preference.
+    public private(set) var mode: Mode = Mode.current
     public var intent: String = ""                       // editable transcript / typed input
     /// Tone/register for the generated phrases — chosen on-screen, persisted (shared with the
     /// "Понять" compose path via `ToneOfVoice.current`).
     public var tone: ToneOfVoice = ToneOfVoice.current {
-        didSet { UserDefaults.standard.set(tone.rawValue, forKey: ToneOfVoice.storageKey) }
+        didSet { Prefs.store.set(tone.rawValue, forKey: ToneOfVoice.storageKey) }
     }
     public private(set) var variants: [PhraseVariant] = []
     public private(set) var errorMessage: String?
@@ -121,7 +121,7 @@ public final class VoiceViewModel {
         case .listening:
             stopListening()
         default:
-            if UserDefaults.standard.bool(forKey: primingDefaultsKey) {
+            if Prefs.store.bool(forKey: primingDefaultsKey) {
                 startListening()
             } else {
                 showMicPriming = true
@@ -135,12 +135,12 @@ public final class VoiceViewModel {
     /// if the mic hasn't been primed yet.
     public func beginVoiceInput() {
         guard phase != .listening else { return }
-        if UserDefaults.standard.bool(forKey: primingDefaultsKey) { startListening() }
+        if Prefs.store.bool(forKey: primingDefaultsKey) { startListening() }
         else { showMicPriming = true }
     }
 
     public func confirmPriming() {
-        UserDefaults.standard.set(true, forKey: primingDefaultsKey)
+        Prefs.store.set(true, forKey: primingDefaultsKey)
         showMicPriming = false
         startListening()
     }
@@ -252,11 +252,23 @@ public final class VoiceViewModel {
     }
 
     /// Switch between "how to say" (phrasings of one thought) and "what to say" (phrases for a
-    /// situation). With results already shown (or in flight) and non-empty input, re-run in the new
-    /// mode; otherwise just remember the choice (the prior results would be stale for the new mode).
-    public func selectMode(_ newMode: Mode) {
+    /// situation) from the ON-SCREEN selector — remembered across launches.
+    public func selectMode(_ newMode: Mode) { applyMode(newMode, persist: true) }
+
+    /// Programmatic mode change (widget deep link). Same behavior, but SESSION-ONLY: a routed
+    /// action must never overwrite the mode the user explicitly chose on the selector.
+    public func routeMode(_ newMode: Mode) { applyMode(newMode, persist: false) }
+
+    /// With results already shown (or in flight) and non-empty input, re-run in the new mode;
+    /// otherwise just remember the choice (the prior results would be stale for the new mode).
+    private func applyMode(_ newMode: Mode, persist: Bool) {
         guard newMode != mode else { return }
         mode = newMode
+        if persist { Prefs.store.set(newMode.rawValue, forKey: Mode.storageKey) }
+        // Re-run the input the results were GENERATED from, not an edited-but-unsubmitted draft —
+        // generation for new text happens only via the button. (A deliberately CLEARED field falls
+        // through to the reset branch instead of resurrecting deleted text.)
+        if phase == .results, canSubmit, let generatedIntent { intent = generatedIntent }
         if canSubmit, phase == .results || phase == .processing {
             submit()                          // re-run the same input in the new mode
         } else if phase == .results || phase == .processing || phase == .failed {
@@ -269,11 +281,23 @@ public final class VoiceViewModel {
         }
     }
 
-    /// The screen is leaving (tab switch / navigation away). An edit the user typed but never
-    /// submitted is dropped, so on return the input still matches the results on screen — the only
-    /// way to generate for the new text is to actually press the button.
+    /// The screen is leaving (tab switch / navigation away). Stops anything that must not keep
+    /// running from a hidden tab, then drops an edit the user typed but never submitted, so on
+    /// return the input still matches the results on screen — the only way to generate for the new
+    /// text is to actually press the button.
     public func screenDisappeared() {
-        guard phase == .results, let generatedIntent, intent != generatedIntent else { return }
+        // The mic must never keep recording from a hidden tab — and unlike stopListening(), leaving
+        // must NOT auto-submit: no LLM request may fire from a screen the user isn't on.
+        if phase == .listening {
+            captureTask?.cancel()
+            captureTask = nil
+            phase = .idle
+        }
+        stopPlayback()
+        // Trimmed comparison: `generatedIntent` stores the trimmed submit text, so a whitespace-only
+        // difference (e.g. dictation's trailing space) must not count as an edit.
+        guard phase == .results, let generatedIntent,
+              intent.trimmingCharacters(in: .whitespacesAndNewlines) != generatedIntent else { return }
         intent = generatedIntent
     }
 
@@ -283,6 +307,8 @@ public final class VoiceViewModel {
     public func selectTone(_ newTone: ToneOfVoice) {
         guard newTone != tone else { return }
         tone = newTone
+        // Same rule as applyMode: re-run the GENERATED input, never an unsubmitted draft.
+        if phase == .results, canSubmit, let generatedIntent { intent = generatedIntent }
         if canSubmit, phase == .results || phase == .processing { submit() }
     }
 

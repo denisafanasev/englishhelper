@@ -62,13 +62,17 @@ public struct TranslationCacheStats: Sendable, Equatable {
 
 /// Builds the cache key for a text-translation request. Inputs that change the result must all be in
 /// the key: the scenario `kind`, the (trimmed) input text, the `tone`/register (Say it only; nil for
-/// Translate), and both languages. Case is preserved — case can change meaning ("polish"/"Polish").
+/// Translate), both languages, and the model `tier` (a per-scenario Settings choice — switching the
+/// model must not serve results produced by the other one). Case is preserved — case can change
+/// meaning ("polish"/"Polish").
 public enum TranslationCacheKey {
     public static func make(kind: RequestKind, input: String, tone: Register?,
-                            studiedLanguage: String, nativeLanguage: String) -> String {
+                            studiedLanguage: String, nativeLanguage: String,
+                            tier: ModelTier) -> String {
         let normalized = input.trimmingCharacters(in: .whitespacesAndNewlines)
         let toneKey = tone?.rawValue ?? "-"
+        let tierKey = tier == .fast ? "fast" : "standard"
         // \u{1} (a control char) can't appear in user text, so fields can't collide.
-        return [kind.rawValue, studiedLanguage, nativeLanguage, toneKey, normalized].joined(separator: "\u{1}")
+        return [kind.rawValue, studiedLanguage, nativeLanguage, toneKey, tierKey, normalized].joined(separator: "\u{1}")
     }
 }

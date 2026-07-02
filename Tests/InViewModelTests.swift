@@ -157,6 +157,50 @@ import Presentation
         #expect(makeVM().mode == .translate)
     }
 
+    /// A ROUTED mode change (deep link / shared-in text) applies for the session but must never
+    /// overwrite the persisted selector choice — only an explicit on-screen tap does.
+    @Test func routedModeIsSessionOnly() {
+        let vm = makeVM()
+        vm.routeMode(.translate)
+        #expect(vm.mode == .translate)          // applied now…
+        #expect(makeVM().mode == .explain)      // …but the next launch keeps the saved default
+    }
+
+    /// startExplain (Explain from a card / History / Share Extension) is a routed action too: it
+    /// must not overwrite a persisted Translate preference.
+    @Test func startExplainDoesNotOverwritePersistedMode() async throws {
+        makeVM().selectMode(.translate)         // the user's explicit, persisted choice
+
+        let vm = makeVM()
+        vm.startExplain(text: "give me a hand")
+        try await waitUntil { vm.phase == .result }
+        #expect(vm.mode == .explain)            // routed action ran in Explain…
+        #expect(makeVM().mode == .translate)    // …but the saved preference is intact
+    }
+
+    /// Clearing the input and switching the mode mid-flight must CANCEL the old-mode request — its
+    /// late result must not land under the new mode, and the deliberately cleared text must not be
+    /// resurrected by a later tab round-trip.
+    @Test func clearedInputModeSwitchCancelsInFlightRequest() async throws {
+        UserDefaults.standard.set("russian", forKey: "targetLanguage")
+        UserDefaults.standard.set("english", forKey: "studiedLanguage")
+        let vm = makeVM(llm: StubLLMClient(behavior: .success, latency: .milliseconds(150)))
+        vm.selectMode(.translate)
+        vm.source = "bank"
+        vm.submit()
+        #expect(vm.phase == .processing)
+
+        vm.source = ""                          // the field's clear (X) button
+        vm.selectMode(.explain)
+        #expect(vm.phase == .idle)              // in-flight request dropped, not left running
+
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(vm.phase == .idle)              // the slow translate result never landed
+        #expect(vm.translations.isEmpty)
+        vm.screenDisappeared()
+        #expect(vm.source.isEmpty)              // cleared text is not resurrected on leave/return
+    }
+
     // MARK: Explain mode
 
     @Test func explainModeProducesExplanationNotTranslation() async throws {

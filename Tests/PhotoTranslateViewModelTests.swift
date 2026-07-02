@@ -47,6 +47,15 @@ import Presentation
         #expect(makeVM().mode == .translate)
     }
 
+    /// A ROUTED mode change (shared-in image, widget deep link) applies for the session but must
+    /// never overwrite the persisted selector choice — only an explicit on-screen tap does.
+    @Test func routedModeIsSessionOnly() {
+        let vm = makeVM()
+        vm.routeMode(.translate)
+        #expect(vm.mode == .translate)          // applied now…
+        #expect(makeVM().mode == .explain)      // …but the next launch keeps the saved default
+    }
+
     /// Explain is the default mode — a photo yields a scene explanation, not text blocks.
     @Test func explainModeIsDefaultAndProducesExplanation() async throws {
         let vm = makeVM()

@@ -37,6 +37,9 @@ public struct RootView: View {
     /// Pulls the next item shared INTO the app via the iOS Share sheet (App-Group backed), or nil.
     /// Injected by the App composition root, which owns the App-Group reader. Default: nothing shared.
     private let consumeShared: () -> SharedRoute?
+    /// Pulls a deep-link URL that arrived BEFORE this view existed (a widget tap cold-launching the
+    /// app lands while the async boot splash is up), or nil. Single-consume; default: none.
+    private let consumeLaunchURL: () -> URL?
 
     public init(
         out: VoiceViewModel,
@@ -47,7 +50,8 @@ public struct RootView: View {
         settings: SettingsViewModel,
         degradedStorage: Bool = false,
         network: NetworkMonitor = NetworkMonitor(),
-        consumeShared: @escaping () -> SharedRoute? = { nil }
+        consumeShared: @escaping () -> SharedRoute? = { nil },
+        consumeLaunchURL: @escaping () -> URL? = { nil }
     ) {
         _out = State(initialValue: out)
         _inbound = State(initialValue: inbound)
@@ -58,6 +62,7 @@ public struct RootView: View {
         self.degradedStorage = degradedStorage
         _network = State(initialValue: network)
         self.consumeShared = consumeShared
+        self.consumeLaunchURL = consumeLaunchURL
     }
 
     public var body: some View {
@@ -97,33 +102,16 @@ public struct RootView: View {
                 }
                 // iOS Share sheet → scenario. The extension wakes us via the `englishhelper://` scheme;
                 // becoming active is the fallback if that launch was blocked. Single-consume either way.
-                .onOpenURL { url in
-                    guard url.scheme == "englishhelper" else { return }
-                    // Lock Screen widgets deep-link straight to a scenario (the host carries the
-                    // destination + mode). The Share extension uses host "share" (and legacy URLs) →
-                    // fall through to the App-Group consume. Idempotent on purpose: iOS 26 can fire this
-                    // twice per tap, and re-selecting the same tab / mode is a no-op.
-                    switch url.host {
-                    case "seeit", "seeit-translate":
-                        selection = "camera"
-                        photo.selectMode(url.host == "seeit-translate" ? .translate : .explain)
-                        if CameraPicker.isAvailable { photo.cameraTapped() }   // open the camera straight away
-                    case "getit", "getit-translate":
-                        selection = "in"
-                        inbound.selectMode(url.host == "getit-translate" ? .translate : .explain)
-                        inbound.beginVoiceInput()                              // turn the mic on for input
-                    case "sayit", "sayit-what":
-                        selection = "out"
-                        out.selectMode(url.host == "sayit-what" ? .whatToSay : .howToSay)
-                        out.beginVoiceInput()
-                    default:
-                        handleShared()
-                    }
-                }
+                .onOpenURL { handleURL($0) }
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .active { handleShared() }   // warm foreground (already-running app)
                 }
-                .task { handleShared() }                     // cold launch (onChange won't fire for the initial active state)
+                .task {
+                    // Cold launch (onChange won't fire for the initial active state). A widget URL
+                    // that arrived while the boot splash was up is buffered by the App — route it now.
+                    if let url = consumeLaunchURL() { handleURL(url) }
+                    handleShared()
+                }
                 // Rebuild ONLY the tab content when the interface language changes — re-running every
                 // screen's `Loc.t(...)`. Scoped here (not the whole body) so the Settings sheet and
                 // `@State` survive: switching language live keeps the sheet open instead of dismissing.
@@ -164,8 +152,35 @@ public struct RootView: View {
         .preferredColorScheme(theme.colorScheme)
     }
 
+    /// Route an `englishhelper://` deep link to its scenario. Lock Screen widgets deep-link straight
+    /// to a scenario (the host carries the destination + mode); the Share extension uses host
+    /// "share" (and legacy URLs) → fall through to the App-Group consume. Idempotent on purpose:
+    /// iOS 26 can fire this twice per tap, and re-selecting the same tab / mode is a no-op.
+    /// `routeMode` (not `selectMode`) keeps these routed mode changes session-only — they must not
+    /// overwrite the mode the user explicitly chose on the on-screen selector.
+    private func handleURL(_ url: URL) {
+        guard url.scheme == "englishhelper" else { return }
+        switch url.host {
+        case "seeit", "seeit-translate":
+            selection = "camera"
+            photo.routeMode(url.host == "seeit-translate" ? .translate : .explain)
+            if CameraPicker.isAvailable { photo.cameraTapped() }   // open the camera straight away
+        case "getit", "getit-translate":
+            selection = "in"
+            inbound.routeMode(url.host == "getit-translate" ? .translate : .explain)
+            inbound.beginVoiceInput()                              // turn the mic on for input
+        case "sayit", "sayit-what":
+            selection = "out"
+            out.routeMode(url.host == "sayit-what" ? .whatToSay : .howToSay)
+            out.beginVoiceInput()
+        default:
+            handleShared()
+        }
+    }
+
     /// Consume a pending shared item (from the Share Extension) and route it to its scenario:
     /// text → Get it / Explain, image → See it / Explain. No-ops when nothing is pending.
+    /// `routeMode`: session-only, same as handleURL.
     private func handleShared() {
         guard let route = consumeShared() else { return }
         switch route {
@@ -174,7 +189,7 @@ public struct RootView: View {
             inbound.startExplain(text: text)
         case .explainImage(let data):
             selection = "camera"
-            photo.selectMode(.explain)
+            photo.routeMode(.explain)
             photo.didPickFromLibrary(data)
         }
     }

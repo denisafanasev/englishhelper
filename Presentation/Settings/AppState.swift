@@ -36,7 +36,7 @@ public enum ToneOfVoice: String, CaseIterable, Sendable {
     }
     /// Read the persisted preference (shared key, also read by the view models at generation time).
     public static var current: ToneOfVoice {
-        ToneOfVoice(rawValue: UserDefaults.standard.string(forKey: storageKey) ?? "") ?? .casual
+        ToneOfVoice(rawValue: Prefs.store.string(forKey: storageKey) ?? "") ?? .casual
     }
     static let storageKey = "toneOfVoice"
 }

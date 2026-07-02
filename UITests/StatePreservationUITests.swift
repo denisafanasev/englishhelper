@@ -29,8 +29,10 @@ final class StatePreservationUITests: XCTestCase {
             "-studiedLanguage", "english",
             "-targetLanguage", "russian",
             "-toneOfVoice", "casual",
-            // Modes are persisted on the simulator; the argument domain pins each launch to the
-            // defaults so a mode a previous test tapped can't leak into this one.
+            // Modes/tone are persisted; the argument domain pins each launch's READS to the defaults,
+            // and under -uiTestStubs the app WRITES them to an ephemeral suite wiped every launch
+            // (Presentation/Support/Prefs.swift) — so test taps never leak into the next test or
+            // into the real app's saved preferences on this simulator.
             "-sayItMode", "howToSay",
             "-getItMode", "explain",
             "-seeItMode", "explain",

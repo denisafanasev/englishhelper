@@ -72,6 +72,8 @@ open EnglishHelper.xcodeproj                    # or ⌘R in Xcode
 ```
 
 Tests: `xcodebuild test -scheme EnglishHelper -destination 'platform=iOS Simulator,name=iPhone 17 Pro'`
+(unit tests only — fast). The XCUI suite is a separate, slow scheme:
+`xcodebuild test -scheme EnglishHelperUITests -destination 'platform=iOS Simulator,name=iPhone 17 Pro'`
 
 ## Config & secrets
 `AppConfig` reads `CLAUDE_API_KEY` + `CLAUDE_MODEL` from the app's Info.plist, populated at build
