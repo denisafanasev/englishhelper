@@ -29,6 +29,12 @@ struct EnglishHelperApp: App {
         reachability = ReachabilityMonitor { online, constrained in
             Task { @MainActor in networkUI.update(isOnline: online, isConstrained: constrained) }
         }
+        // TelemetryDeck (product analytics) must be initialized before the first signal; the entry
+        // point is the documented place. Skipped when the App ID isn't configured (analytics stays
+        // off — AppContainer.bootLive then wires no tracker) and under XCUITest (deterministic runs).
+        if !Self.isUITest, let appID = AppConfig.load().telemetryDeckAppID {
+            TelemetryDeckTracker.initialize(appID: appID)
+        }
     }
 
     /// True when launched by the XCUITest suite (`-uiTestStubs`): boot deterministic stubs and skip

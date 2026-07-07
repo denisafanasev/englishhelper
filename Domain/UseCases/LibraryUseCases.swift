@@ -41,10 +41,14 @@ public protocol SaveExpressionUseCase: Sendable {
 public struct SaveExpressionInteractor: SaveExpressionUseCase {
     private let enrich: EnrichExpressionUseCase
     private let repository: ExpressionRepository
+    /// Optional product analytics (nil = disabled, e.g. tests / mock boot). Events carry NO user content.
+    private let analytics: (any AnalyticsTracking)?
 
-    public init(enrich: EnrichExpressionUseCase, repository: ExpressionRepository) {
+    public init(enrich: EnrichExpressionUseCase, repository: ExpressionRepository,
+                analytics: (any AnalyticsTracking)? = nil) {
         self.enrich = enrich
         self.repository = repository
+        self.analytics = analytics
     }
 
     public func callAsFunction(en: String, knownRU: String? = nil, context: String = "") async throws -> Expression {
@@ -61,6 +65,7 @@ public struct SaveExpressionInteractor: SaveExpressionUseCase {
             context: context
         )
         try await repository.add(expression)
+        analytics?.track(.expressionSaved)   // counts NEW cards only — the de-dup return above doesn't
         return expression
     }
 }
@@ -108,15 +113,21 @@ public protocol ExportDeckUseCase: Sendable {
 public struct ExportDeckInteractor: ExportDeckUseCase {
     private let repository: ExpressionRepository
     private let exporter: DeckExporting
+    /// Optional product analytics (nil = disabled, e.g. tests / mock boot). Events carry NO user content.
+    private let analytics: (any AnalyticsTracking)?
 
-    public init(repository: ExpressionRepository, exporter: DeckExporting) {
+    public init(repository: ExpressionRepository, exporter: DeckExporting,
+                analytics: (any AnalyticsTracking)? = nil) {
         self.repository = repository
         self.exporter = exporter
+        self.analytics = analytics
     }
 
     public func callAsFunction() async throws -> ExportedDeck {
         let expressions = try await repository.all()
         guard !expressions.isEmpty else { throw ExportError.nothingToExport }
-        return try await exporter.export(expressions)
+        let deck = try await exporter.export(expressions)
+        analytics?.track(.deckExported)
+        return deck
     }
 }

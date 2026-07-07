@@ -37,6 +37,8 @@
 	<string>$(CLAUDE_MODEL)</string>
 	<key>CLAUDE_FAST_MODEL</key>
 	<string>$(CLAUDE_FAST_MODEL)</string>
+	<key>TELEMETRYDECK_APP_ID</key>
+	<string>$(TELEMETRYDECK_APP_ID)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSRequiresIPhoneOS</key>

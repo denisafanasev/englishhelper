@@ -56,6 +56,14 @@ configFiles:
   Debug: Config/Base.xcconfig
   Release: Config/Base.xcconfig
 
+# SPM dependencies. TelemetryDeck (privacy-first product analytics — no ATT/IDFA) is linked into
+# the Adapters framework ONLY: the SDK is static, so linking it into a second image (the app)
+# would duplicate it; the composition root initializes it via `TelemetryDeckTracker.initialize`.
+packages:
+  TelemetryDeck:
+    url: https://github.com/TelemetryDeck/SwiftClient
+    from: 2.0.0
+
 targets:
 
   Domain:
@@ -71,6 +79,8 @@ targets:
     sources: [Data]
     dependencies:
       - target: Domain
+      - package: TelemetryDeck
+        product: TelemetryDeck   # 2.x product name (`TelemetryClient` is the deprecated 1.x shim)
 
   DesignSystem:
     type: framework
