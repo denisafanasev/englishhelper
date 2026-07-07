@@ -199,7 +199,10 @@ CHANGELOG.md     user-facing release notes
 
 ## Status
 
-**v1.3.1 (build 9)** — the app now ships publicly as **Gist It** (renamed from EnglishHelper);
+**v1.3.2 (build 10)** — adds **anonymous product analytics** via TelemetryDeck behind a Domain
+`AnalyticsTracking` port (closed no-payload event enum — no PII by construction; SDK confined to
+the Adapters module and off entirely when no App ID is configured). Previously, in v1.3.1:
+the app now ships publicly as **Gist It** (renamed from EnglishHelper);
 Lock Screen widgets (one per scenario, deep-linking straight into the camera or a live mic), an
 offline translation cache with reuse stats, per-scenario model choice, the standard tier upgraded
 to **Claude Sonnet 5**, and per-screen state preservation across tab switches (results, input,

@@ -2,6 +2,16 @@
 
 Release notes for **Gist It** (formerly EnglishHelper), written for the people who use it.
 
+## 1.3.2 — 2026-07-07
+
+**Anonymous usage insights.** Gist It now counts how often its features are used — a translation
+finished, a phrase saved, a deck exported — so future updates can focus on what actually gets used.
+What you type, say, or photograph is **never** part of it: the app sends bare event names only
+("translation completed"), with no text, no photos, and no way to attach them. Analytics run
+through [TelemetryDeck](https://telemetrydeck.com), a privacy-first service that keeps no personal
+profiles and uses no advertising identifiers — which is why there's no tracking-consent pop-up:
+there is simply nothing to consent to.
+
 ## 1.3.1 — 2026-07-02
 
 **A new name: Gist It.** EnglishHelper is now **Gist It** — a name that finally fits what the app
