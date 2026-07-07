@@ -31,6 +31,8 @@ public final class AppContainer: Sendable {
     public let expressions: any ExpressionRepository
     public let history: any HistoryRepository
     public let exporter: any DeckExporting
+    /// Product analytics port. Nil (mock/UI-test boots) disables tracking — use cases treat it as optional.
+    public let analytics: (any AnalyticsTracking)?
 
     // Use cases (what Presentation consumes)
     public let howToSay: any HowToSayUseCase
@@ -63,7 +65,8 @@ public final class AppContainer: Sendable {
         expressions: any ExpressionRepository,
         history: any HistoryRepository,
         exporter: any DeckExporting,
-        cache: (any TranslationCache)? = nil
+        cache: (any TranslationCache)? = nil,
+        analytics: (any AnalyticsTracking)? = nil
     ) {
         self.config = config
         self.usingFallbackStore = usingFallbackStore
@@ -75,25 +78,33 @@ public final class AppContainer: Sendable {
         self.expressions = expressions
         self.history = history
         self.exporter = exporter
+        self.analytics = analytics
 
         // Wire use cases onto the ports.
         // "Say it" phrase generation routes to the user-selected model (default Sonnet).
         self.howToSay = HowToSayInteractor(llm: llm, history: history, cache: cache,
-                                           tier: { LLMModelChoice.currentSayIt.tier })
+                                           tier: { LLMModelChoice.currentSayIt.tier },
+                                           analytics: analytics)
         self.whatToSay = WhatToSayInteractor(llm: llm, history: history, cache: cache,
-                                             tier: { LLMModelChoice.currentSayIt.tier })
-        self.photoTranslate = PhotoTranslateInteractor(llm: llm, history: history)   // LLM vision (no local OCR)
-        self.photoExplain = PhotoExplainInteractor(llm: llm)                          // "See it" Explain mode
+                                             tier: { LLMModelChoice.currentSayIt.tier },
+                                             analytics: analytics)
+        self.photoTranslate = PhotoTranslateInteractor(llm: llm, history: history,
+                                                       analytics: analytics)          // LLM vision (no local OCR)
+        self.photoExplain = PhotoExplainInteractor(llm: llm, analytics: analytics)    // "See it" Explain mode
         self.enrich = EnrichExpressionInteractor(llm: llm)
         self.studyList = StudyListInteractor(repository: expressions)
         self.requestHistory = RequestHistoryInteractor(history: history)
-        self.exportDeck = ExportDeckInteractor(repository: expressions, exporter: exporter)
+        self.exportDeck = ExportDeckInteractor(repository: expressions, exporter: exporter,
+                                               analytics: analytics)
         // Anki exporter is pure (no deps), built here at the composition root.
-        self.exportAnkiDeck = ExportDeckInteractor(repository: expressions, exporter: AnkiExporter())
+        self.exportAnkiDeck = ExportDeckInteractor(repository: expressions, exporter: AnkiExporter(),
+                                                   analytics: analytics)
         self.regenerateHowToSay = RegenerateHowToSayInteractor(llm: llm, history: history, cache: cache,
-                                                               tier: { LLMModelChoice.currentSayIt.tier })
+                                                               tier: { LLMModelChoice.currentSayIt.tier },
+                                                               analytics: analytics)
         self.saveExpression = SaveExpressionInteractor(
-            enrich: EnrichExpressionInteractor(llm: llm), repository: expressions
+            enrich: EnrichExpressionInteractor(llm: llm), repository: expressions,
+            analytics: analytics
         )
         self.voiceCapture = VoiceCaptureInteractor(recognizer: speechRecognizer)
         self.voiceCaptureEN = VoiceCaptureInteractor(recognizer: speechRecognizerEN)
@@ -102,9 +113,11 @@ public final class AppContainer: Sendable {
         // Route translate / explain to the user-selected model (live read each request). Defaults:
         // translate → Haiku (speed), explain → Sonnet (quality).
         self.understand = UnderstandInteractor(llm: llm, history: history, cache: cache,
-                                               tier: { LLMModelChoice.currentTranslate.tier })
+                                               tier: { LLMModelChoice.currentTranslate.tier },
+                                               analytics: analytics)
         self.explainExpression = ExplainExpressionInteractor(llm: llm,
-                                                             tier: { LLMModelChoice.currentExplain.tier })
+                                                             tier: { LLMModelChoice.currentExplain.tier },
+                                                             analytics: analytics)
         self.cacheAdmin = TranslationCacheAdminInteractor(cache: cache)
     }
 
@@ -138,7 +151,11 @@ public final class AppContainer: Sendable {
             history: SwiftDataHistoryRepository(modelContainer: modelContainer),
             exporter: AlgoAppXMLExporter(),
             // Persistent translation cache: repeat text translations skip the model (Say it + Get-it Translate).
-            cache: SwiftDataTranslationCache(modelContainer: modelContainer)
+            cache: SwiftDataTranslationCache(modelContainer: modelContainer),
+            // Live product analytics — wired ONLY when the App ID is configured: the SDK asserts (in
+            // debug) if a signal is sent before `initialize`, which the entry point calls iff the ID
+            // is present. No ID (fresh clone / CI) → analytics is simply off, like the API key.
+            analytics: config.telemetryDeckAppID != nil ? TelemetryDeckTracker() : nil
         )
     }
 
