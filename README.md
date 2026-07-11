@@ -199,9 +199,16 @@ CHANGELOG.md     user-facing release notes
 
 ## Status
 
-**v1.3.2 (build 10)** — adds **anonymous product analytics** via TelemetryDeck behind a Domain
+**v1.3.3 (build 11)** — voice input is now **push-to-talk**: capture runs while the mic button is
+held (press haptic + the standard iOS record chimes around the actual recording, sequenced in the
+speech adapter so the beep is never captured); a deliberate release stops and submits, while a
+SYSTEM touch-cancel (call / permission alert / scroll steal / backgrounding) stops WITHOUT firing a
+request. The widget deep-link flow keeps its hands-free auto-listen; VoiceOver degrades to a
+tap-toggle. The Get it action button also doubles as **Paste** while the field is empty and the
+clipboard holds text (metadata-only check; the clipboard is read solely on the explicit tap).
+Previously, in v1.3.2: **anonymous product analytics** via TelemetryDeck behind a Domain
 `AnalyticsTracking` port (closed no-payload event enum — no PII by construction; SDK confined to
-the Adapters module and off entirely when no App ID is configured). Previously, in v1.3.1:
+the Adapters module and off entirely when no App ID is configured). In v1.3.1:
 the app now ships publicly as **Gist It** (renamed from EnglishHelper);
 Lock Screen widgets (one per scenario, deep-linking straight into the camera or a live mic), an
 offline translation cache with reuse stats, per-scenario model choice, the standard tier upgraded

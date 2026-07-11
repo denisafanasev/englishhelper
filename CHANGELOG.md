@@ -2,7 +2,7 @@
 
 Release notes for **Gist It** (formerly EnglishHelper), written for the people who use it.
 
-## 1.3.3 — 2026-07-11
+## 1.3.3 — 2026-07-12
 
 **Hold to talk.** The mic button now works like a walkie-talkie: **press and hold**, speak, and
 **let go** — your words are translated, explained, or turned into phrasings the moment you release,
