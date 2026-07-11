@@ -21,19 +21,22 @@ import Presentation
     private func makeVM(
         llm: any LLMClient = MockLLMClient(),
         repo: MockExpressionRepository = MockExpressionRepository(seed: []),
-        isConfigured: Bool = true
+        isConfigured: Bool = true,
+        recognizer: any SpeechRecognizing = MockSpeechRecognizing(),
+        pasteboard: any PasteboardReading = MockPasteboard(text: nil)   // deterministic: never the sim's real clipboard
     ) -> InViewModel {
         let history = MockHistoryRepository()
         return InViewModel(
             understand: UnderstandInteractor(llm: llm, history: history),
             explain: ExplainExpressionInteractor(llm: llm),
-            voiceCapture: VoiceCaptureInteractor(recognizer: MockSpeechRecognizing()),
+            voiceCapture: VoiceCaptureInteractor(recognizer: recognizer),
             pronounce: PlayPronunciationInteractor(synthesizer: MockSpeechSynthesizing()),
             saveExpression: SaveExpressionInteractor(
                 enrich: EnrichExpressionInteractor(llm: llm), repository: repo
             ),
             studyList: StudyListInteractor(repository: repo),
-            isConfigured: isConfigured
+            isConfigured: isConfigured,
+            pasteboard: pasteboard
         )
     }
 
@@ -302,6 +305,249 @@ import Presentation
         #expect(vm.phase == .result)
         #expect(vm.explanation != nil)
         #expect(spy.explainHadImage == false)         // no image attached → explained broadly, not in-photo
+    }
+
+    // MARK: Push-to-talk (capture runs while the button is held; release runs the current mode)
+
+    /// Press starts the mic; RELEASE stops it and runs Translate/Explain (per the on-screen mode)
+    /// on what was heard — the live-mic contract (the stream stays open until cancelled).
+    @Test func holdCapturesAndReleaseRunsCurrentMode() async throws {
+        UserDefaults.standard.set(true, forKey: "didPrimeMic")
+        UserDefaults.standard.set("russian", forKey: "targetLanguage")
+        UserDefaults.standard.set("english", forKey: "studiedLanguage")
+        let vm = makeVM(recognizer: HoldingEnRecognizer(partial: "bank"))
+        vm.selectMode(.translate)
+        vm.micPressBegan()
+        #expect(vm.isListening)
+        try await waitUntil { vm.source == "bank" }
+        #expect(vm.isListening)                                   // still held — no submit yet
+        vm.micPressEnded()
+        try await waitUntil { vm.phase == .result }
+        #expect(vm.phase == .result)
+        #expect(vm.translations.first?.text == "банк")
+    }
+
+    /// Releasing with nothing heard must return to idle without firing a request.
+    @Test func releaseWithNothingHeardReturnsToIdle() async throws {
+        UserDefaults.standard.set(true, forKey: "didPrimeMic")
+        let vm = makeVM(recognizer: HoldingEnRecognizer(partial: nil))
+        vm.micPressBegan()
+        #expect(vm.isListening)
+        vm.micPressEnded()
+        #expect(vm.phase == .idle)
+        try await Task.sleep(for: .milliseconds(100))             // nothing may resurface later
+        #expect(vm.phase == .idle)
+        #expect(vm.translations.isEmpty)
+        #expect(vm.explanation == nil)
+    }
+
+    /// Release must actually SHUT DOWN the capture: the stream is terminated and late audio can't
+    /// mutate the input afterwards — a hot-mic regression (submit without stop) fails here.
+    @Test func releaseTerminatesCaptureAndIgnoresLateTranscripts() async throws {
+        UserDefaults.standard.set(true, forKey: "didPrimeMic")
+        UserDefaults.standard.set("russian", forKey: "targetLanguage")
+        UserDefaults.standard.set("english", forKey: "studiedLanguage")
+        let recognizer = HoldingEnRecognizer(partial: "bank")
+        let vm = makeVM(recognizer: recognizer)
+        vm.selectMode(.translate)
+        vm.micPressBegan()
+        try await waitUntil { vm.source == "bank" }
+        vm.micPressEnded()
+        try await waitUntil { recognizer.terminated }
+        #expect(recognizer.terminated)                            // the mic is OFF, not just submitted-from
+        recognizer.yield("late words")
+        try await waitUntil { vm.phase == .result }
+        #expect(vm.source == "bank")                              // late audio never joined the input
+    }
+
+    /// A SYSTEM cancel of the hold stops the mic WITHOUT running Translate/Explain.
+    @Test func cancelledHoldStopsWithoutSubmitting() async throws {
+        UserDefaults.standard.set(true, forKey: "didPrimeMic")
+        let recognizer = HoldingEnRecognizer(partial: "bank")
+        let vm = makeVM(recognizer: recognizer)
+        vm.micPressBegan()
+        try await waitUntil { vm.source == "bank" }
+        vm.micPressCancelled()
+        #expect(vm.phase == .idle)
+        try await waitUntil { recognizer.terminated }
+        #expect(recognizer.terminated)
+        try await Task.sleep(for: .milliseconds(100))             // no request may surface later
+        #expect(vm.phase == .idle)
+        #expect(vm.translations.isEmpty)
+        #expect(vm.explanation == nil)
+    }
+
+    /// A press while the mic is ALREADY on (widget auto-start) must not restart the capture — and
+    /// the matching release stops and runs the current mode, so a tap ends a routed capture.
+    @Test func pressDuringRoutedListeningIsNoOpAndReleaseSubmits() async throws {
+        UserDefaults.standard.set(true, forKey: "didPrimeMic")
+        let vm = makeVM(recognizer: HoldingEnRecognizer(partial: "bank"))
+        vm.beginVoiceInput()                                      // routed (widget): mic on, no finger down
+        try await waitUntil { vm.source == "bank" }
+        vm.micPressBegan()                                        // tap lands on the live mic
+        #expect(vm.isListening)
+        #expect(vm.source == "bank")                              // no restart — transcript survived
+        vm.micPressEnded()
+        try await waitUntil { vm.phase == .result }
+        #expect(vm.phase == .result)
+    }
+
+    // MARK: Paste affordance (the action button doubles as Paste while the field is empty)
+
+    /// Empty field + text on the clipboard → the action button is PASTE; tapping it fills the
+    /// field and the button flips back to the mode action — WITHOUT auto-running the request
+    /// (the user submits deliberately with a second tap).
+    @Test func emptyFieldWithClipboardShowsPasteAndPastes() async throws {
+        let pasteboard = MockPasteboard(text: "break a leg")
+        let vm = makeVM(pasteboard: pasteboard)
+        vm.refreshClipboardState()                        // what .onAppear does
+        #expect(vm.showsPasteAction)
+        #expect(vm.hasActionAvailable)
+        vm.pasteIntoInput()
+        #expect(vm.source == "break a leg")
+        #expect(!vm.showsPasteAction)                     // now it's Translate/Explain again
+        #expect(vm.hasActionAvailable)
+        #expect(vm.phase == .idle)                        // paste never submits…
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(vm.phase == .idle)                        // …not even asynchronously
+    }
+
+    /// A whitespace-only clipboard reports hasText=true but has nothing usable: one tap must flip
+    /// the affordance off (never a permanently enabled do-nothing Paste button).
+    @Test func whitespaceClipboardPasteDisarmsAffordance() {
+        let vm = makeVM(pasteboard: MockPasteboard(text: "   \n"))
+        vm.refreshClipboardState()
+        #expect(vm.showsPasteAction)                      // metadata says text — button offers Paste
+        vm.pasteIntoInput()
+        #expect(vm.source.isEmpty)                        // nothing injected
+        #expect(!vm.showsPasteAction)                     // affordance disarmed
+        #expect(!vm.hasActionAvailable)                   // button disables
+    }
+
+    /// The Paste persona is suppressed mid-capture: while listening the (disabled) button keeps the
+    /// MODE title instead of flashing Paste→Translate as partial transcripts arrive.
+    @Test func pastePersonaSuppressedWhileListening() {
+        UserDefaults.standard.set(true, forKey: "didPrimeMic")
+        let vm = makeVM(recognizer: HoldingEnRecognizer(partial: nil),
+                        pasteboard: MockPasteboard(text: "clipboard text"))
+        vm.refreshClipboardState()
+        #expect(vm.showsPasteAction)
+        vm.micPressBegan()
+        #expect(vm.isListening)
+        #expect(!vm.showsPasteAction)                     // mode action (disabled), not Paste
+        vm.micPressCancelled()
+        #expect(vm.showsPasteAction)                      // idle again → Paste is back
+    }
+
+    /// Empty field + empty clipboard → no Paste, the action button is disabled.
+    @Test func emptyFieldWithEmptyClipboardDisablesAction() {
+        let vm = makeVM(pasteboard: MockPasteboard(text: nil))
+        vm.refreshClipboardState()
+        #expect(!vm.showsPasteAction)
+        #expect(!vm.hasActionAvailable)
+    }
+
+    /// Typed input wins: with text in the field the button is the mode action even if the
+    /// clipboard also has text.
+    @Test func typedInputSuppressesPaste() {
+        let vm = makeVM(pasteboard: MockPasteboard(text: "clipboard text"))
+        vm.refreshClipboardState()
+        vm.source = "typed text"
+        #expect(!vm.showsPasteAction)
+        #expect(vm.hasActionAvailable)
+    }
+
+    /// Clearing the field re-arms Paste when the clipboard has text — and disables the button
+    /// when it doesn't (the clipboard is re-checked on the clear, not stale from screen appear).
+    @Test func clearingFieldReArmsPasteFromCurrentClipboard() {
+        let pasteboard = MockPasteboard(text: "break a leg")
+        let vm = makeVM(pasteboard: pasteboard)
+        vm.refreshClipboardState()
+        vm.source = "typed"
+        vm.source = ""                                    // ✕ / deleted everything
+        #expect(vm.showsPasteAction)                      // clipboard still has text → Paste
+
+        pasteboard.text = nil                             // clipboard emptied meanwhile
+        vm.source = "typed again"
+        vm.source = ""
+        #expect(!vm.showsPasteAction)                     // re-checked on clear → disabled
+        #expect(!vm.hasActionAvailable)
+    }
+
+    /// A stale Paste affordance (clipboard emptied since the last check) must not inject anything —
+    /// the tap just re-syncs the state and the button disables.
+    @Test func staleClipboardPasteIsNoOpAndResyncs() {
+        let pasteboard = MockPasteboard(text: "was here")
+        let vm = makeVM(pasteboard: pasteboard)
+        vm.refreshClipboardState()
+        #expect(vm.showsPasteAction)
+        pasteboard.text = nil                             // clipboard emptied since the last check
+        vm.pasteIntoInput()
+        #expect(vm.source.isEmpty)                        // nothing injected
+        #expect(!vm.clipboardHasText)                     // state re-synced → button disables
+    }
+
+    /// Press-originated priming must NOT auto-start (no finger to release); the ROUTED priming
+    /// path must (the widget promised a hands-free mic).
+    @Test func primingAutoStartsOnlyForRoutedFlow() {
+        UserDefaults.standard.removeObject(forKey: "didPrimeMic")
+        let pressVM = makeVM(recognizer: HoldingEnRecognizer(partial: nil))
+        pressVM.micPressBegan()
+        #expect(pressVM.showMicPriming)
+        pressVM.confirmPriming()
+        #expect(!pressVM.isListening)                             // armed, not started
+
+        UserDefaults.standard.removeObject(forKey: "didPrimeMic")
+        let routedVM = makeVM(recognizer: HoldingEnRecognizer(partial: nil))
+        routedVM.beginVoiceInput()                                // widget deep link, unprimed
+        #expect(routedVM.showMicPriming)
+        routedVM.confirmPriming()
+        #expect(routedVM.isListening)                             // hands-free promise kept
+    }
+}
+
+/// Mutable canned clipboard — `hasText`/`readText` mirror UIPasteboard semantics without touching
+/// the simulator's real (nondeterministic) pasteboard.
+@MainActor
+private final class MockPasteboard: PasteboardReading {
+    var text: String?
+    init(text: String?) { self.text = text }
+    var hasText: Bool { text?.isEmpty == false }
+    func readText() -> String? { text }
+}
+
+/// A capture stream that behaves like the LIVE mic under push-to-talk: yields a partial (if any)
+/// and stays OPEN until the hold ends (task cancellation) — never finishes on its own. Records the
+/// termination and allows LATE yields, so tests can assert the release/cancel actually SHUT DOWN
+/// the capture (not merely that a submit happened).
+private final class HoldingEnRecognizer: SpeechRecognizing, @unchecked Sendable {
+    private let partial: String?
+    private let lock = NSLock()
+    private var continuation: AsyncThrowingStream<SpeechTranscript, Error>.Continuation?
+    private var terminatedFlag = false
+
+    init(partial: String?) { self.partial = partial }
+
+    /// True once the consumer tore the stream down (the mic is OFF).
+    var terminated: Bool { lock.lock(); defer { lock.unlock() }; return terminatedFlag }
+
+    /// Simulate audio arriving AFTER the stream was (or should have been) stopped.
+    func yield(_ text: String) {
+        lock.lock(); let c = continuation; lock.unlock()
+        c?.yield(SpeechTranscript(text: text, isFinal: false))
+    }
+
+    func transcribe() -> AsyncThrowingStream<SpeechTranscript, Error> {
+        AsyncThrowingStream { continuation in
+            continuation.onTermination = { @Sendable _ in
+                self.lock.lock(); self.terminatedFlag = true; self.lock.unlock()
+            }
+            self.lock.lock(); self.continuation = continuation; self.lock.unlock()
+            if let partial = self.partial {
+                continuation.yield(SpeechTranscript(text: partial, isFinal: false))
+            }
+            // No finish: the session ends only via onTermination (release cancels the capture task).
+        }
     }
 }
 
