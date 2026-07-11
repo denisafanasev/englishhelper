@@ -8,9 +8,18 @@ Release notes for **Gist It** (formerly EnglishHelper), written for the people w
 **let go** — your words are translated, explained, or turned into phrasings the moment you release,
 with no extra tap. The button answers your touch with a small **vibration**, then plays the familiar
 recording **chime** — speak after it — and a closing chime confirms the mic is off when you let go.
-(The chimes follow the ring/silent switch; the vibration always comes through.) Opening the mic from
-a Lock Screen widget still works hands-free: it starts listening on its own, and a single tap on the
-button finishes and sends what you said.
+(The chimes follow the ring/silent switch; the vibration always comes through.)
+
+**Only a deliberate release sends.** If something interrupts the hold — a phone call, a permission
+pop-up, Control Center, switching away, or the page scrolling under your finger — the mic simply
+turns off and your half-finished sentence is **dropped, not sent**. What's in the field stays there,
+so you can hold again and finish the thought.
+
+**Still hands-free from the Lock Screen.** Opening the mic from a widget works as before: it starts
+listening on its own (on very first use, right after you allow the microphone), and a single tap on
+the button finishes and sends what you said. With **VoiceOver**, the button works as a toggle — one
+activation starts listening, the next stops and sends — and its hints now say exactly that, in all
+six interface languages.
 
 ## 1.3.2 — 2026-07-07
 
