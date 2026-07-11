@@ -21,6 +21,14 @@ the button finishes and sends what you said. With **VoiceOver**, the button work
 activation starts listening, the next stops and sends — and its hints now say exactly that, in all
 six interface languages.
 
+**Paste in one tap.** Copied something in another app? On **Get it**, while the input field is
+empty and your clipboard holds text, the Translate/Explain button becomes **Paste** — one tap drops
+the copied text into the field (with a small vibration), and the button turns back into
+Translate/Explain for you to fire when ready. Clearing the field brings Paste back; with nothing
+typed and nothing copied, the button simply waits, disabled. The app never peeks at your clipboard's
+contents on its own — it only checks *whether* there's text (which iOS allows silently) and reads it
+solely when you tap Paste.
+
 ## 1.3.2 — 2026-07-07
 
 **Anonymous usage insights.** Gist It now counts how often its features are used — a translation

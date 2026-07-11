@@ -7,12 +7,17 @@
 //
 
 import SwiftUI
+import UIKit    // UIPasteboard.changedNotification (re-arms the Paste affordance on in-app copies)
 import Domain
 import DesignSystem
 
 public struct InView: View {
     @State private var model: InViewModel
     @FocusState private var fieldFocused: Bool
+    /// Bumped on every action-button tap — the trigger for its impact haptic (Paste AND Translate).
+    @State private var actionTapCount = 0
+    /// The clipboard can change while the app is backgrounded — re-check on return to foreground.
+    @Environment(\.scenePhase) private var scenePhase
 
     public init(model: InViewModel) {
         _model = State(initialValue: model)
@@ -37,6 +42,16 @@ public struct InView: View {
             // Leaving the screen (tab switch) drops an input edit the user never submitted, so the
             // field still matches the on-screen result when they come back.
             .onDisappear { model.screenDisappeared() }
+            // Keep the Paste affordance honest: re-check the clipboard whenever the screen shows,
+            // the app returns to the foreground, or the clipboard changes while active — e.g. the
+            // Copy button on THIS screen's result card (metadata check only — no iOS paste banner).
+            .onAppear { model.refreshClipboardState() }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { model.refreshClipboardState() }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIPasteboard.changedNotification)) { _ in
+                model.refreshClipboardState()
+            }
             .sheet(isPresented: $model.showMicPriming) { primingSheet }
             .alert(Loc.t("Сохранение", "Saving"), isPresented: saveErrorBinding) {
                 Button("OK", role: .cancel) {}
@@ -103,26 +118,33 @@ public struct InView: View {
                     .foregroundStyle(Tokens.Content.tertiary)
             }
 
+            // One button, two personas: with an EMPTY field and text on the clipboard it is PASTE
+            // (fills the field, then flips back to Translate/Explain for a deliberate submit);
+            // otherwise it is the mode's action. Every tap gives an impact haptic.
             EHButton(actionTitle, icon: actionIcon, kind: .primary, fillWidth: true,
                      accessibilityID: "getit.action") {
                 fieldFocused = false
-                model.submit()
+                actionTapCount += 1
+                if model.showsPasteAction { model.pasteIntoInput() } else { model.submit() }
             }
-            .disabled(!canTranslate)   // EHButton dims itself when disabled
+            .disabled(!actionEnabled)   // EHButton dims itself when disabled
+            .sensoryFeedback(.impact(weight: .medium), trigger: actionTapCount)
         }
     }
 
-    /// Enabled only with non-empty input and not mid-request/listening.
-    private var canTranslate: Bool {
-        model.canSubmit && model.phase != .processing && !model.isListening
+    /// Enabled with something to do (input to submit OR clipboard to paste) and not mid-request/listening.
+    private var actionEnabled: Bool {
+        model.hasActionAvailable && model.phase != .processing && !model.isListening
     }
 
     private var actionTitle: String {
-        model.mode == .explain ? Loc.t("Объяснить", "Explain") : Loc.t("Перевести", "Translate")
+        if model.showsPasteAction { return Loc.t("Вставить", "Paste") }
+        return model.mode == .explain ? Loc.t("Объяснить", "Explain") : Loc.t("Перевести", "Translate")
     }
 
     private var actionIcon: String {
-        model.mode == .explain ? "lightbulb" : "character.book.closed"
+        if model.showsPasteAction { return "doc.on.clipboard" }
+        return model.mode == .explain ? "lightbulb" : "character.book.closed"
     }
 
     // The empty-state hint adapts to the selected mode: Explain describes the nuance breakdown,

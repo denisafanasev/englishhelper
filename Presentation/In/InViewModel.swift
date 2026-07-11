@@ -40,7 +40,11 @@ public final class InViewModel {
     /// routed change (Explain from a card/History, Share Extension, widget deep link) is
     /// session-only, so it can never silently overwrite the user's saved preference.
     public private(set) var mode: Mode = Mode.current
-    public var source: String = ""                       // editable transcript / typed input
+    public var source: String = "" {                     // editable transcript / typed input
+        // Clearing the field (the ✕ button or deleting everything) re-arms the Paste affordance —
+        // re-check the clipboard so the action button can flip to Paste (or disable) immediately.
+        didSet { if source.isEmpty && !oldValue.isEmpty { refreshClipboardState() } }
+    }
     public private(set) var studied: String?             // input rendered in the studied language (headline + TTS)
     public private(set) var translations: [TranslationVariant] = []  // Translate mode: 1–5 translations + context
     public private(set) var explanation: ExpressionExplanation?   // Explain mode result (native)
@@ -51,6 +55,9 @@ public final class InViewModel {
     public private(set) var isOffline = false
     public private(set) var isPlaying = false
     public private(set) var isSaved = false
+    /// Last observed "clipboard holds text" state (refreshed on appear / foreground / field clear).
+    /// Drives the action button's Paste mode; the metadata check never triggers the iOS paste banner.
+    public private(set) var clipboardHasText = false
     public var showMicPriming = false {
         // The sheet can close WITHOUT confirm/cancelPriming (interactive swipe-down just flips the
         // binding) — any close must consume a pending routed auto-start, or a LATER press-originated
@@ -79,6 +86,8 @@ public final class InViewModel {
     /// Keeps a slow explanation/translation alive briefly after backgrounding + notifies on completion.
     /// Nil in tests/previews (then it's a transparent pass-through).
     private let longTask: (any LongTaskCoordinating)?
+    /// Clipboard access for the Paste affordance (injected so tests can can content).
+    private let pasteboard: any PasteboardReading
 
     private var captureTask: Task<Void, Never>?
     private var requestTask: Task<Void, Never>?
@@ -94,7 +103,8 @@ public final class InViewModel {
         saveExpression: any SaveExpressionUseCase,
         studyList: any StudyListUseCase,
         isConfigured: Bool,
-        longTask: (any LongTaskCoordinating)? = nil
+        longTask: (any LongTaskCoordinating)? = nil,
+        pasteboard: any PasteboardReading = SystemPasteboard()
     ) {
         self.understand = understand
         self.explain = explain
@@ -104,6 +114,7 @@ public final class InViewModel {
         self.studyList = studyList
         self.isConfigured = isConfigured
         self.longTask = longTask
+        self.pasteboard = pasteboard
     }
 
     // MARK: Derived
@@ -111,6 +122,42 @@ public final class InViewModel {
     public var isListening: Bool { phase == .listening }
     public var canSubmit: Bool { !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     public var needsAPIKey: Bool { !isConfigured }
+
+    // MARK: Paste affordance (the action button doubles as Paste while the field is empty)
+
+    /// The action button renders (and acts) as PASTE: nothing to submit yet, but the clipboard has
+    /// text one tap away. Pasting fills the field, which flips the button back to Translate/Explain.
+    /// Suppressed while listening/processing — mid-dictation the (disabled) button keeps showing the
+    /// MODE action instead of churning Paste→Translate as partial transcripts arrive.
+    public var showsPasteAction: Bool {
+        !canSubmit && clipboardHasText && phase != .listening && phase != .processing
+    }
+
+    /// The action button is tappable: either there's input to submit or a clipboard text to paste.
+    /// (Empty field + empty clipboard = disabled Translate/Explain button.)
+    public var hasActionAvailable: Bool { canSubmit || clipboardHasText }
+
+    /// Re-read the clipboard's has-text METADATA (never triggers the iOS paste banner). Called on
+    /// screen appear, on returning to the foreground (the clipboard changes while backgrounded),
+    /// and when the field is cleared.
+    public func refreshClipboardState() {
+        clipboardHasText = pasteboard.hasText
+    }
+
+    /// Put the clipboard text into the input field (explicit user tap — iOS may show its one-time
+    /// paste confirmation). The field becoming non-empty flips the button to Translate/Explain; the
+    /// user then submits DELIBERATELY — pasting never auto-runs the request.
+    public func pasteIntoInput() {
+        guard let text = pasteboard.readText(),
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            // Nothing USABLE (emptied since the last check, denied, non-text, or whitespace-only —
+            // where `hasText` would still say true). Mark the clipboard unusable directly so the
+            // button flips/disables instead of staying an enabled do-nothing Paste.
+            clipboardHasText = false
+            return
+        }
+        source = text
+    }
 
     /// The studied-language rendering — the card headline, the TTS source, and the study card's
     /// front. We study the language being LEARNED, never the user's own language.

@@ -22,7 +22,8 @@ import Presentation
         llm: any LLMClient = MockLLMClient(),
         repo: MockExpressionRepository = MockExpressionRepository(seed: []),
         isConfigured: Bool = true,
-        recognizer: any SpeechRecognizing = MockSpeechRecognizing()
+        recognizer: any SpeechRecognizing = MockSpeechRecognizing(),
+        pasteboard: any PasteboardReading = MockPasteboard(text: nil)   // deterministic: never the sim's real clipboard
     ) -> InViewModel {
         let history = MockHistoryRepository()
         return InViewModel(
@@ -34,7 +35,8 @@ import Presentation
                 enrich: EnrichExpressionInteractor(llm: llm), repository: repo
             ),
             studyList: StudyListInteractor(repository: repo),
-            isConfigured: isConfigured
+            isConfigured: isConfigured,
+            pasteboard: pasteboard
         )
     }
 
@@ -390,6 +392,101 @@ import Presentation
         #expect(vm.phase == .result)
     }
 
+    // MARK: Paste affordance (the action button doubles as Paste while the field is empty)
+
+    /// Empty field + text on the clipboard → the action button is PASTE; tapping it fills the
+    /// field and the button flips back to the mode action — WITHOUT auto-running the request
+    /// (the user submits deliberately with a second tap).
+    @Test func emptyFieldWithClipboardShowsPasteAndPastes() async throws {
+        let pasteboard = MockPasteboard(text: "break a leg")
+        let vm = makeVM(pasteboard: pasteboard)
+        vm.refreshClipboardState()                        // what .onAppear does
+        #expect(vm.showsPasteAction)
+        #expect(vm.hasActionAvailable)
+        vm.pasteIntoInput()
+        #expect(vm.source == "break a leg")
+        #expect(!vm.showsPasteAction)                     // now it's Translate/Explain again
+        #expect(vm.hasActionAvailable)
+        #expect(vm.phase == .idle)                        // paste never submits…
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(vm.phase == .idle)                        // …not even asynchronously
+    }
+
+    /// A whitespace-only clipboard reports hasText=true but has nothing usable: one tap must flip
+    /// the affordance off (never a permanently enabled do-nothing Paste button).
+    @Test func whitespaceClipboardPasteDisarmsAffordance() {
+        let vm = makeVM(pasteboard: MockPasteboard(text: "   \n"))
+        vm.refreshClipboardState()
+        #expect(vm.showsPasteAction)                      // metadata says text — button offers Paste
+        vm.pasteIntoInput()
+        #expect(vm.source.isEmpty)                        // nothing injected
+        #expect(!vm.showsPasteAction)                     // affordance disarmed
+        #expect(!vm.hasActionAvailable)                   // button disables
+    }
+
+    /// The Paste persona is suppressed mid-capture: while listening the (disabled) button keeps the
+    /// MODE title instead of flashing Paste→Translate as partial transcripts arrive.
+    @Test func pastePersonaSuppressedWhileListening() {
+        UserDefaults.standard.set(true, forKey: "didPrimeMic")
+        let vm = makeVM(recognizer: HoldingEnRecognizer(partial: nil),
+                        pasteboard: MockPasteboard(text: "clipboard text"))
+        vm.refreshClipboardState()
+        #expect(vm.showsPasteAction)
+        vm.micPressBegan()
+        #expect(vm.isListening)
+        #expect(!vm.showsPasteAction)                     // mode action (disabled), not Paste
+        vm.micPressCancelled()
+        #expect(vm.showsPasteAction)                      // idle again → Paste is back
+    }
+
+    /// Empty field + empty clipboard → no Paste, the action button is disabled.
+    @Test func emptyFieldWithEmptyClipboardDisablesAction() {
+        let vm = makeVM(pasteboard: MockPasteboard(text: nil))
+        vm.refreshClipboardState()
+        #expect(!vm.showsPasteAction)
+        #expect(!vm.hasActionAvailable)
+    }
+
+    /// Typed input wins: with text in the field the button is the mode action even if the
+    /// clipboard also has text.
+    @Test func typedInputSuppressesPaste() {
+        let vm = makeVM(pasteboard: MockPasteboard(text: "clipboard text"))
+        vm.refreshClipboardState()
+        vm.source = "typed text"
+        #expect(!vm.showsPasteAction)
+        #expect(vm.hasActionAvailable)
+    }
+
+    /// Clearing the field re-arms Paste when the clipboard has text — and disables the button
+    /// when it doesn't (the clipboard is re-checked on the clear, not stale from screen appear).
+    @Test func clearingFieldReArmsPasteFromCurrentClipboard() {
+        let pasteboard = MockPasteboard(text: "break a leg")
+        let vm = makeVM(pasteboard: pasteboard)
+        vm.refreshClipboardState()
+        vm.source = "typed"
+        vm.source = ""                                    // ✕ / deleted everything
+        #expect(vm.showsPasteAction)                      // clipboard still has text → Paste
+
+        pasteboard.text = nil                             // clipboard emptied meanwhile
+        vm.source = "typed again"
+        vm.source = ""
+        #expect(!vm.showsPasteAction)                     // re-checked on clear → disabled
+        #expect(!vm.hasActionAvailable)
+    }
+
+    /// A stale Paste affordance (clipboard emptied since the last check) must not inject anything —
+    /// the tap just re-syncs the state and the button disables.
+    @Test func staleClipboardPasteIsNoOpAndResyncs() {
+        let pasteboard = MockPasteboard(text: "was here")
+        let vm = makeVM(pasteboard: pasteboard)
+        vm.refreshClipboardState()
+        #expect(vm.showsPasteAction)
+        pasteboard.text = nil                             // clipboard emptied since the last check
+        vm.pasteIntoInput()
+        #expect(vm.source.isEmpty)                        // nothing injected
+        #expect(!vm.clipboardHasText)                     // state re-synced → button disables
+    }
+
     /// Press-originated priming must NOT auto-start (no finger to release); the ROUTED priming
     /// path must (the widget promised a hands-free mic).
     @Test func primingAutoStartsOnlyForRoutedFlow() {
@@ -407,6 +504,16 @@ import Presentation
         routedVM.confirmPriming()
         #expect(routedVM.isListening)                             // hands-free promise kept
     }
+}
+
+/// Mutable canned clipboard — `hasText`/`readText` mirror UIPasteboard semantics without touching
+/// the simulator's real (nondeterministic) pasteboard.
+@MainActor
+private final class MockPasteboard: PasteboardReading {
+    var text: String?
+    init(text: String?) { self.text = text }
+    var hasText: Bool { text?.isEmpty == false }
+    func readText() -> String? { text }
 }
 
 /// A capture stream that behaves like the LIVE mic under push-to-talk: yields a partial (if any)
