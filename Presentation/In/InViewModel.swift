@@ -51,7 +51,12 @@ public final class InViewModel {
     public private(set) var isOffline = false
     public private(set) var isPlaying = false
     public private(set) var isSaved = false
-    public var showMicPriming = false
+    public var showMicPriming = false {
+        // The sheet can close WITHOUT confirm/cancelPriming (interactive swipe-down just flips the
+        // binding) — any close must consume a pending routed auto-start, or a LATER press-originated
+        // confirm would wrongly start a hands-free capture. confirmPriming reads the flag first.
+        didSet { if !showMicPriming { routedStartPending = false } }
+    }
 
     private var savedExpressionID: UUID?
     /// The input the on-screen result was generated from — restored on leaving the screen so an
@@ -122,37 +127,76 @@ public final class InViewModel {
 
     // MARK: Mic / capture (English)
 
-    public func micTapped() {
-        switch phase {
-        case .listening:
-            stopListening()
-        default:
-            if Prefs.store.bool(forKey: primingDefaultsKey) {
-                startListening()
-            } else {
-                showMicPriming = true
-            }
+    /// PUSH-TO-TALK press (finger down on the mic): start capturing. If the mic is ALREADY on (the
+    /// widget deep link auto-starts it), the press is a no-op — the matching release then stops and
+    /// submits, so a tap still ends a routed capture. Unprimed mic shows the priming sheet instead
+    /// (the sheet cancels the hold; capture starts on the next press).
+    public func micPressBegan() {
+        guard phase != .listening else { return }
+        if Prefs.store.bool(forKey: primingDefaultsKey) {
+            startListening()
+        } else {
+            showMicPriming = true
         }
     }
 
-    /// Start voice input WITHOUT toggling — used by the Lock Screen widget deep link so the mic comes on
-    /// the moment the app opens. Idempotent (guards `.listening`) because iOS 26 can deliver the widget
-    /// URL twice; the toggle `micTapped` would otherwise start-then-stop. Shows priming first if needed.
+    /// PUSH-TO-TALK release (finger up): stop capturing and run Translate/Explain on what was heard
+    /// (nothing heard → back to idle). No-op unless listening — a release after the priming sheet
+    /// or a failed start has nothing to stop.
+    public func micPressEnded() {
+        guard phase == .listening else { return }
+        stopListening()
+    }
+
+    /// The SYSTEM ended the hold (permission alert, incoming call, Control Center, scroll claimed
+    /// the touch, backgrounding) — the user didn't lift the finger to ask for anything, so stop the
+    /// mic WITHOUT submitting: a request must never fire off a half-finished utterance.
+    public func micPressCancelled() {
+        guard phase == .listening else { return }
+        captureTask?.cancel()
+        captureTask = nil
+        phase = .idle
+    }
+
+    /// Start voice input WITHOUT a press being involved — used by the Lock Screen widget deep link
+    /// so the mic comes on the moment the app opens. Idempotent (guards `.listening`) because
+    /// iOS 26 can deliver the widget URL twice. Shows the priming sheet first if the mic hasn't
+    /// been primed yet; confirming then STILL auto-starts (see `routedStartPending`).
     public func beginVoiceInput() {
         guard phase != .listening else { return }
-        if Prefs.store.bool(forKey: primingDefaultsKey) { startListening() }
-        else { showMicPriming = true }
+        if Prefs.store.bool(forKey: primingDefaultsKey) {
+            startListening()
+        } else {
+            routedStartPending = true
+            showMicPriming = true
+        }
     }
+
+    /// True while the priming sheet on screen was opened by the ROUTED `beginVoiceInput` (widget) —
+    /// that flow promised a hands-free live mic, so confirming resumes the auto-start. A capture
+    /// running without a finger down is safe under push-to-talk: a press on it is a no-op and the
+    /// release (or VoiceOver activate) stops-and-submits.
+    private var routedStartPending = false
 
     public func confirmPriming() {
         Prefs.store.set(true, forKey: primingDefaultsKey)
+        // Read BEFORE closing the sheet — showMicPriming's didSet consumes the flag on any close.
+        let resumeRoutedStart = routedStartPending
         showMicPriming = false
-        startListening()
+        // Press-originated priming must NOT auto-start: the finger left the button when the sheet
+        // appeared, so an auto-started capture would have no release to stop it — the user just
+        // holds again. The routed (widget) flow has no finger at all; it keeps its auto-start.
+        if resumeRoutedStart { startListening() }
     }
 
     public func cancelPriming() { showMicPriming = false }
 
     private func startListening() {
+        // A still-in-flight request would flip phase to .result/.failed MID-hold — hijacking the
+        // live capture and swallowing the release (its `.listening` guard would fail, leaving the
+        // mic hot). Starting a new capture supersedes the old request; cancel it.
+        requestTask?.cancel()
+        requestTask = nil
         errorMessage = nil
         isOffline = false
         studied = nil
@@ -248,6 +292,10 @@ public final class InViewModel {
                     let result = try await withBackgroundCompletion(self.longTask, .translation) {
                         try await self.understand(text, studiedLanguage: studiedLang, nativeLanguage: nativeLang)
                     }
+                    // A push-to-talk press may have superseded this request while its result was
+                    // already enqueued — applying it would flip the phase mid-hold and swallow the
+                    // release. Cancellation wins over an already-computed result.
+                    guard !Task.isCancelled else { return }
                     self.studied = result.studied         // headline + TTS
                     self.translations = result.variants   // 1–5 translations (+ context per variant)
                     self.explanation = nil
@@ -255,6 +303,7 @@ public final class InViewModel {
                     let result = try await withBackgroundCompletion(self.longTask, .explanation) {
                         try await self.explain(text, studiedLanguage: studiedLang, nativeLanguage: nativeLang, image: nil, alternatives: explainAlts)
                     }
+                    guard !Task.isCancelled else { return }   // see .translate above
                     self.studied = result.studied
                     self.explanation = result
                     self.translations = []

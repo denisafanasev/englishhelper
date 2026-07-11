@@ -12,6 +12,7 @@
 import Foundation
 import Speech
 import AVFoundation
+import AudioToolbox
 import OSLog
 import Domain
 
@@ -50,6 +51,18 @@ private final class RecognitionSession: @unchecked Sendable {
     /// Only deactivate the shared AVAudioSession if THIS session activated it, so a late teardown
     /// can't deactivate a session another capture/playback is currently using.
     private var didActivateSession = false
+    /// Set once the audio engine is actually capturing — gates the end-of-capture cue so a start
+    /// that never recorded (permission denied / engine failure) can't play a misleading stop sound.
+    private var captureBegan = false
+    /// Set by stop(). Push-to-talk makes cancellation DURING start-up routine (a quick tap releases
+    /// while start() is still awaiting permissions or the begin cue) — and onTermination fires only
+    /// ONCE, so if begin() ran after that stop() nothing could ever stop it again: a hot mic and a
+    /// stranded .record session. Every await in the start path re-checks this flag before proceeding.
+    @MainActor private var stopped = false
+
+    /// The standard iOS recording cues (Voice Memos / dictation): begin_record.caf / end_record.caf.
+    private static let beginCueID: SystemSoundID = 1113
+    private static let endCueID: SystemSoundID = 1114
 
     init(locale: Locale) { self.locale = locale }
 
@@ -60,7 +73,17 @@ private final class RecognitionSession: @unchecked Sendable {
                 continuation.finish(throwing: SpeechRecognitionError.permissionDenied)
                 return
             }
+            // Released while the permission checks ran (incl. the FIRST-use system dialogs, which
+            // cancel the touch) → the capture is already over; don't beep for it.
+            guard await !self.isStopped() else { return }
+            // Start-of-recording cue BEFORE the engine starts: the beep is never captured, and its
+            // end is the "speak now" moment. Awaited via the completion so capture opens right after.
+            // Played outside the .record session (not yet active), so it's audible on the system route.
+            await Self.playCue(Self.beginCueID)
             await MainActor.run {
+                // Released while the cue played → begin() must not run: onTermination has already
+                // fired its one stop(), so an engine started HERE could never be stopped again.
+                guard !self.stopped else { return }
                 do {
                     try self.begin(yielding: continuation)
                 } catch {
@@ -68,6 +91,14 @@ private final class RecognitionSession: @unchecked Sendable {
                     continuation.finish(throwing: error)
                 }
             }
+        }
+    }
+
+    @MainActor private func isStopped() -> Bool { stopped }
+
+    private static func playCue(_ id: SystemSoundID) async {
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            AudioServicesPlaySystemSoundWithCompletion(id) { done.resume() }
         }
     }
 
@@ -111,6 +142,7 @@ private final class RecognitionSession: @unchecked Sendable {
         engine.prepare()
         do {
             try engine.start()
+            captureBegan = true
         } catch {
             inputNode.removeTap(onBus: 0)
             deactivateSessionIfNeeded()
@@ -154,6 +186,7 @@ private final class RecognitionSession: @unchecked Sendable {
 
     func stop() {
         Task { @MainActor [self] in
+            stopped = true
             task?.cancel()
             task = nil
             request?.endAudio()
@@ -161,6 +194,13 @@ private final class RecognitionSession: @unchecked Sendable {
             if engine.isRunning { engine.stop() }
             engine.inputNode.removeTap(onBus: 0)
             deactivateSessionIfNeeded()
+            // End-of-recording cue AFTER teardown (recorder off, .record session released): tells the
+            // user the mic is closed. Fire-and-forget — nothing waits on it. Runs on every terminated
+            // capture that actually recorded, including a tab-switch cancel (the mic DID turn off).
+            if captureBegan {
+                captureBegan = false
+                AudioServicesPlaySystemSound(Self.endCueID)
+            }
         }
     }
 

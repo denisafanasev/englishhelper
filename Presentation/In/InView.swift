@@ -79,15 +79,24 @@ public struct InView: View {
             .focused($fieldFocused)
 
             VStack(spacing: Tokens.Space.s8) {
-                MicButton(status: micStatus) {
-                    fieldFocused = false
-                    model.micTapped()
-                }
+                MicButton(status: micStatus,
+                          onPressBegan: {
+                              fieldFocused = false
+                              model.micPressBegan()
+                          },
+                          onPressEnded: { model.micPressEnded() },
+                          onPressCancelled: { model.micPressCancelled() })
                 .accessibilityLabel(Loc.t("Микрофон", "Microphone"))
                 .accessibilityValue(model.isListening ? Loc.t("Слушаю", "Listening") : Loc.t("Готов", "Ready"))
+                // VoiceOver-only copy: for VoiceOver the control is a TOGGLE (activation can't
+                // hold), so the hints describe tap-to-start / tap-to-stop — and the stop hint names
+                // what the CURRENT mode will actually run.
                 .accessibilityHint(model.isListening
-                    ? Loc.t("Коснитесь, чтобы остановить", "Tap to stop")
-                    : Loc.t("Коснитесь, чтобы говорить на изучаемом языке", "Tap to speak the language you're learning"))
+                    ? (model.mode == .translate
+                        ? Loc.t("Коснитесь, чтобы остановить и перевести", "Tap to stop and translate")
+                        : Loc.t("Коснитесь, чтобы остановить и получить объяснение", "Tap to stop and get an explanation"))
+                    : Loc.t("Коснитесь, чтобы начать диктовку на изучаемом языке; сигнал отметит начало записи",
+                            "Tap to start dictating in the language you're learning; a tone marks the start"))
 
                 Text(micCaption)
                     .textStyle(Tokens.Text.footnote)
@@ -152,9 +161,9 @@ public struct InView: View {
 
     private var micCaption: String {
         switch model.micStatus {
-        case .listening: Loc.t("Слушаю… коснитесь, чтобы остановить", "Listening… tap to stop")
+        case .listening: Loc.t("Слушаю… отпустите для перевода или объяснения", "Listening… release to translate or explain")
         case .processing: Loc.t("Минуту…", "One moment…")
-        case .idle: Loc.t("Нажмите и говорите на изучаемом языке", "Tap and speak the language you're learning")
+        case .idle: Loc.t("Удерживайте и говорите на изучаемом языке", "Hold and speak the language you're learning")
         }
     }
 

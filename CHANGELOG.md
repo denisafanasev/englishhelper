@@ -2,6 +2,16 @@
 
 Release notes for **Gist It** (formerly EnglishHelper), written for the people who use it.
 
+## 1.3.3 — 2026-07-11
+
+**Hold to talk.** The mic button now works like a walkie-talkie: **press and hold**, speak, and
+**let go** — your words are translated, explained, or turned into phrasings the moment you release,
+with no extra tap. The button answers your touch with a small **vibration**, then plays the familiar
+recording **chime** — speak after it — and a closing chime confirms the mic is off when you let go.
+(The chimes follow the ring/silent switch; the vibration always comes through.) Opening the mic from
+a Lock Screen widget still works hands-free: it starts listening on its own, and a single tap on the
+button finishes and sends what you said.
+
 ## 1.3.2 — 2026-07-07
 
 **Anonymous usage insights.** Gist It now counts how often its features are used — a translation

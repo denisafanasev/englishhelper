@@ -83,15 +83,21 @@ public struct VoiceView: View {
 
             if showsMic {
                 VStack(spacing: Tokens.Space.s8) {
-                    MicButton(status: micStatus) {
-                        fieldFocused = false
-                        model.micTapped()
-                    }
+                    MicButton(status: micStatus,
+                              onPressBegan: {
+                                  fieldFocused = false
+                                  model.micPressBegan()
+                              },
+                              onPressEnded: { model.micPressEnded() },
+                              onPressCancelled: { model.micPressCancelled() })
                     .accessibilityLabel(Loc.t("Микрофон", "Microphone"))
                     .accessibilityValue(model.isListening ? Loc.t("Слушаю", "Listening") : Loc.t("Готов", "Ready"))
+                    // VoiceOver-only copy: for VoiceOver the control is a TOGGLE (activation can't
+                    // hold), so the hints describe tap-to-start / tap-to-stop, not press-and-hold.
                     .accessibilityHint(model.isListening
-                        ? Loc.t("Коснитесь, чтобы остановить", "Tap to stop")
-                        : Loc.t("Коснитесь, чтобы говорить на родном языке", "Tap to speak your native language"))
+                        ? Loc.t("Коснитесь, чтобы остановить и получить варианты", "Tap to stop and get phrasings")
+                        : Loc.t("Коснитесь, чтобы начать диктовку на родном языке; сигнал отметит начало записи",
+                                "Tap to start dictating in your native language; a tone marks the start"))
 
                     Text(micCaption)
                         .textStyle(Tokens.Text.footnote)
@@ -125,9 +131,9 @@ public struct VoiceView: View {
 
     private var micCaption: String {
         switch model.micStatus {
-        case .listening: Loc.t("Слушаю… коснитесь, чтобы остановить", "Listening… tap to stop")
+        case .listening: Loc.t("Слушаю… отпустите, чтобы получить варианты", "Listening… release to get phrasings")
         case .processing: Loc.t("Минуту…", "One moment…")
-        case .idle: Loc.t("Нажмите и говорите на родном языке", "Tap and speak your native language")
+        case .idle: Loc.t("Удерживайте и говорите на родном языке", "Hold and speak your native language")
         }
     }
 

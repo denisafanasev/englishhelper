@@ -21,13 +21,14 @@ import Presentation
     private func makeVM(
         llm: any LLMClient = MockLLMClient(),
         repo: MockExpressionRepository = MockExpressionRepository(seed: []),
-        isConfigured: Bool = true
+        isConfigured: Bool = true,
+        recognizer: any SpeechRecognizing = MockSpeechRecognizing()
     ) -> InViewModel {
         let history = MockHistoryRepository()
         return InViewModel(
             understand: UnderstandInteractor(llm: llm, history: history),
             explain: ExplainExpressionInteractor(llm: llm),
-            voiceCapture: VoiceCaptureInteractor(recognizer: MockSpeechRecognizing()),
+            voiceCapture: VoiceCaptureInteractor(recognizer: recognizer),
             pronounce: PlayPronunciationInteractor(synthesizer: MockSpeechSynthesizing()),
             saveExpression: SaveExpressionInteractor(
                 enrich: EnrichExpressionInteractor(llm: llm), repository: repo
@@ -302,6 +303,144 @@ import Presentation
         #expect(vm.phase == .result)
         #expect(vm.explanation != nil)
         #expect(spy.explainHadImage == false)         // no image attached → explained broadly, not in-photo
+    }
+
+    // MARK: Push-to-talk (capture runs while the button is held; release runs the current mode)
+
+    /// Press starts the mic; RELEASE stops it and runs Translate/Explain (per the on-screen mode)
+    /// on what was heard — the live-mic contract (the stream stays open until cancelled).
+    @Test func holdCapturesAndReleaseRunsCurrentMode() async throws {
+        UserDefaults.standard.set(true, forKey: "didPrimeMic")
+        UserDefaults.standard.set("russian", forKey: "targetLanguage")
+        UserDefaults.standard.set("english", forKey: "studiedLanguage")
+        let vm = makeVM(recognizer: HoldingEnRecognizer(partial: "bank"))
+        vm.selectMode(.translate)
+        vm.micPressBegan()
+        #expect(vm.isListening)
+        try await waitUntil { vm.source == "bank" }
+        #expect(vm.isListening)                                   // still held — no submit yet
+        vm.micPressEnded()
+        try await waitUntil { vm.phase == .result }
+        #expect(vm.phase == .result)
+        #expect(vm.translations.first?.text == "банк")
+    }
+
+    /// Releasing with nothing heard must return to idle without firing a request.
+    @Test func releaseWithNothingHeardReturnsToIdle() async throws {
+        UserDefaults.standard.set(true, forKey: "didPrimeMic")
+        let vm = makeVM(recognizer: HoldingEnRecognizer(partial: nil))
+        vm.micPressBegan()
+        #expect(vm.isListening)
+        vm.micPressEnded()
+        #expect(vm.phase == .idle)
+        try await Task.sleep(for: .milliseconds(100))             // nothing may resurface later
+        #expect(vm.phase == .idle)
+        #expect(vm.translations.isEmpty)
+        #expect(vm.explanation == nil)
+    }
+
+    /// Release must actually SHUT DOWN the capture: the stream is terminated and late audio can't
+    /// mutate the input afterwards — a hot-mic regression (submit without stop) fails here.
+    @Test func releaseTerminatesCaptureAndIgnoresLateTranscripts() async throws {
+        UserDefaults.standard.set(true, forKey: "didPrimeMic")
+        UserDefaults.standard.set("russian", forKey: "targetLanguage")
+        UserDefaults.standard.set("english", forKey: "studiedLanguage")
+        let recognizer = HoldingEnRecognizer(partial: "bank")
+        let vm = makeVM(recognizer: recognizer)
+        vm.selectMode(.translate)
+        vm.micPressBegan()
+        try await waitUntil { vm.source == "bank" }
+        vm.micPressEnded()
+        try await waitUntil { recognizer.terminated }
+        #expect(recognizer.terminated)                            // the mic is OFF, not just submitted-from
+        recognizer.yield("late words")
+        try await waitUntil { vm.phase == .result }
+        #expect(vm.source == "bank")                              // late audio never joined the input
+    }
+
+    /// A SYSTEM cancel of the hold stops the mic WITHOUT running Translate/Explain.
+    @Test func cancelledHoldStopsWithoutSubmitting() async throws {
+        UserDefaults.standard.set(true, forKey: "didPrimeMic")
+        let recognizer = HoldingEnRecognizer(partial: "bank")
+        let vm = makeVM(recognizer: recognizer)
+        vm.micPressBegan()
+        try await waitUntil { vm.source == "bank" }
+        vm.micPressCancelled()
+        #expect(vm.phase == .idle)
+        try await waitUntil { recognizer.terminated }
+        #expect(recognizer.terminated)
+        try await Task.sleep(for: .milliseconds(100))             // no request may surface later
+        #expect(vm.phase == .idle)
+        #expect(vm.translations.isEmpty)
+        #expect(vm.explanation == nil)
+    }
+
+    /// A press while the mic is ALREADY on (widget auto-start) must not restart the capture — and
+    /// the matching release stops and runs the current mode, so a tap ends a routed capture.
+    @Test func pressDuringRoutedListeningIsNoOpAndReleaseSubmits() async throws {
+        UserDefaults.standard.set(true, forKey: "didPrimeMic")
+        let vm = makeVM(recognizer: HoldingEnRecognizer(partial: "bank"))
+        vm.beginVoiceInput()                                      // routed (widget): mic on, no finger down
+        try await waitUntil { vm.source == "bank" }
+        vm.micPressBegan()                                        // tap lands on the live mic
+        #expect(vm.isListening)
+        #expect(vm.source == "bank")                              // no restart — transcript survived
+        vm.micPressEnded()
+        try await waitUntil { vm.phase == .result }
+        #expect(vm.phase == .result)
+    }
+
+    /// Press-originated priming must NOT auto-start (no finger to release); the ROUTED priming
+    /// path must (the widget promised a hands-free mic).
+    @Test func primingAutoStartsOnlyForRoutedFlow() {
+        UserDefaults.standard.removeObject(forKey: "didPrimeMic")
+        let pressVM = makeVM(recognizer: HoldingEnRecognizer(partial: nil))
+        pressVM.micPressBegan()
+        #expect(pressVM.showMicPriming)
+        pressVM.confirmPriming()
+        #expect(!pressVM.isListening)                             // armed, not started
+
+        UserDefaults.standard.removeObject(forKey: "didPrimeMic")
+        let routedVM = makeVM(recognizer: HoldingEnRecognizer(partial: nil))
+        routedVM.beginVoiceInput()                                // widget deep link, unprimed
+        #expect(routedVM.showMicPriming)
+        routedVM.confirmPriming()
+        #expect(routedVM.isListening)                             // hands-free promise kept
+    }
+}
+
+/// A capture stream that behaves like the LIVE mic under push-to-talk: yields a partial (if any)
+/// and stays OPEN until the hold ends (task cancellation) — never finishes on its own. Records the
+/// termination and allows LATE yields, so tests can assert the release/cancel actually SHUT DOWN
+/// the capture (not merely that a submit happened).
+private final class HoldingEnRecognizer: SpeechRecognizing, @unchecked Sendable {
+    private let partial: String?
+    private let lock = NSLock()
+    private var continuation: AsyncThrowingStream<SpeechTranscript, Error>.Continuation?
+    private var terminatedFlag = false
+
+    init(partial: String?) { self.partial = partial }
+
+    /// True once the consumer tore the stream down (the mic is OFF).
+    var terminated: Bool { lock.lock(); defer { lock.unlock() }; return terminatedFlag }
+
+    /// Simulate audio arriving AFTER the stream was (or should have been) stopped.
+    func yield(_ text: String) {
+        lock.lock(); let c = continuation; lock.unlock()
+        c?.yield(SpeechTranscript(text: text, isFinal: false))
+    }
+
+    func transcribe() -> AsyncThrowingStream<SpeechTranscript, Error> {
+        AsyncThrowingStream { continuation in
+            continuation.onTermination = { @Sendable _ in
+                self.lock.lock(); self.terminatedFlag = true; self.lock.unlock()
+            }
+            self.lock.lock(); self.continuation = continuation; self.lock.unlock()
+            if let partial = self.partial {
+                continuation.yield(SpeechTranscript(text: partial, isFinal: false))
+            }
+            // No finish: the session ends only via onTermination (release cancels the capture task).
+        }
     }
 }
 
