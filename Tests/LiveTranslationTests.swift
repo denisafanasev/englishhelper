@@ -50,6 +50,23 @@ struct SonioxTokenAccumulatorTests {
         #expect(acc.translationPending == " же")
     }
 
+    /// A language switch draws a divider line in BOTH transcripts and drops the flushed tails;
+    /// the first tokens после разделителя lose their leading space.
+    @Test func boundaryDrawsDividerInBothTranscripts() {
+        var acc = SonioxTokenAccumulator()
+        acc.ingest([
+            SonioxToken(text: "Hello", isFinal: true, translationStatus: "original"),
+            SonioxToken(text: "Привет", isFinal: true, translationStatus: "translation"),
+        ])
+        acc.insertBoundary()
+        acc.ingest([
+            SonioxToken(text: " Да", isFinal: true, translationStatus: "original"),
+            SonioxToken(text: " Yes", isFinal: true, translationStatus: "translation"),
+        ])
+        #expect(acc.originalFinal == "Hello\(SonioxTokenAccumulator.boundary)Да")
+        #expect(acc.translationFinal == "Привет\(SonioxTokenAccumulator.boundary)Yes")
+    }
+
     @Test func markerTokensAreFiltered() {
         var acc = SonioxTokenAccumulator()
         acc.ingest([
@@ -390,6 +407,45 @@ struct SessionRecordingsPlayerTests {
         try await waitUntil { (try? await history.recent(limit: 5))?.isEmpty == false }
         let entries = try await history.recent(limit: 5)
         #expect(entries.first?.kind == .liveTranslation)   // the previous session WAS saved
+    }
+
+    /// Direction toggle while IDLE: only the setting flips — nothing is sent to the port, and the
+    /// next start listens in the reversed direction (native → studied).
+    @Test func directionToggleWhileIdleOnlyChangesTheSetting() async throws {
+        UserDefaults.standard.set("english", forKey: "studiedLanguage")
+        UserDefaults.standard.set("russian", forKey: "targetLanguage")
+        let live = MockLiveTranslating()
+        let vm = makeVM(live: live)
+        vm.routeMode(.online)
+
+        #expect(!vm.isLiveReversed)              // default: studied → native
+        vm.toggleLiveDirection()
+        #expect(vm.isLiveReversed)
+        #expect(live.switchCount == 0)           // idle: no mid-session switch happened
+
+        vm.toggleLive()                          // the NEXT session starts reversed
+        try await waitUntil { live.lastStartLanguages != nil }
+        #expect(live.lastStartLanguages?.studied == "ru")   // now LISTENING to the native language
+        #expect(live.lastStartLanguages?.native == "en")
+    }
+
+    /// Direction toggle on a RUNNING session: passed through to the port, which draws a divider
+    /// line in both transcripts and continues — the session never stops.
+    @Test func directionToggleWhileListeningDrawsDividerAndContinues() async throws {
+        let live = MockLiveTranslating()
+        let vm = makeVM(live: live)
+        vm.routeMode(.online)
+        vm.toggleLive()
+        try await waitUntil { vm.liveText.translationFinal == "Осторожно, промежуток." }
+
+        vm.toggleLiveDirection()
+        #expect(vm.isLiveReversed)
+        try await waitUntil { live.switchCount == 1 }
+        #expect(live.switchCount == 1)
+        try await waitUntil { vm.liveText.originalFinal.contains("⸻") }
+        #expect(vm.liveText.originalFinal.contains("⸻"))      // divider in the speech pane
+        #expect(vm.liveText.translationFinal.contains("⸻"))   // …and in the translation pane
+        #expect(vm.isLiveListening)                            // still the same session
     }
 
     @Test func submitIsANoOpInOnlineMode() async throws {

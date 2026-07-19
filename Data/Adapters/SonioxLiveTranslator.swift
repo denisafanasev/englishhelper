@@ -61,6 +61,11 @@ public final class SonioxLiveTranslator: LiveTranslating, @unchecked Sendable {
         await session?.setPaused(paused)
     }
 
+    public func switchLanguages() async {
+        let session = await MainActor.run { current }
+        await session?.switchLanguages()
+    }
+
     public func stop() async {
         let session = await MainActor.run { current }
         await session?.stopGracefully()
@@ -91,14 +96,17 @@ private final class LiveSession: @unchecked Sendable {
     private let apiKey: String
     private let model: String
     private let endpoint: URL
-    private let studied: String
-    private let native: String
+    // `var`: the language-direction toggle swaps these mid-session (socket rotation).
+    @MainActor private var studied: String
+    @MainActor private var native: String
 
     // MARK: control state (@MainActor)
     @MainActor private var continuation: AsyncThrowingStream<LiveTranslationEvent, Error>.Continuation?
     @MainActor private var stopped = false          // abort requested or session fully done
     @MainActor private var finishing = false        // graceful stop in progress (draining finals)
     @MainActor private var paused = false           // engine paused; socket kept warm on keepalives
+    @MainActor private var rotationPending = false  // language switch: waiting for the old socket's <fin>
+    @MainActor private var rotationTimeoutTask: Task<Void, Never>?
     @MainActor private var captureBegan = false
     @MainActor private var didActivateSession = false
     @MainActor private var accumulator = SonioxTokenAccumulator()
@@ -279,14 +287,26 @@ private final class LiveSession: @unchecked Sendable {
                         return accumulator.snapshot
                     }
                     await MainActor.run { continuation?.yield(.text(snapshot)) }
+                    // A language switch waits for the old socket's finalize marker: everything up
+                    // to the switch is now final — rotate. This loop belongs to the OLD socket; end it.
+                    if tokens.contains(where: { $0.text == "<fin>" }) {
+                        let rotating = await MainActor.run { rotationPending }
+                        if rotating {
+                            await performRotation()
+                            return
+                        }
+                    }
                 }
                 if decoded.finished == true {
                     await emitFinishedAndComplete(error: nil)
                     return
                 }
             } catch {
-                let (aborted, draining) = await MainActor.run { (stopped, finishing) }
-                if aborted { return }
+                // A rotated-away socket dies by design — only the CURRENT socket's failure matters.
+                let (aborted, draining, stale) = await MainActor.run {
+                    (stopped, finishing, webSocket !== socket)
+                }
+                if aborted || stale { return }
                 // Socket died while draining finals → finish with what we have instead of failing.
                 if draining { await emitFinishedAndComplete(error: nil); return }
                 await fail(Self.map(error))
@@ -385,6 +405,46 @@ private final class LiveSession: @unchecked Sendable {
             } else {
                 try? engine.start()
             }
+        }
+    }
+
+    /// The direction toggle: finalize what the old direction heard, then ROTATE the socket — a new
+    /// connection with the languages swapped continues the SAME session (same recording, same
+    /// transcripts + a divider line). Audio buffers in TapState during the hand-over, so nothing
+    /// said in between is lost.
+    func switchLanguages() async {
+        await MainActor.run {
+            guard captureBegan, !stopped, !finishing, !rotationPending else { return }
+            rotationPending = true
+            socketConfigured = false   // buffer audio until the NEW socket's config frame is out
+            if let socket = webSocket {
+                // Flush the old direction's tail into finals; its <fin> marker triggers the rotation.
+                Task { try? await socket.send(.string(#"{"type":"finalize"}"#)) }
+            }
+            // Safety net: rotate even if the <fin> never arrives (dead socket, packet loss).
+            rotationTimeoutTask = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(2))
+                if Task.isCancelled { return }
+                await self?.performRotation()
+            }
+        }
+    }
+
+    /// Tear down the drained old socket, swap the languages, draw the divider, reconnect.
+    private func performRotation() async {
+        await MainActor.run {
+            guard rotationPending, !stopped, !finishing else { return }
+            rotationPending = false
+            rotationTimeoutTask?.cancel()
+            rotationTimeoutTask = nil
+            receiveTask?.cancel()
+            receiveTask = nil
+            webSocket?.cancel(with: .goingAway, reason: nil)
+            webSocket = nil
+            swap(&studied, &native)
+            accumulator.insertBoundary()
+            continuation?.yield(.text(accumulator.snapshot))
+            openSocket()   // new config frame carries the SWAPPED languages
         }
     }
 
@@ -503,6 +563,7 @@ private final class LiveSession: @unchecked Sendable {
         senderTask?.cancel(); senderTask = nil
         watchdogTask?.cancel(); watchdogTask = nil
         finishTimeoutTask?.cancel(); finishTimeoutTask = nil
+        rotationTimeoutTask?.cancel(); rotationTimeoutTask = nil
         if let observer = interruptionObserver {
             NotificationCenter.default.removeObserver(observer)
             interruptionObserver = nil
@@ -765,10 +826,30 @@ public struct SonioxTokenAccumulator: Sendable, Equatable {
     /// earlier would split the PREVIOUS utterance's still-arriving translation tail, which lags
     /// its speech by a chunk.
     private var paragraphBreakPending = false
-    /// The translation's break was just inserted — trim the leading space off its next token.
+    /// A break/boundary was just inserted — trim the leading space off the next token.
     private var trimNextTranslationSpace = false
+    private var trimNextOriginalSpace = false
 
     public init() {}
+
+    /// The visible divider between direction segments (language switch mid-session).
+    public static let boundary = "\n\n⸻\n\n"
+
+    /// Language direction switched mid-session: draw a DIVIDER LINE in both transcripts. The
+    /// switch is preceded by a finalize, so the pending tails are already flushed — drop them.
+    public mutating func insertBoundary() {
+        if !originalFinal.isEmpty {
+            originalFinal += Self.boundary
+            trimNextOriginalSpace = true
+        }
+        if !translationFinal.isEmpty {
+            translationFinal += Self.boundary
+            trimNextTranslationSpace = true
+        }
+        originalPending = ""
+        translationPending = ""
+        paragraphBreakPending = false
+    }
 
     public mutating func ingest(_ tokens: [SonioxToken]) {
         originalPending = ""
@@ -788,6 +869,9 @@ public struct SonioxTokenAccumulator: Sendable, Equatable {
                         translationFinal += "\n\n"
                         trimNextTranslationSpace = true
                     }
+                } else if trimNextOriginalSpace {
+                    trimNextOriginalSpace = false
+                    originalFinal += Self.droppingLeadingSpaces(token.text)
                 } else {
                     originalFinal += token.text
                 }

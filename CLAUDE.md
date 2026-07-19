@@ -96,7 +96,14 @@ a production build would proxy via a backend.
 Listen TOGGLE (pill with a live sound diagram) streams the mic (AVAudioEngine → AVAudioConverter →
 16 kHz mono pcm_s16le, ~120 ms binary chunks) to Soniox `stt-rt-v5` over
 `wss://stt-rt.soniox.com/transcribe-websocket` with built-in one_way translation into the native
-language; the recommended low-latency endpointing config is on. Final tokens append, non-final
+language; the recommended low-latency endpointing config is on. Control row: **Pause**
+(engine.pause + keepalives every ~10 s — the socket stays warm, resume is instant; `LiveMicActivity`
+flags the held mic so History playback refuses politely instead of stealing the session), a
+**direction toggle** (default studied→native, session-scoped; mid-session it sends
+`{"type":"finalize"}`, waits for `<fin>` (2 s cap), ROTATES the socket with swapped languages, and
+`insertBoundary()` draws a divider in both transcripts — same session/recording), and **New**
+(graceful stop → saved to History, screen cleared; drain-tail updates are discarded). Both panes
+have copy buttons. Final tokens append, non-final
 tokens REPLACE, and `<end>`/`<fin>` utterance markers start a new PARAGRAPH in both transcripts
 (pure `SonioxTokenAccumulator`, unit-tested). Two synced auto-scroll panes
 (recognized 4-line pane + translation pane on the remaining height; bottom-stick with pause-on-

@@ -21,9 +21,18 @@ so the original and its translation stay side by side wherever you are in the se
 translating until you stop it. If nobody has spoken for **5 minutes**, it stops itself (and saves),
 so a forgotten microphone never runs all day.
 
-**Pause and start fresh.** Two buttons flank Listen: **Pause** instantly mutes the session (nothing
-is recognized or recorded while you talk privately) and resumes just as instantly; **New** saves
-the current session to History — recording included — and clears the screen for the next one.
+**Pause without hanging up.** A **Pause** button sits next to Listen: it instantly mutes the
+session (nothing is recognized or recorded while you talk privately) and resumes just as
+instantly — the connection stays warm the whole time.
+
+**Flip the direction mid-conversation.** A **direction toggle** (EN→RU / RU→EN) sits next to the
+buttons — by default the session listens to the language you're learning and translates into your
+own. Tap it to answer back: on a running session it draws a **divider line** in both windows and
+keeps going in the opposite direction — same session, same recording. Tapped while idle, it just
+sets the direction for the next session.
+
+**Copy what you heard.** Both text windows have a copy button — the recognized speech and the
+running translation are one tap away from the clipboard.
 
 **Every session is kept — with the sound.** Each listening session lands in **History** with the
 full original text, the full translation, and the **original audio**, so you can replay exactly

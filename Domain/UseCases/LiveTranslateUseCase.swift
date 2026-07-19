@@ -15,6 +15,8 @@ public protocol LiveTranslateUseCase: Sendable {
     func start(studiedLanguage: String, nativeLanguage: String) -> AsyncThrowingStream<LiveTranslationEvent, Error>
     /// Quickly mute/unmute the running session (see `LiveTranslating.setPaused`).
     func setPaused(_ paused: Bool) async
+    /// Reverse the translation direction mid-session (see `LiveTranslating.switchLanguages`).
+    func switchLanguages() async
     /// Gracefully end the current session (drains remaining text; the stream then completes).
     func stop() async
 }
@@ -95,6 +97,8 @@ public struct LiveTranslateInteractor: LiveTranslateUseCase {
     }
 
     public func setPaused(_ paused: Bool) async { await live.setPaused(paused) }
+
+    public func switchLanguages() async { await live.switchLanguages() }
 
     public func stop() async { await live.stop() }
 }

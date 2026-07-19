@@ -40,6 +40,19 @@ public final class MockLiveTranslating: LiveTranslating, @unchecked Sendable {
     private let script: Script
     private let lock = NSLock()
     private var continuation: AsyncThrowingStream<LiveTranslationEvent, Error>.Continuation?
+    private var lastYielded = LiveTranslationText.empty
+
+    /// The languages the LAST start() received — assert direction on this in tests.
+    public var lastStartLanguages: (studied: String, native: String)? {
+        lock.withLock { startLanguages }
+    }
+    private var startLanguages: (studied: String, native: String)?
+
+    /// How many times the direction was switched mid-session.
+    public var switchCount: Int {
+        lock.withLock { switches }
+    }
+    private var switches = 0
 
     public init(script: Script = Script()) {
         self.script = script
@@ -49,6 +62,8 @@ public final class MockLiveTranslating: LiveTranslating, @unchecked Sendable {
         AsyncThrowingStream { continuation in
             lock.lock()
             self.continuation = continuation
+            self.startLanguages = (studiedLanguage, nativeLanguage)
+            self.lastYielded = script.updates.last ?? .empty
             lock.unlock()
             continuation.onTermination = { @Sendable [weak self] _ in
                 guard let self else { return }
@@ -75,6 +90,22 @@ public final class MockLiveTranslating: LiveTranslating, @unchecked Sendable {
 
     public func setPaused(_ newValue: Bool) async {
         lock.withLock { paused = newValue }
+    }
+
+    /// Mirrors the live adapter's contract: mid-session a divider line lands in both transcripts.
+    public func switchLanguages() async {
+        let (continuation, updated) = lock.withLock { () -> (AsyncThrowingStream<LiveTranslationEvent, Error>.Continuation?, LiveTranslationText) in
+            switches += 1
+            let boundary = SonioxTokenAccumulator.boundary
+            lastYielded = LiveTranslationText(
+                originalFinal: lastYielded.originalFinal.isEmpty ? "" : lastYielded.originalFinal + boundary,
+                originalPending: "",
+                translationFinal: lastYielded.translationFinal.isEmpty ? "" : lastYielded.translationFinal + boundary,
+                translationPending: ""
+            )
+            return (self.continuation, lastYielded)
+        }
+        continuation?.yield(.text(updated))
     }
 
     public func stop() async {

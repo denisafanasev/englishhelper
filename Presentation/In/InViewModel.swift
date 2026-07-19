@@ -80,6 +80,9 @@ public final class InViewModel {
     public private(set) var isLiveStopping = false
     /// Session muted (Pause button): recognition/recording stopped, connection warm, resume instant.
     public private(set) var isLivePaused = false
+    /// Translation direction. FALSE (default) = studied → native; TRUE = native → studied.
+    /// Session-scoped, not persisted: every app launch starts in the default direction.
+    public private(set) var isLiveReversed = false
     public private(set) var liveText = LiveTranslationText.empty
     /// Mic input level 0…1 for the on-button sound diagram.
     public private(set) var liveLevel: Float = 0
@@ -380,13 +383,16 @@ public final class InViewModel {
         isLiveStopping = false
         isLivePaused = false
         liveClearPending = false
+        // The direction toggle decides which language is LISTENED TO and which is produced.
         let studiedCode = StudiedLanguage.current.languageCode
         let nativeCode = TargetLanguage.current.languageCode
+        let from = isLiveReversed ? nativeCode : studiedCode
+        let to = isLiveReversed ? studiedCode : nativeCode
         liveTask = Task { [weak self] in
             guard let self else { return }
             do {
-                for try await event in self.liveTranslate.start(studiedLanguage: studiedCode,
-                                                                nativeLanguage: nativeCode) {
+                for try await event in self.liveTranslate.start(studiedLanguage: from,
+                                                                nativeLanguage: to) {
                     switch event {
                     case .listening:
                         break
@@ -424,6 +430,16 @@ public final class InViewModel {
         liveLevel = 0
         let paused = isLivePaused
         Task { [weak self] in await self?.liveTranslate.setPaused(paused) }
+    }
+
+    /// The direction toggle: flip which language is recognized and which is produced. On a RUNNING
+    /// session (listening, translating, or paused) the adapter finalizes the current tail, draws a
+    /// divider line in both transcripts, and continues in the opposite direction — same session,
+    /// same recording. With no session running it changes only the setting for the next start.
+    public func toggleLiveDirection() {
+        isLiveReversed.toggle()
+        guard isLiveListening, !isLiveStopping else { return }
+        Task { [weak self] in await self?.liveTranslate.switchLanguages() }
     }
 
     /// The New button: the current session is SAVED as usual (graceful stop → History, recording

@@ -57,7 +57,7 @@ changeable later in Settings. Then the app opens on five tabs:
 | Tab | What it's for |
 |---|---|
 | **Сказать / Say it** *(center, default)* | Speak or type a thought in your native language → get **3** natural phrasings ("How to say"), or describe a **situation** → get the 3–10 most useful phrases for it ("What to say"). Pick a tone (Polite / Casual / Slang); tap a card to hear it; bookmark to save. |
-| **Понять / Get it** | Type or dictate an expression in the studied language. **Translate** gives a faithful meaning; **Explain** breaks down what it means, how formal or blunt it sounds, where it's used, and a familiar comparison. **Online** turns the phone into a live interpreter: tap **Listen** and surrounding speech is recognized and translated in real time — recognized text in a small pane, the running translation in a big one, both auto-scrolling (scroll up to re-read; grab the bottom to re-engage). Every session is saved to History with its audio. |
+| **Понять / Get it** | Type or dictate an expression in the studied language. **Translate** gives a faithful meaning; **Explain** breaks down what it means, how formal or blunt it sounds, where it's used, and a familiar comparison. **Online** turns the phone into a live interpreter: tap **Listen** and surrounding speech is recognized and translated in real time — recognized text in a small pane, the running translation in a big one, both auto-scrolling (scroll up to re-read; grab the bottom to re-engage) and copyable. **Pause** mutes the session instantly; the **direction switch** (EN | RU) flips who is being translated — mid-session it draws a divider and continues. Every session is saved to History with its audio. |
 | **Смотреть / See it** | Point the camera (or pick a photo) at a sign, menu, or page → on-device text recognition → translation drawn over the image. Explain or save any phrase from the result. |
 | **Изучаю / Study** | Your flat study list. Add manually, mark learned, swipe to delete, and **export to AlgoApp** (your SRS app) via the system share sheet. |
 | **История / History** | A chronological log of every request; tap an entry to see the full result, replay it, copy, or explain. Live-translation sessions keep their **original audio** for playback. Swipe left to delete an entry (a session's recording is deleted with it). |
@@ -212,10 +212,15 @@ speech around you and translates it in real time: tap **Listen** (a toggle with 
 diagram) and the recognized speech streams into a small pane while its translation runs in the big
 one — partial words render instantly and firm up as Soniox (`stt-rt-v5`, one WebSocket stream for
 recognition AND translation) commits them. Both panes auto-follow the newest text, pause when you
-scroll up, re-engage at the bottom, and scroll each other proportionally. Sessions keep listening in
-the **background**, auto-stop after **5 minutes of silence**, and each one is saved to **History**
-with its original **audio recording** (playable from the entry; History rows are now
-swipe-to-delete, which also removes the audio). The mic pill was redesigned into the same capsule
+scroll up, re-engage at the bottom, scroll each other proportionally, break into paragraphs at
+speech pauses, and are copyable. The control row: **Pause** (instant mute/resume — the connection
+stays warm on keepalives), **Listen**, and a **direction switch** (two positions, the live-green
+highlight marks the language being heard; studied→native by default — flipping mid-session
+finalizes the tail, draws a divider in both transcripts, and rotates the stream to the reversed
+language pair, same session, same recording).
+Sessions keep listening in the **background**, auto-stop after **5 minutes of silence**,
+and each one is saved to **History** with its original **audio recording** (playable from the
+Request card of the entry; History rows are now swipe-to-delete, which also removes the audio). The mic pill was redesigned into the same capsule
 form as the action buttons, and photo recognition errors now offer **Retry**. New in the stack: a
 backend-agnostic `LiveTranslating` Domain port, the `SonioxLiveTranslator` adapter (16 kHz PCM
 chunks, silence watchdog, interruption-safe, AAC session recording), and a `SessionRecordings`

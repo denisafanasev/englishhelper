@@ -172,10 +172,12 @@ public struct InView: View {
             modeSelector
             if model.needsLiveAPIKey { sonioxKeyBanner }
             // The controls sit BETWEEN the two transcript panes (the view's middle slot):
-            // Pause (mute/unmute the running session) · Listen (start/stop) · New (save + clear).
+            // Pause (mute/unmute the running session) · Listen (start/stop) · direction switch.
             LiveTranscriptView(text: model.liveText, isStreaming: model.isLiveListening,
                                smallPaneContentHeight: firstWindowContentHeight) {
-                HStack(spacing: Tokens.Space.s12) {
+                // s8 (not s12): four controls share this row — the tighter gap buys the Listen
+                // pill the width it needs on the smallest iPhones.
+                HStack(spacing: Tokens.Space.s8) {
                     // Pause / Resume: compact glyph — the label is VoiceOver's (and the UI tests').
                     liveSideButton(
                         icon: model.isLivePaused ? "play.fill" : "pause.fill",
@@ -195,14 +197,9 @@ public struct InView: View {
                     )
                     .disabled(model.needsLiveAPIKey)
 
-                    // New: save the running session and clear the screen for a fresh one.
-                    liveSideButton(
-                        icon: "plus",
-                        label: Loc.t("Новая", "New", "Nouvelle", "Nueva", "Neu", "Nuova"),
-                        action: { model.newLiveSession() }
-                    )
-                    // Enabled when there is anything to save or clear.
-                    .disabled(!model.isLiveListening && model.liveText == .empty && model.liveErrorMessage == nil)
+                    // Direction toggle (default studied → native). On a running session it draws a
+                    // divider and continues in the opposite direction; idle — just the setting.
+                    directionToggle
                 }
                 if let message = model.liveErrorMessage {
                     Text(message)
@@ -218,6 +215,26 @@ public struct InView: View {
     /// `.buttonStyle(.plain)` doesn't (same rationale as EHButton).
     private func liveSideButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
         LiveSideButton(icon: icon, label: label, action: action)
+    }
+
+    /// The language-direction SWITCH: two positions (left = studied, right = native); the GREEN
+    /// highlight marks the language being LISTENED TO — the same live green as the Listen pill —
+    /// and slides left↔right on tap. Green on EN = hearing EN, translating into RU; and vice versa.
+    private var directionToggle: some View {
+        DirectionSwitch(
+            leftLabel: StudiedLanguage.current.abbreviation,
+            rightLabel: TargetLanguage.current.abbreviation,
+            isRightActive: model.isLiveReversed,
+            accessibilityTitle: Loc.t("Направление перевода", "Translation direction",
+                                      "Sens de traduction", "Dirección de traducción",
+                                      "Übersetzungsrichtung", "Direzione di traduzione"),
+            accessibilityValue: model.isLiveReversed
+                ? "\(TargetLanguage.current.abbreviation)→\(StudiedLanguage.current.abbreviation)"
+                : "\(StudiedLanguage.current.abbreviation)→\(TargetLanguage.current.abbreviation)",
+            action: { model.toggleLiveDirection() }
+        )
+        .disabled(model.isLiveStopping)
+        .sensoryFeedback(.impact(weight: .medium), trigger: model.isLiveReversed)
     }
 
     private var sonioxKeyBanner: some View {
@@ -511,5 +528,52 @@ private struct LiveSideButton: View {
         .buttonStyle(.plain)
         .opacity(isEnabled ? 1 : 0.4)
         .accessibilityLabel(label)
+    }
+}
+
+/// Two-position language switch for Online mode. The LIVE-GREEN capsule marks the language the
+/// microphone listens to and SLIDES between the positions on tap (whole control = one button;
+/// VoiceOver reads the full direction, e.g. "EN→RU").
+private struct DirectionSwitch: View {
+    let leftLabel: String
+    let rightLabel: String
+    let isRightActive: Bool
+    let accessibilityTitle: String
+    let accessibilityValue: String
+    let action: () -> Void
+    @Environment(\.isEnabled) private var isEnabled
+    @Namespace private var knob
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 2) {
+                segment(leftLabel, active: !isRightActive)
+                segment(rightLabel, active: isRightActive)
+            }
+            .padding(4)
+            .frame(height: 50)
+            .glassPanel(cornerRadius: Tokens.Radius.pill)
+            .animation(Tokens.Motion.quick, value: isRightActive)
+        }
+        .buttonStyle(.plain)
+        .opacity(isEnabled ? 1 : 0.4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel(accessibilityTitle)
+        .accessibilityValue(accessibilityValue)
+    }
+
+    private func segment(_ text: String, active: Bool) -> some View {
+        Text(text)
+            .font(.system(size: 12, weight: .bold))
+            .foregroundStyle(active ? Tokens.Content.onSignal : Tokens.Content.secondary)
+            .frame(width: 60, height: 42)
+            .background {
+                if active {
+                    Capsule()
+                        .fill(Tokens.Signal.live)
+                        .matchedGeometryEffect(id: "active", in: knob)
+                }
+            }
     }
 }
