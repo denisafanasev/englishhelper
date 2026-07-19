@@ -166,6 +166,17 @@ private struct HistoryDetailView: View {
         } message: {
             Text(model.errorMessage ?? "")
         }
+        // Recording-playback failures carry their own, correctly-titled alert.
+        .alert(Loc.t("Запись", "Recording", "Enregistrement", "Grabación", "Aufnahme", "Registrazione"),
+               isPresented: playbackErrorBinding) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(model.playbackError ?? "")
+        }
+    }
+
+    private var playbackErrorBinding: Binding<Bool> {
+        Binding(get: { model.playbackError != nil }, set: { if !$0 { model.clearPlaybackError() } })
     }
 
     @ViewBuilder private var resultSection: some View {

@@ -234,6 +234,34 @@ struct LiveHistoryTests {
     }
 }
 
+// MARK: - Recordings playback guard
+
+struct SessionRecordingsPlayerTests {
+
+    /// The player refuses playback ONLY while a live session actually holds the mic — never
+    /// because the shared audio session's category still lingers from an ENDED session.
+    @Test func playbackBusyOnlyWhileLiveMicIsActive() async {
+        let player = SessionRecordingsPlayer()
+
+        LiveMicActivity.set(true)
+        defer { LiveMicActivity.set(false) }
+        var thrown: Error?
+        do {
+            for try await _ in player.play(fileName: "whatever.m4a") {}
+        } catch { thrown = error }
+        #expect(thrown as? RecordingPlaybackError == .busy)
+
+        // Mic released (session over) → the guard opens; a nonexistent file now reports .missing,
+        // proving the request got PAST the busy check.
+        LiveMicActivity.set(false)
+        thrown = nil
+        do {
+            for try await _ in player.play(fileName: "whatever.m4a") {}
+        } catch { thrown = error }
+        #expect(thrown as? RecordingPlaybackError == .missing)
+    }
+}
+
 // MARK: - InViewModel online mode
 
 @Suite(.serialized) @MainActor struct InViewModelOnlineTests {

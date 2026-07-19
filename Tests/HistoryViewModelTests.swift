@@ -118,3 +118,48 @@ import Presentation
         #expect(vm.isSaved(HistoryDetailViewModel.variantKey(variant)))
     }
 }
+
+// MARK: - Recording playback errors get their own alert channel
+
+@MainActor struct HistoryDetailPlaybackErrorTests {
+
+    /// A playback failure must land in `playbackError` (its own "Recording" alert) — NEVER in
+    /// `errorMessage`, whose alert is titled "Study list".
+    @Test func playbackFailureUsesItsOwnChannel() async throws {
+        let repo = MockExpressionRepository(seed: [])
+        let llm = MockLLMClient()
+        let entry = HistoryEntry(
+            inputText: "Hi",
+            result: .liveTranslation(original: "Hi", ru: "Привет", audioFileName: "s.m4a", duration: 3)
+        )
+        let vm = HistoryDetailViewModel(
+            entry: entry,
+            saveExpression: SaveExpressionInteractor(
+                enrich: EnrichExpressionInteractor(llm: llm), repository: repo
+            ),
+            studyList: StudyListInteractor(repository: repo),
+            pronounce: PlayPronunciationInteractor(synthesizer: MockSpeechSynthesizing()),
+            recordings: BusyRecordings()
+        )
+        #expect(vm.recordingFileName == "s.m4a")
+
+        vm.toggleRecordingPlayback()
+        let clock = ContinuousClock(); let start = clock.now
+        while vm.playbackError == nil {
+            if clock.now - start > .seconds(2) { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(vm.playbackError != nil)
+        #expect(vm.errorMessage == nil)   // the study-list alert stays silent
+    }
+}
+
+/// Recordings double whose playback always reports a live session holding the mic.
+private struct BusyRecordings: SessionRecordingsManaging {
+    func play(fileName: String) -> AsyncThrowingStream<RecordingPlayback, Error> {
+        AsyncThrowingStream { $0.finish(throwing: RecordingPlaybackError.busy) }
+    }
+    func exists(fileName: String) -> Bool { true }
+    func delete(fileName: String) async {}
+    func sweep(keeping: Set<String>) async {}
+}

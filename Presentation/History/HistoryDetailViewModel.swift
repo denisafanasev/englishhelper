@@ -63,6 +63,11 @@ public final class HistoryDetailViewModel {
 
     public private(set) var isPlayingRecording = false
     public private(set) var recordingProgress: Double = 0
+    /// Playback failures get their OWN channel: `errorMessage` is the study-list alert ("Study
+    /// list" title) — a recording problem under that title reads as nonsense.
+    public private(set) var playbackError: String?
+
+    public func clearPlaybackError() { playbackError = nil }
 
     /// Play / stop the original session audio (toggle).
     public func toggleRecordingPlayback() {
@@ -84,10 +89,10 @@ public final class HistoryDetailViewModel {
                     }
                 }
             } catch RecordingPlaybackError.busy {
-                self.errorMessage = Loc.t("Сначала остановите онлайн-прослушивание.",
-                                          "Stop the live listening session first.")
+                self.playbackError = Loc.t("Сначала остановите онлайн-прослушивание.",
+                                           "Stop the live listening session first.")
             } catch {
-                self.errorMessage = Loc.t("Не удалось воспроизвести запись.", "Couldn't play the recording.")
+                self.playbackError = Loc.t("Не удалось воспроизвести запись.", "Couldn't play the recording.")
             }
             if !Task.isCancelled {
                 self.isPlayingRecording = false

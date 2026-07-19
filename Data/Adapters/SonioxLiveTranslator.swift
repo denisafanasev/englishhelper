@@ -67,6 +67,21 @@ public final class SonioxLiveTranslator: LiveTranslating, @unchecked Sendable {
     }
 }
 
+// MARK: - Cross-adapter mic signal
+
+/// TRUE while a live session HOLDS the microphone (capturing or paused). The recordings player
+/// refuses playback while set — switching the shared AVAudioSession to .playback would kill the
+/// capture. An `AVAudioSession.category == .record` check is NOT a substitute: the category
+/// lingers as `.record` after deactivation, long after the session ended (which made playback
+/// refuse even with no session running). Public only so tests can exercise the player's guard.
+public enum LiveMicActivity {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var active = false
+
+    public static var isActive: Bool { lock.withLock { active } }
+    public static func set(_ value: Bool) { lock.withLock { active = value } }
+}
+
 // MARK: - Session
 
 /// One live session: mic capture → (converter → WebSocket) + (AAC file), token stream → events.
@@ -208,6 +223,7 @@ private final class LiveSession: @unchecked Sendable {
         do {
             try engine.start()
             captureBegan = true
+            LiveMicActivity.set(true)   // recordings playback must not steal the session now
         } catch {
             inputNode.removeTap(onBus: 0)
             deactivateSessionIfNeeded()
@@ -473,6 +489,7 @@ private final class LiveSession: @unchecked Sendable {
     private func stopCapture() {
         guard captureBegan else { return }
         captureBegan = false
+        LiveMicActivity.set(false)
         engine.stop()
         engine.inputNode.removeTap(onBus: 0)
         tap.closeFile()

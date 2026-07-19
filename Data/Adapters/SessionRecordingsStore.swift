@@ -54,9 +54,11 @@ public final class SessionRecordingsPlayer: SessionRecordingsManaging, @unchecke
 
     public func play(fileName: String) -> AsyncThrowingStream<RecordingPlayback, Error> {
         AsyncThrowingStream { continuation in
-            // A live session holds the shared audio session in .record — switching it to .playback
-            // here would kill the running capture. Refuse instead of stealing the microphone.
-            guard AVAudioSession.sharedInstance().category != .record else {
+            // A RUNNING live session holds the shared audio session — switching it to .playback
+            // here would kill the capture. Refuse instead of stealing the microphone. (Checked via
+            // the translator's explicit flag: the session CATEGORY lingers as .record long after
+            // the session ended, so it must not be the signal.)
+            guard !LiveMicActivity.isActive else {
                 continuation.finish(throwing: RecordingPlaybackError.busy)
                 return
             }
