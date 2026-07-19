@@ -74,8 +74,9 @@ three language pickers, the appearance theme, and app/model info.
 - **Instant, offline repeats.** Ask for the same translation or phrasing again and it comes straight
   from an on-device **cache** — no wait, no connection needed. (Asking for *fresh* variants still
   goes to Claude.)
-- **One tap from the Lock Screen.** Six **widgets**, one per scenario, deep-link straight into the app
-  with the **camera ready** (See it) or the **mic already listening** (Get it / Say it).
+- **One tap from the Lock Screen.** Seven **widgets**, one per scenario, deep-link straight into the
+  app with the **camera ready** (See it), the **mic already listening** (Get it / Say it), or a
+  **live-translation session already running** (Get it · Online).
 - **Share a photo straight in.** Send an image to Gist It from Photos or any app to translate it.
 - **Light / dark / system** theme, and a live check that Claude is reachable.
 

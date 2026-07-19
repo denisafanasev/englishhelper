@@ -17,11 +17,12 @@ import Presentation
     /// not whatever a previous test (or app run on this simulator) left behind.
     init() { UserDefaults.standard.removeObject(forKey: "seeItMode") }
 
-    private func makeVM(llm: any LLMClient = MockLLMClient()) -> PhotoTranslateViewModel {
+    private func makeVM(llm: any LLMClient = MockLLMClient(),
+                        history: MockHistoryRepository = MockHistoryRepository()) -> PhotoTranslateViewModel {
         let repo = MockExpressionRepository(seed: [])
         return PhotoTranslateViewModel(
-            photoTranslate: PhotoTranslateInteractor(llm: llm, history: MockHistoryRepository()),
-            photoExplain: PhotoExplainInteractor(llm: llm),
+            photoTranslate: PhotoTranslateInteractor(llm: llm, history: history),
+            photoExplain: PhotoExplainInteractor(llm: llm, history: history),
             pronounce: PlayPronunciationInteractor(synthesizer: MockSpeechSynthesizing()),
             saveExpression: SaveExpressionInteractor(
                 enrich: EnrichExpressionInteractor(llm: llm), repository: repo
@@ -68,6 +69,30 @@ import Presentation
         #expect(vm.explanation != nil)
         #expect(vm.explanation?.title.isEmpty == false)
         #expect(vm.explanation?.details.isEmpty == false)
+    }
+
+    /// Both See-it modes land in history: Explain writes a photoExplain entry (title + details).
+    @Test func explainModeAppendsToHistory() async throws {
+        let history = MockHistoryRepository()
+        let vm = makeVM(history: history)
+        vm.didPickFromLibrary(Data())                // default mode = Explain
+        try await waitUntil { vm.phase == .result }
+        let entries = try await history.recent(limit: 5)
+        #expect(entries.count == 1)
+        guard case .photoExplain(let title, let details) = entries.first?.result else {
+            Issue.record("expected a photoExplain entry, got \(String(describing: entries.first))")
+            return
+        }
+        #expect(title == vm.explanation?.title)
+        #expect(details == vm.explanation?.details)
+        #expect(entries.first?.inputText == title)   // the title doubles as the row's input text
+    }
+
+    @Test func photoExplainSurvivesCodingRoundTrip() throws {
+        let result = RequestResult.photoExplain(title: "Blue plaque", details: "Marks a notable resident.")
+        let decoded = try JSONDecoder().decode(RequestResult.self, from: JSONEncoder().encode(result))
+        #expect(decoded == result)
+        #expect(decoded.kind == .photoExplain)
     }
 
     @Test func producesBlocks() async throws {

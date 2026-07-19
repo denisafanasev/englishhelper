@@ -7,13 +7,20 @@
 //
 
 import SwiftUI
+import UIKit    // UIPasteboard.changedNotification (re-arms the Paste affordance on in-app copies)
 import Domain
 import DesignSystem
 
 public struct VoiceView: View {
     @State private var model: VoiceViewModel
     @FocusState private var fieldFocused: Bool
+    /// Dynamic-Type-scaled body line height — the input box matches Get it's "first window" exactly.
+    @ScaledMetric(relativeTo: .body) private var bodyLineHeight = Tokens.Text.body.lineHeight
     @Environment(AppUIState.self) private var ui   // for routing per-variant "explain" into Get it
+    /// Bumped on every action-button tap — the trigger for its impact haptic (Paste AND submit).
+    @State private var actionTapCount = 0
+    /// The clipboard can change while the app is backgrounded — re-check on return to foreground.
+    @Environment(\.scenePhase) private var scenePhase
     /// `false` for the text-only "Текст" tab (no microphone — same flow, typed input).
     private let showsMic: Bool
 
@@ -42,6 +49,16 @@ public struct VoiceView: View {
             // Leaving the screen (tab switch) drops an input edit the user never submitted, so the
             // field still matches the on-screen results when they come back.
             .onDisappear { model.screenDisappeared() }
+            // Keep the Paste affordance honest: re-check the clipboard whenever the screen shows,
+            // the app returns to the foreground, or the clipboard changes while active — same
+            // contract as the Get-it screen (metadata check only — no iOS paste banner).
+            .onAppear { model.refreshClipboardState() }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { model.refreshClipboardState() }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIPasteboard.changedNotification)) { _ in
+                model.refreshClipboardState()
+            }
             .sheet(isPresented: $model.showMicPriming) { primingSheet }
             .alert(Loc.t("Сохранение", "Saving"), isPresented: saveErrorBinding) {
                 Button("OK", role: .cancel) {}
@@ -75,39 +92,51 @@ public struct VoiceView: View {
             .accessibilityElement(children: .contain)
             .accessibilityLabel(Loc.t("Режим", "Mode"))
 
-            GlassField(fieldPrompt, text: $model.intent, accessibilityID: "sayit.input") {
+            // A fixed 4-line box — EXACTLY the Get-it screens' input/first-window height, so the
+            // two screens read as one family.
+            GlassField(fieldPrompt, text: $model.intent, accessibilityID: "sayit.input",
+                       fixedHeight: 4 * bodyLineHeight + 2 * Tokens.Space.s16) {
                 fieldFocused = false
                 model.pick()
             }
             .focused($fieldFocused)
 
-            if showsMic {
-                // Pill-shaped push-to-talk (same form as the action button below); the status
-                // caption lives inside the pill, keeping the whole control block compact so the
-                // content area below gets the freed space.
-                MicButton(status: micStatus, title: micCaption,
-                          onPressBegan: {
-                              fieldFocused = false
-                              model.micPressBegan()
-                          },
-                          onPressEnded: { model.micPressEnded() },
-                          onPressCancelled: { model.micPressCancelled() })
-                .accessibilityLabel(Loc.t("Микрофон", "Microphone"))
-                .accessibilityValue(model.isListening ? Loc.t("Слушаю", "Listening") : Loc.t("Готов", "Ready"))
-                // VoiceOver-only copy: for VoiceOver the control is a TOGGLE (activation can't
-                // hold), so the hints describe tap-to-start / tap-to-stop, not press-and-hold.
-                .accessibilityHint(model.isListening
-                    ? Loc.t("Коснитесь, чтобы остановить и получить варианты", "Tap to stop and get phrasings")
-                    : Loc.t("Коснитесь, чтобы начать диктовку на родном языке; сигнал отметит начало записи",
-                            "Tap to start dictating in your native language; a tone marks the start"))
-            }
+            // Mic + action side by side in ONE row (half width each) — the compact input block
+            // leaves the room below to the results.
+            HStack(spacing: Tokens.Space.s12) {
+                if showsMic {
+                    // Pill-shaped push-to-talk (same form as the action button next to it); the
+                    // status caption lives inside the pill.
+                    MicButton(status: micStatus, title: micCaption,
+                              onPressBegan: {
+                                  fieldFocused = false
+                                  model.micPressBegan()
+                              },
+                              onPressEnded: { model.micPressEnded() },
+                              onPressCancelled: { model.micPressCancelled() })
+                    .accessibilityLabel(Loc.t("Микрофон", "Microphone"))
+                    .accessibilityValue(model.isListening ? Loc.t("Слушаю", "Listening") : Loc.t("Готов", "Ready"))
+                    // VoiceOver-only copy: for VoiceOver the control is a TOGGLE (activation can't
+                    // hold), so the hints describe tap-to-start / tap-to-stop, not press-and-hold.
+                    .accessibilityHint(model.isListening
+                        ? Loc.t("Коснитесь, чтобы остановить и получить варианты", "Tap to stop and get phrasings")
+                        : Loc.t("Коснитесь, чтобы начать диктовку на родном языке; сигнал отметит начало записи",
+                                "Tap to start dictating in your native language; a tone marks the start"))
+                }
 
-            EHButton(actionTitle, icon: actionIcon, kind: .primary, fillWidth: true,
-                     accessibilityID: "sayit.action") {
-                fieldFocused = false
-                model.pick()
+                // One button, two personas: with an EMPTY field and text on the clipboard it is
+                // PASTE (fills the field, then flips back to the mode action for a deliberate
+                // submit); otherwise it is the mode's action. Every tap gives an impact haptic.
+                // Same contract as the Get-it screen.
+                EHButton(actionTitle, icon: actionIcon, kind: .primary, fillWidth: true,
+                         accessibilityID: "sayit.action") {
+                    fieldFocused = false
+                    actionTapCount += 1
+                    if model.showsPasteAction { model.pasteIntoInput() } else { model.pick() }
+                }
+                .disabled(!actionEnabled)   // EHButton dims itself when disabled
+                .sensoryFeedback(.impact(weight: .medium), trigger: actionTapCount)
             }
-            .disabled(!canPick)   // EHButton dims itself when disabled
 
             SegmentedSelector(
                 ToneOfVoice.allCases,
@@ -121,14 +150,15 @@ public struct VoiceView: View {
         }
     }
 
-    /// Enabled only with non-empty input and not mid-request/listening.
-    private var canPick: Bool {
-        model.canSubmit && model.phase != .processing && !model.isListening
+    /// Enabled with something to do (input to submit OR clipboard to paste) and not mid-request/listening.
+    private var actionEnabled: Bool {
+        model.hasActionAvailable && model.phase != .processing && !model.isListening
     }
 
     private var micCaption: String {
+        // Short captions: the pill shares its row with the action button (half width each).
         switch model.micStatus {
-        case .listening: Loc.t("Слушаю… отпустите, чтобы получить варианты", "Listening… release to get phrasings")
+        case .listening: Loc.t("Слушаю…", "Listening…")
         case .processing: Loc.t("Минуту…", "One moment…")
         case .idle: Loc.t("Удерживайте и говорите", "Hold and speak")
         }
@@ -148,8 +178,10 @@ public struct VoiceView: View {
     }
 
     /// With results already shown the button regenerates (`pick()` → `regenerate()`), so the label and
-    /// icon must read "another set", not the first-run "find phrasings".
+    /// icon must read "another set", not the first-run "find phrasings". An empty field with text on
+    /// the clipboard turns it into PASTE (see the Get-it screen for the same persona switch).
     private var actionTitle: String {
+        if model.showsPasteAction { return Loc.t("Вставить", "Paste") }
         if model.phase == .results {
             return Loc.t("Другие варианты", "Other options",
                          "Autres options", "Otras opciones", "Andere Optionen", "Altre opzioni")
@@ -164,7 +196,8 @@ public struct VoiceView: View {
     }
 
     private var actionIcon: String {
-        model.phase == .results ? "arrow.triangle.2.circlepath" : "sparkles"
+        if model.showsPasteAction { return "doc.on.clipboard" }
+        return model.phase == .results ? "arrow.triangle.2.circlepath" : "sparkles"
     }
 
     private var loadingText: String {
@@ -262,6 +295,12 @@ public struct VoiceView: View {
                         ui.pendingExplain = ExplainRequest(text: variant.en, alternatives: alternatives)
                     }
                 )
+            }
+            // Start over with a fresh thought — the same affordance as Get it's "New phrase" button.
+            EHButton(Loc.t("Новая фраза", "New phrase", "Nouvelle phrase", "Nueva frase",
+                           "Neue Phrase", "Nuova frase"),
+                     icon: "arrow.triangle.2.circlepath", kind: .glass, fillWidth: true) {
+                model.reset()
             }
         }
     }

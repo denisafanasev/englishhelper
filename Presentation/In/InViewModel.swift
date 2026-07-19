@@ -78,6 +78,8 @@ public final class InViewModel {
     public private(set) var isLiveListening = false
     /// Graceful stop in flight (finals draining) — the button shows a brief "finishing" state.
     public private(set) var isLiveStopping = false
+    /// Session muted (Pause button): recognition/recording stopped, connection warm, resume instant.
+    public private(set) var isLivePaused = false
     public private(set) var liveText = LiveTranslationText.empty
     /// Mic input level 0…1 for the on-button sound diagram.
     public private(set) var liveLevel: Float = 0
@@ -87,10 +89,22 @@ public final class InViewModel {
     /// The input the on-screen result was generated from — restored on leaving the screen so an
     /// edit the user never submitted can't sit above a result it doesn't match.
     private var generatedSource: String?
-    /// The mode that produced the on-screen result. A round trip THROUGH Online back to this same
-    /// mode must not re-fire the request (the result is still valid) — only a genuine
-    /// Translate↔Explain switch re-runs.
+    /// The mode that produced the on-screen result. A round trip back to this same mode must not
+    /// re-fire the request — the result is still valid.
     private var generatedMode: Mode?
+
+    /// Finished result of a text mode, kept when the user switches modes: coming BACK shows it
+    /// again instead of re-asking the model. Matched by the input that produced it — an answer is
+    /// only ever re-generated on an EXPLICIT user action (the action button), never by navigation.
+    private struct CachedModeResult {
+        var studied: String?
+        var translations: [TranslationVariant]
+        var explanation: ExpressionExplanation?
+        var generatedSource: String
+        var isSaved: Bool
+        var savedExpressionID: UUID?
+    }
+    private var modeResults: [Mode: CachedModeResult] = [:]
     /// Bumped on every new result so an in-flight save can tell "user un-saved" from "result was
     /// regenerated" and not silently delete a just-bookmarked expression.
     private var resultsGeneration = 0
@@ -325,6 +339,9 @@ public final class InViewModel {
     /// The Listen button opened the priming sheet — confirming should start the session (the tap
     /// already ended; unlike push-to-talk there is no held finger to conflict with).
     private var liveStartPending = false
+    /// "New" was tapped while the old session drains — its tail text updates must not repopulate
+    /// the freshly cleared screen (the session still SAVES in full; only the display is reset).
+    private var liveClearPending = false
 
     /// The Listen button: one tap starts a session, the next tap gracefully ends it (the finished
     /// session is saved to History by the use case).
@@ -339,6 +356,21 @@ public final class InViewModel {
         }
     }
 
+    /// Start a live session WITHOUT a tap — the Lock Screen widget deep link, mirroring
+    /// `beginVoiceInput`. IDEMPOTENT (never a toggle): iOS 26 can deliver the widget URL twice,
+    /// and a second delivery must not stop the session the first one started. Unprimed mic shows
+    /// the priming sheet; confirming resumes the start (`liveStartPending`). With no Soniox key
+    /// this is a no-op — same as the disabled Listen button (the screen already shows the banner).
+    public func beginLiveInput() {
+        guard !isLiveListening, !isLiveStopping, !needsLiveAPIKey else { return }
+        if Prefs.store.bool(forKey: primingDefaultsKey) {
+            startLive()
+        } else {
+            liveStartPending = true
+            showMicPriming = true
+        }
+    }
+
     private func startLive() {
         guard !isLiveListening, liveTask == nil else { return }
         liveErrorMessage = nil
@@ -346,6 +378,8 @@ public final class InViewModel {
         liveLevel = 0
         isLiveListening = true
         isLiveStopping = false
+        isLivePaused = false
+        liveClearPending = false
         let studiedCode = StudiedLanguage.current.languageCode
         let nativeCode = TargetLanguage.current.languageCode
         liveTask = Task { [weak self] in
@@ -364,7 +398,8 @@ public final class InViewModel {
                             self.liveLevel = level
                         }
                     case .text(let text):
-                        self.liveText = text
+                        // After "New" the drain tail belongs to the SAVED session, not the screen.
+                        if !self.liveClearPending { self.liveText = text }
                     case .finished:
                         break   // history is saved by the use case; UI keeps the transcript on screen
                     }
@@ -374,9 +409,33 @@ public final class InViewModel {
             }
             self.isLiveListening = false
             self.isLiveStopping = false
+            self.isLivePaused = false
+            self.liveClearPending = false
             self.liveLevel = 0
             self.liveTask = nil
         }
+    }
+
+    /// The Pause button: quickly mute the session (nothing recognized or recorded while paused;
+    /// the connection stays warm) and just as quickly bring the translation back.
+    public func toggleLivePause() {
+        guard isLiveListening, !isLiveStopping else { return }
+        isLivePaused.toggle()
+        liveLevel = 0
+        let paused = isLivePaused
+        Task { [weak self] in await self?.liveTranslate.setPaused(paused) }
+    }
+
+    /// The New button: the current session is SAVED as usual (graceful stop → History, recording
+    /// included) and the screen clears for a fresh one. With nothing running it just clears.
+    public func newLiveSession() {
+        if isLiveListening {
+            liveClearPending = true
+            stopLive()
+        }
+        liveText = .empty
+        liveErrorMessage = nil
+        liveLevel = 0
     }
 
     /// Graceful stop: the session drains its final words, emits `.finished`, and the stream ends —
@@ -539,6 +598,7 @@ public final class InViewModel {
     private func applyMode(_ newMode: Mode, persist: Bool) {
         guard newMode != mode else { return }
         let oldMode = mode
+        stashCurrentResult()   // keep the finished answer of the mode we're leaving
         mode = newMode
         if persist { Prefs.store.set(newMode.rawValue, forKey: Mode.storageKey) }
         // Leaving Online mid-session: end it GRACEFULLY (it saves to History) — never keep a hot
@@ -562,11 +622,18 @@ public final class InViewModel {
         // running new text happens only via the button. (A deliberately CLEARED field falls through
         // to the reset branch instead of resurrecting deleted text.)
         if phase == .result, canSubmit, let generatedSource { source = generatedSource }
-        // Round trip THROUGH Online back to the mode that produced the on-screen result: it is
-        // still valid — re-firing would waste a request and reset the bookmark state.
-        if oldMode == .online, phase == .result, newMode == generatedMode { return }
-        // Re-run the SAME input in the new mode — including after a FAILURE (e.g. the model was
-        // unavailable in the previous mode), so switching mode retries instead of staying stuck.
+        // The on-screen result already belongs to the target mode (round trip through Online):
+        // it is still valid — re-firing would waste a request and reset the bookmark state.
+        if phase == .result, newMode == generatedMode { return }
+        // This mode already answered THIS input: show the kept answer — a model call happens only
+        // on an explicit user action, never because the user navigated between modes.
+        let input = source.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !input.isEmpty, let cached = modeResults[newMode], cached.generatedSource == input {
+            restoreResult(cached, for: newMode)
+            return
+        }
+        // No kept answer for this mode+input: run it — including after a FAILURE (e.g. the model
+        // was unavailable in the previous mode), so switching mode retries instead of staying stuck.
         if canSubmit, phase == .result || phase == .processing || phase == .failed {
             submit()
         } else {
@@ -583,6 +650,33 @@ public final class InViewModel {
                 isOffline = false
             }
         }
+    }
+
+    /// Snapshot the visible finished result under the mode that produced it (no-op otherwise).
+    private func stashCurrentResult() {
+        guard phase == .result, let generatedMode, let generatedSource else { return }
+        modeResults[generatedMode] = CachedModeResult(
+            studied: studied, translations: translations, explanation: explanation,
+            generatedSource: generatedSource, isSaved: isSaved, savedExpressionID: savedExpressionID
+        )
+    }
+
+    /// Put a kept answer back on screen — the exact state the mode was left in, bookmark included.
+    private func restoreResult(_ cached: CachedModeResult, for newMode: Mode) {
+        requestTask?.cancel()   // an in-flight other-mode request must not land over the restored view
+        requestTask = nil
+        studied = cached.studied
+        translations = cached.translations
+        explanation = cached.explanation
+        generatedSource = cached.generatedSource
+        generatedMode = newMode
+        source = cached.generatedSource
+        isSaved = cached.isSaved
+        savedExpressionID = cached.savedExpressionID
+        resultsGeneration += 1   // an in-flight save from the previous mode must not attach here
+        errorMessage = nil
+        isOffline = false
+        phase = .result
     }
 
     /// The screen is leaving (tab switch / navigation away). Stops anything that must not keep

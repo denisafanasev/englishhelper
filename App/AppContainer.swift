@@ -98,7 +98,8 @@ public final class AppContainer: Sendable {
                                              analytics: analytics)
         self.photoTranslate = PhotoTranslateInteractor(llm: llm, history: history,
                                                        analytics: analytics)          // LLM vision (no local OCR)
-        self.photoExplain = PhotoExplainInteractor(llm: llm, analytics: analytics)    // "See it" Explain mode
+        self.photoExplain = PhotoExplainInteractor(llm: llm, history: history,
+                                                   analytics: analytics)              // "See it" Explain mode
         self.enrich = EnrichExpressionInteractor(llm: llm)
         self.studyList = StudyListInteractor(repository: expressions)
         self.requestHistory = RequestHistoryInteractor(history: history, recordings: recordings)

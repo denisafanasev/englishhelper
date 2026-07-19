@@ -132,12 +132,22 @@ private struct HistoryDetailView: View {
 
                 // For translate/photo the request text IS the studied-language rendering, so its
                 // playback (in the studied voice), copy, and explain sit in the card header — the same
-                // icon row as the phrase cards.
+                // icon row as the phrase cards. A live session's REAL recording also belongs here:
+                // it is the original of the request, not part of the translation below.
                 labeledCard(title: Loc.t("Запрос", "Request"),
                             actions: { if isPlayableSource { requestActions } }) {
-                    Text(entry.inputText)
-                        .textStyle(Tokens.Text.body)
-                        .foregroundStyle(Tokens.Content.primary)
+                    VStack(alignment: .leading, spacing: Tokens.Space.s12) {
+                        // The RECORDING comes first — it IS the original; the recognized text
+                        // below is derived from it.
+                        if case .liveTranslation(_, _, _, let duration) = entry.result,
+                           model.recordingFileName != nil {
+                            recordingRow(duration: duration)
+                            Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)
+                        }
+                        Text(entry.inputText)
+                            .textStyle(Tokens.Text.body)
+                            .foregroundStyle(Tokens.Content.primary)
+                    }
                 }
 
                 resultSection
@@ -200,19 +210,41 @@ private struct HistoryDetailView: View {
             .padding(Tokens.Space.s16)
             .glassPanel(cornerRadius: Tokens.Radius.card)
 
-        case .liveTranslation(_, let ru, _, let duration):
-            // The recognized speech is the "Запрос" card above (inputText); here: the original
-            // session recording AT THE TOP (when the audio survived), then the translation.
+        case .photoExplain(let title, let details):
+            // Same shape as the See-it explanation card: title + hairline + details, copyable.
+            // The "Запрос" card above shows the title too (it doubles as inputText) — acceptable
+            // duplication; the photo itself was never persisted.
+            VStack(alignment: .leading, spacing: Tokens.Space.s12) {
+                HStack {
+                    sectionTitle(Loc.t("Объяснение", "Explanation", "Explication", "Explicación",
+                                       "Erklärung", "Spiegazione"))
+                    Spacer(minLength: Tokens.Space.s8)
+                    CopyButton(title + "\n\n" + details, style: .icon,
+                               accessibilityLabel: Loc.t("Скопировать объяснение", "Copy explanation"))
+                }
+                Text(title)
+                    .textStyle(Tokens.Text.headline)
+                    .foregroundStyle(Tokens.Content.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)
+                Text(details)
+                    .textStyle(Tokens.Text.body)
+                    .foregroundStyle(Tokens.Content.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(Tokens.Space.s16)
+            .glassPanel(cornerRadius: Tokens.Radius.card)
+
+        case .liveTranslation(_, let ru, _, _):
+            // The recognized speech AND its recording live in the "Запрос" card above; here — the
+            // translation only.
             VStack(alignment: .leading, spacing: Tokens.Space.s12) {
                 HStack {
                     sectionTitle(Loc.t("Перевод", "Translation"))
                     Spacer(minLength: Tokens.Space.s8)
                     CopyButton(ru, style: .icon,
                                accessibilityLabel: Loc.t("Скопировать перевод", "Copy translation"))
-                }
-                if model.recordingFileName != nil {
-                    recordingRow(duration: duration)
-                    Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)
                 }
                 Text(ru)
                     .textStyle(Tokens.Text.body)
@@ -266,7 +298,8 @@ private struct HistoryDetailView: View {
     private var isPlayableSource: Bool {
         switch entry.kind {
         case .translate, .photoTranslate: true
-        case .howToSay, .whatToSay, .liveTranslation: false
+        // photoExplain's inputText is the native-language TITLE — nothing to speak in the studied voice.
+        case .howToSay, .whatToSay, .photoExplain, .liveTranslation: false
         }
     }
 
@@ -352,6 +385,7 @@ private func kindIcon(_ kind: RequestKind) -> String {
     case .whatToSay: "bubble.left.and.bubble.right"
     case .translate: "character.bubble"
     case .photoTranslate: "camera"
+    case .photoExplain: "sparkle.magnifyingglass"
     case .liveTranslation: "waveform"
     }
 }
@@ -362,6 +396,8 @@ private func kindTitle(_ kind: RequestKind) -> String {
     case .whatToSay: Loc.t("Что сказать", "What to say", "Quoi dire", "Qué decir", "Was sagen", "Cosa dire")
     case .translate: Loc.t("Перевод", "Translation")
     case .photoTranslate: Loc.t("Фото-перевод", "Photo translation")
+    case .photoExplain: Loc.t("Фото-объяснение", "Photo explanation", "Explication photo",
+                              "Explicación de foto", "Foto-Erklärung", "Spiegazione foto")
     case .liveTranslation: Loc.t("Онлайн-перевод", "Live translation", "Traduction en direct",
                                  "Traducción en vivo", "Live-Übersetzung", "Traduzione dal vivo")
     }
@@ -372,6 +408,7 @@ private func resultSnippet(_ result: RequestResult) -> String {
     case .howToSay(let variants), .whatToSay(let variants): variants.first?.en ?? "—"
     case .translate(let ru): ru
     case .photoTranslate(let ru): ru
+    case .photoExplain(_, let details): details
     case .liveTranslation(_, let ru, _, _): ru
     }
 }

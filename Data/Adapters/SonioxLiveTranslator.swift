@@ -56,6 +56,11 @@ public final class SonioxLiveTranslator: LiveTranslating, @unchecked Sendable {
         }
     }
 
+    public func setPaused(_ paused: Bool) async {
+        let session = await MainActor.run { current }
+        await session?.setPaused(paused)
+    }
+
     public func stop() async {
         let session = await MainActor.run { current }
         await session?.stopGracefully()
@@ -78,6 +83,7 @@ private final class LiveSession: @unchecked Sendable {
     @MainActor private var continuation: AsyncThrowingStream<LiveTranslationEvent, Error>.Continuation?
     @MainActor private var stopped = false          // abort requested or session fully done
     @MainActor private var finishing = false        // graceful stop in progress (draining finals)
+    @MainActor private var paused = false           // engine paused; socket kept warm on keepalives
     @MainActor private var captureBegan = false
     @MainActor private var didActivateSession = false
     @MainActor private var accumulator = SonioxTokenAccumulator()
@@ -275,13 +281,28 @@ private final class LiveSession: @unchecked Sendable {
 
     /// Ships converted audio to the socket every ~100 ms once the config frame is through.
     /// Before that, chunks accumulate in TapState — the official "buffer until configured" tip.
+    /// While PAUSED no audio flows — a keepalive every ~10 s stops Soniox's 20 s idle timeout
+    /// from closing the warm connection.
     @MainActor
     private func startSender() {
         senderTask = Task { [weak self] in
+            var idleCycles = 0
             while let self, await !self.isStopped() {
-                let (ready, socket) = await MainActor.run { (self.socketConfigured, self.webSocket) }
+                let (ready, socket, isPaused) = await MainActor.run {
+                    (self.socketConfigured, self.webSocket, self.paused)
+                }
                 if ready, let socket {
-                    for chunk in self.tap.take(chunkSize: Self.chunkBytes) {
+                    let chunks = self.tap.take(chunkSize: Self.chunkBytes)
+                    if chunks.isEmpty, isPaused {
+                        idleCycles += 1
+                        if idleCycles >= 100 {   // ~10 s of silence on the wire
+                            idleCycles = 0
+                            try? await socket.send(.string(#"{"type":"keepalive"}"#))
+                        }
+                    } else {
+                        idleCycles = 0
+                    }
+                    for chunk in chunks {
                         do { try await socket.send(.data(chunk)) } catch {
                             let draining = await MainActor.run { self.finishing || self.stopped }
                             if !draining { await self.fail(Self.map(error)) }
@@ -334,6 +355,22 @@ private final class LiveSession: @unchecked Sendable {
     }
 
     // MARK: stop / abort / fail
+
+    /// Quick mute/unmute: `AVAudioEngine.pause()` stops the tap callbacks (no audio sent, nothing
+    /// recorded, no levels) while the audio session AND the WebSocket stay warm — the sender keeps
+    /// the connection alive with keepalives — so resuming is a near-instant `engine.start()`.
+    func setPaused(_ newValue: Bool) async {
+        await MainActor.run {
+            guard captureBegan, !stopped, !finishing, paused != newValue else { return }
+            paused = newValue
+            if newValue {
+                engine.pause()
+                continuation?.yield(.level(0))   // flatten the on-button diagram immediately
+            } else {
+                try? engine.start()
+            }
+        }
+    }
 
     /// Graceful end: mic off, recording closed, EOF to Soniox, drain finals (5 s cap), emit
     /// `.finished`, complete the stream. Idempotent.

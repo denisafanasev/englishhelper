@@ -324,12 +324,78 @@ struct LiveHistoryTests {
         #expect(vm.isLiveListening)
     }
 
+    /// Pause mutes the running session (passed through to the port) WITHOUT ending it; a second
+    /// tap resumes just as fast.
+    @Test func pauseTogglesQuicklyWithoutEndingTheSession() async throws {
+        let live = MockLiveTranslating()
+        let vm = makeVM(live: live)
+        vm.routeMode(.online)
+        vm.toggleLive()
+        #expect(vm.isLiveListening)
+
+        vm.toggleLivePause()
+        #expect(vm.isLivePaused)
+        try await waitUntil { live.isPaused }
+        #expect(live.isPaused)
+        #expect(vm.isLiveListening)          // still running — pause is not stop
+
+        vm.toggleLivePause()
+        try await waitUntil { !live.isPaused }
+        #expect(!vm.isLivePaused)
+        #expect(vm.isLiveListening)
+    }
+
+    /// "New" saves the running session to History (with its recording) and clears the screen;
+    /// the drain tail never repopulates the cleared panes.
+    @Test func newSavesCurrentSessionAndClearsTheScreen() async throws {
+        let history = MockHistoryRepository()
+        let vm = makeVM(history: history)
+        vm.routeMode(.online)
+        vm.toggleLive()
+        try await waitUntil { vm.liveText.translationFinal == "Осторожно, промежуток." }
+
+        vm.newLiveSession()
+        #expect(vm.liveText == .empty)       // cleared immediately
+        try await waitUntil { !vm.isLiveListening }
+        #expect(vm.liveText == .empty)       // the finishing session's tail stayed out
+
+        try await waitUntil { (try? await history.recent(limit: 5))?.isEmpty == false }
+        let entries = try await history.recent(limit: 5)
+        #expect(entries.first?.kind == .liveTranslation)   // the previous session WAS saved
+    }
+
     @Test func submitIsANoOpInOnlineMode() async throws {
         let vm = makeVM()
         vm.routeMode(.online)   // session-only: never persists getItMode under a parallel suite
         vm.source = "bank"
         vm.submit()
         #expect(vm.phase == .idle)   // no request fired
+    }
+
+    /// The Lock Screen widget's hands-free start: begins a session and is IDEMPOTENT — iOS 26 can
+    /// deliver the widget URL twice, and the second delivery must never stop the first's session.
+    @Test func beginLiveInputStartsSessionAndIsIdempotent() async throws {
+        let vm = makeVM()
+        vm.routeMode(.online)   // session-only: never persists getItMode under a parallel suite
+        vm.beginLiveInput()
+        #expect(vm.isLiveListening)
+        vm.beginLiveInput()      // duplicate URL delivery
+        #expect(vm.isLiveListening)   // still listening — NOT toggled off
+        try await waitUntil { vm.liveText.originalFinal == "Mind the gap." }
+        #expect(vm.liveText.originalFinal == "Mind the gap.")
+    }
+
+    /// Unprimed mic: the widget-routed start primes first; confirming resumes the session start.
+    @Test func beginLiveInputPrimesThenConfirmStarts() async throws {
+        UserDefaults.standard.removeObject(forKey: "didPrimeMic")
+        defer { UserDefaults.standard.set(true, forKey: "didPrimeMic") }
+        let vm = makeVM()
+        vm.routeMode(.online)
+        vm.beginLiveInput()
+        #expect(vm.showMicPriming)
+        #expect(!vm.isLiveListening)
+        vm.confirmPriming()
+        #expect(vm.isLiveListening)
     }
 }
 

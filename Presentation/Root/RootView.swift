@@ -169,6 +169,10 @@ public struct RootView: View {
             selection = "in"
             inbound.routeMode(url.host == "getit-translate" ? .translate : .explain)
             inbound.beginVoiceInput()                              // turn the mic on for input
+        case "getit-online":
+            selection = "in"
+            inbound.routeMode(.online)
+            inbound.beginLiveInput()                               // start the live session hands-free
         case "sayit", "sayit-what":
             selection = "out"
             out.routeMode(url.host == "sayit-what" ? .whatToSay : .howToSay)

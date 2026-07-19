@@ -48,7 +48,7 @@ public final class HistoryDetailViewModel {
     public var translationRU: String? {
         switch entry.result {
         case .translate(let ru), .photoTranslate(let ru): ru
-        case .howToSay, .whatToSay, .liveTranslation: nil
+        case .howToSay, .whatToSay, .photoExplain, .liveTranslation: nil
         }
     }
 
@@ -133,8 +133,8 @@ public final class HistoryDetailViewModel {
                 savedKeys.insert(key)
                 savedIDs[key] = id
             }
-        case .liveTranslation:
-            break   // whole-session text isn't a study card — nothing saveable here
+        case .photoExplain, .liveTranslation:
+            break   // native-language explanation / whole-session text — nothing saveable here
         }
     }
     public static func variantKey(_ variant: PhraseVariant) -> String { variant.id.uuidString }

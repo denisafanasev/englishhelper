@@ -13,6 +13,8 @@ public protocol LiveTranslateUseCase: Sendable {
     /// Start a live session; forwards the port's event stream. `studiedLanguage`/`nativeLanguage`
     /// are ISO-639-1 codes ("en", "ru").
     func start(studiedLanguage: String, nativeLanguage: String) -> AsyncThrowingStream<LiveTranslationEvent, Error>
+    /// Quickly mute/unmute the running session (see `LiveTranslating.setPaused`).
+    func setPaused(_ paused: Bool) async
     /// Gracefully end the current session (drains remaining text; the stream then completes).
     func stop() async
 }
@@ -91,6 +93,8 @@ public struct LiveTranslateInteractor: LiveTranslateUseCase {
             continuation.onTermination = { @Sendable _ in task.cancel() }
         }
     }
+
+    public func setPaused(_ paused: Bool) async { await live.setPaused(paused) }
 
     public func stop() async { await live.stop() }
 }

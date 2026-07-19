@@ -37,7 +37,14 @@ public final class VoiceViewModel {
     /// `selectMode` (an explicit tap on the on-screen selector) — a routed change (widget deep link)
     /// is session-only, so it can never silently overwrite the user's saved preference.
     public private(set) var mode: Mode = Mode.current
-    public var intent: String = ""                       // editable transcript / typed input
+    public var intent: String = "" {                     // editable transcript / typed input
+        // Clearing the field (the ✕ button or deleting everything) re-arms the Paste affordance —
+        // re-check the clipboard so the action button can flip to Paste (or disable) immediately.
+        didSet { if intent.isEmpty && !oldValue.isEmpty { refreshClipboardState() } }
+    }
+    /// Last observed "clipboard holds text" state (refreshed on appear / foreground / field clear).
+    /// Drives the action button's Paste mode; the metadata check never triggers the iOS paste banner.
+    public private(set) var clipboardHasText = false
     /// Tone/register for the generated phrases — chosen on-screen, persisted (shared with the
     /// "Понять" compose path via `ToneOfVoice.current`).
     public var tone: ToneOfVoice = ToneOfVoice.current {
@@ -75,6 +82,8 @@ public final class VoiceViewModel {
     private let saveExpression: any SaveExpressionUseCase
     private let studyList: any StudyListUseCase
     private let isConfigured: Bool
+    /// Clipboard access for the Paste affordance (injected so tests can can content).
+    private let pasteboard: any PasteboardReading
 
     private var captureTask: Task<Void, Never>?
     private var requestTask: Task<Void, Never>?
@@ -90,7 +99,8 @@ public final class VoiceViewModel {
         pronounce: any PlayPronunciationUseCase,
         saveExpression: any SaveExpressionUseCase,
         studyList: any StudyListUseCase,
-        isConfigured: Bool
+        isConfigured: Bool,
+        pasteboard: any PasteboardReading = SystemPasteboard()
     ) {
         self.howToSay = howToSay
         self.regenerateHowToSay = regenerateHowToSay
@@ -100,6 +110,7 @@ public final class VoiceViewModel {
         self.saveExpression = saveExpression
         self.studyList = studyList
         self.isConfigured = isConfigured
+        self.pasteboard = pasteboard
     }
 
     // MARK: Derived
@@ -107,6 +118,41 @@ public final class VoiceViewModel {
     public var isListening: Bool { phase == .listening }
     public var canSubmit: Bool { !intent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     public var needsAPIKey: Bool { !isConfigured }
+
+    // MARK: Paste affordance (the action button doubles as Paste while the field is empty)
+
+    /// The action button renders (and acts) as PASTE: nothing to submit yet, but the clipboard has
+    /// text one tap away. Pasting fills the field, which flips the button back to the mode action.
+    /// Suppressed while listening/processing — mid-dictation the (disabled) button keeps showing the
+    /// MODE action instead of churning Paste→action as partial transcripts arrive. Same contract as
+    /// the Get-it screen.
+    public var showsPasteAction: Bool {
+        !canSubmit && clipboardHasText && phase != .listening && phase != .processing
+    }
+
+    /// The action button is tappable: either there's input to submit or a clipboard text to paste.
+    public var hasActionAvailable: Bool { canSubmit || clipboardHasText }
+
+    /// Re-read the clipboard's has-text METADATA (never triggers the iOS paste banner). Called on
+    /// screen appear, on returning to the foreground, and when the field is cleared.
+    public func refreshClipboardState() {
+        clipboardHasText = pasteboard.hasText
+    }
+
+    /// Put the clipboard text into the input field (explicit user tap — iOS may show its one-time
+    /// paste confirmation). The field becoming non-empty flips the button back to the mode action;
+    /// the user then submits DELIBERATELY — pasting never auto-runs the request.
+    public func pasteIntoInput() {
+        guard let text = pasteboard.readText(),
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            // Nothing USABLE (emptied since the last check, denied, non-text, or whitespace-only —
+            // where `hasText` would still say true). Mark the clipboard unusable directly so the
+            // button flips/disables instead of staying an enabled do-nothing Paste.
+            clipboardHasText = false
+            return
+        }
+        intent = text
+    }
     public func isSaved(_ variant: PhraseVariant) -> Bool { savedVariantIDs.contains(variant.id) }
     public func isPlaying(_ variant: PhraseVariant) -> Bool { playingVariantID == variant.id }
 

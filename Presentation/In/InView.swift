@@ -126,38 +126,41 @@ public struct InView: View {
             }
             .focused($fieldFocused)
 
-            // Pill-shaped push-to-talk (same form as the action button below); the status caption
-            // lives inside the pill — MUST stay visually identical to VoiceView's mic so the two
-            // screens read as one family.
-            MicButton(status: micStatus, title: micCaption,
-                      onPressBegan: {
-                          fieldFocused = false
-                          model.micPressBegan()
-                      },
-                      onPressEnded: { model.micPressEnded() },
-                      onPressCancelled: { model.micPressCancelled() })
-            .accessibilityLabel(Loc.t("Микрофон", "Microphone"))
-            .accessibilityValue(model.isListening ? Loc.t("Слушаю", "Listening") : Loc.t("Готов", "Ready"))
-            // VoiceOver-only copy: for VoiceOver the control is a TOGGLE (activation can't
-            // hold), so the hints describe tap-to-start / tap-to-stop — and the stop hint names
-            // what the CURRENT mode will actually run.
-            .accessibilityHint(model.isListening
-                ? (model.mode == .translate
-                    ? Loc.t("Коснитесь, чтобы остановить и перевести", "Tap to stop and translate")
-                    : Loc.t("Коснитесь, чтобы остановить и получить объяснение", "Tap to stop and get an explanation"))
-                : Loc.t("Коснитесь, чтобы начать диктовку на изучаемом языке; сигнал отметит начало записи",
-                        "Tap to start dictating in the language you're learning; a tone marks the start"))
+            // Mic + action side by side in ONE row (half width each) — same compact block as the
+            // Say-it screen, so the two screens read as one family.
+            HStack(spacing: Tokens.Space.s12) {
+                // Pill-shaped push-to-talk (same form as the action button next to it); the status
+                // caption lives inside the pill.
+                MicButton(status: micStatus, title: micCaption,
+                          onPressBegan: {
+                              fieldFocused = false
+                              model.micPressBegan()
+                          },
+                          onPressEnded: { model.micPressEnded() },
+                          onPressCancelled: { model.micPressCancelled() })
+                .accessibilityLabel(Loc.t("Микрофон", "Microphone"))
+                .accessibilityValue(model.isListening ? Loc.t("Слушаю", "Listening") : Loc.t("Готов", "Ready"))
+                // VoiceOver-only copy: for VoiceOver the control is a TOGGLE (activation can't
+                // hold), so the hints describe tap-to-start / tap-to-stop — and the stop hint names
+                // what the CURRENT mode will actually run.
+                .accessibilityHint(model.isListening
+                    ? (model.mode == .translate
+                        ? Loc.t("Коснитесь, чтобы остановить и перевести", "Tap to stop and translate")
+                        : Loc.t("Коснитесь, чтобы остановить и получить объяснение", "Tap to stop and get an explanation"))
+                    : Loc.t("Коснитесь, чтобы начать диктовку на изучаемом языке; сигнал отметит начало записи",
+                            "Tap to start dictating in the language you're learning; a tone marks the start"))
 
-            // One button, two personas: with an EMPTY field and text on the clipboard it is PASTE
-            // (fills the field, then flips back to Translate/Explain for a deliberate submit);
-            // otherwise it is the mode's action. Every tap gives an impact haptic.
-            EHButton(actionTitle, icon: actionIcon, kind: .primary, fillWidth: true,
-                     accessibilityID: "getit.action") {
-                fieldFocused = false
-                actionTapCount += 1
-                if model.showsPasteAction { model.pasteIntoInput() } else { model.submit() }
+                // One button, two personas: with an EMPTY field and text on the clipboard it is PASTE
+                // (fills the field, then flips back to Translate/Explain for a deliberate submit);
+                // otherwise it is the mode's action. Every tap gives an impact haptic.
+                EHButton(actionTitle, icon: actionIcon, kind: .primary, fillWidth: true,
+                         accessibilityID: "getit.action") {
+                    fieldFocused = false
+                    actionTapCount += 1
+                    if model.showsPasteAction { model.pasteIntoInput() } else { model.submit() }
+                }
+                .disabled(!actionEnabled)   // EHButton dims itself when disabled
             }
-            .disabled(!actionEnabled)   // EHButton dims itself when disabled
             .sensoryFeedback(.impact(weight: .medium), trigger: actionTapCount)
         }
     }
@@ -168,17 +171,39 @@ public struct InView: View {
         VStack(spacing: Tokens.Space.s12) {
             modeSelector
             if model.needsLiveAPIKey { sonioxKeyBanner }
-            // The Listen control sits BETWEEN the two transcript panes (the view's middle slot).
+            // The controls sit BETWEEN the two transcript panes (the view's middle slot):
+            // Pause (mute/unmute the running session) · Listen (start/stop) · New (save + clear).
             LiveTranscriptView(text: model.liveText, isStreaming: model.isLiveListening,
                                smallPaneContentHeight: firstWindowContentHeight) {
-                ListenButton(
-                    isListening: model.isLiveListening,
-                    isStopping: model.isLiveStopping,
-                    level: model.liveLevel,
-                    idleTitle: Loc.t("Слушать", "Listen", "Écouter", "Escuchar", "Zuhören", "Ascolta"),
-                    action: { model.toggleLive() }
-                )
-                .disabled(model.needsLiveAPIKey)
+                HStack(spacing: Tokens.Space.s12) {
+                    // Pause / Resume: compact glyph — the label is VoiceOver's (and the UI tests').
+                    liveSideButton(
+                        icon: model.isLivePaused ? "play.fill" : "pause.fill",
+                        label: model.isLivePaused
+                            ? Loc.t("Дальше", "Resume", "Reprendre", "Seguir", "Weiter", "Riprendi")
+                            : Loc.t("Пауза", "Pause", "Pause", "Pausa", "Pause", "Pausa"),
+                        action: { model.toggleLivePause() }
+                    )
+                    .disabled(!model.isLiveListening || model.isLiveStopping)
+
+                    ListenButton(
+                        isListening: model.isLiveListening,
+                        isStopping: model.isLiveStopping,
+                        level: model.liveLevel,
+                        idleTitle: Loc.t("Слушать", "Listen", "Écouter", "Escuchar", "Zuhören", "Ascolta"),
+                        action: { model.toggleLive() }
+                    )
+                    .disabled(model.needsLiveAPIKey)
+
+                    // New: save the running session and clear the screen for a fresh one.
+                    liveSideButton(
+                        icon: "plus",
+                        label: Loc.t("Новая", "New", "Nouvelle", "Nueva", "Neu", "Nuova"),
+                        action: { model.newLiveSession() }
+                    )
+                    // Enabled when there is anything to save or clear.
+                    .disabled(!model.isLiveListening && model.liveText == .empty && model.liveErrorMessage == nil)
+                }
                 if let message = model.liveErrorMessage {
                     Text(message)
                         .textStyle(Tokens.Text.footnote)
@@ -187,6 +212,12 @@ public struct InView: View {
                 }
             }
         }
+    }
+
+    /// A 50×50 glass glyph flanking the Listen pill (Pause / New). Dims itself when disabled —
+    /// `.buttonStyle(.plain)` doesn't (same rationale as EHButton).
+    private func liveSideButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
+        LiveSideButton(icon: icon, label: label, action: action)
     }
 
     private var sonioxKeyBanner: some View {
@@ -252,8 +283,9 @@ public struct InView: View {
     }
 
     private var micCaption: String {
+        // Short captions: the pill shares its row with the action button (half width each).
         switch model.micStatus {
-        case .listening: Loc.t("Слушаю… отпустите для перевода или объяснения", "Listening… release to translate or explain")
+        case .listening: Loc.t("Слушаю…", "Listening…")
         case .processing: Loc.t("Минуту…", "One moment…")
         case .idle: Loc.t("Удерживайте и говорите", "Hold and speak")
         }
@@ -457,5 +489,27 @@ public struct InView: View {
         case .listening: .listening
         case .processing: .processing
         }
+    }
+}
+
+/// Compact glass glyph button (Pause / New) flanking the Listen pill in Online mode. Fixed 50×50:
+/// it must never compete with the pill for width, whatever the label localizes to.
+private struct LiveSideButton: View {
+    let icon: String
+    let label: String
+    let action: () -> Void
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(Tokens.Content.primary)
+                .frame(width: 50, height: 50)
+                .glassPanel(cornerRadius: Tokens.Radius.pill)
+        }
+        .buttonStyle(.plain)
+        .opacity(isEnabled ? 1 : 0.4)
+        .accessibilityLabel(label)
     }
 }

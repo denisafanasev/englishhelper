@@ -71,6 +71,11 @@ public protocol LiveTranslating: Sendable {
     /// Start listening. `studiedLanguage`/`nativeLanguage` are ISO-639-1 codes ("en", "ru").
     /// The stream throws `LiveTranslationError` on session failure.
     func start(studiedLanguage: String, nativeLanguage: String) -> AsyncThrowingStream<LiveTranslationEvent, Error>
+    /// Quickly MUTE/UNMUTE the running session: while paused, recognition and the recording stop,
+    /// but the session stays warm (connection kept alive) so resuming is instant. No-op when no
+    /// session is running. The silence auto-stop keeps counting — a forgotten paused session still
+    /// ends (and saves) itself.
+    func setPaused(_ paused: Bool) async
     /// Gracefully end the current session (no-op when none is running).
     func stop() async
 }

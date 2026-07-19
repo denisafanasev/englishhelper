@@ -208,6 +208,38 @@ import Presentation
 
     // MARK: Explain mode
 
+    /// Navigating between modes NEVER re-asks the model once a mode has answered the input: the
+    /// kept answer is shown as-is. Only the first visit (no answer yet) runs a request.
+    @Test func switchingBackToAModeShowsKeptResultWithoutNewRequest() async throws {
+        UserDefaults.standard.set("russian", forKey: "targetLanguage")
+        UserDefaults.standard.set("english", forKey: "studiedLanguage")
+        let llm = CountingLLM()
+        let vm = makeVM(llm: llm)
+        vm.selectMode(.translate)
+        vm.source = "bank"
+        vm.submit()
+        try await waitUntil { vm.phase == .result }
+        #expect(!vm.translations.isEmpty)
+        let afterTranslate = llm.calls
+
+        vm.selectMode(.explain)                  // no explain answer yet → runs exactly once
+        try await waitUntil { vm.explanation != nil }
+        let afterExplain = llm.calls
+        #expect(afterExplain == afterTranslate + 1)
+
+        vm.selectMode(.translate)                // kept answer → shown instantly, NO new request
+        #expect(vm.phase == .result)
+        #expect(!vm.translations.isEmpty)
+        #expect(vm.explanation == nil)
+        #expect(llm.calls == afterExplain)
+
+        vm.selectMode(.explain)                  // and back again — still no request
+        #expect(vm.phase == .result)
+        #expect(vm.explanation != nil)
+        #expect(vm.translations.isEmpty)
+        #expect(llm.calls == afterExplain)
+    }
+
     @Test func explainModeProducesExplanationNotTranslation() async throws {
         UserDefaults.standard.set("russian", forKey: "targetLanguage")
         let vm = makeVM()
@@ -572,5 +604,15 @@ private final class FlakyUnderstandLLM: LLMClient, @unchecked Sendable {
     func run<Template: PromptTemplate>(_ template: Template, input: Template.Input) async throws -> Template.Output {
         if remaining > 0 { remaining -= 1; throw LLMError.offline }
         return try template.decode(#"{"studied":"bank","variants":[{"text":"банк","context":""}]}"#)
+    }
+}
+
+/// Counts every model call — proves navigation between modes never re-fires a kept answer.
+private final class CountingLLM: LLMClient, @unchecked Sendable {
+    nonisolated(unsafe) private(set) var calls = 0
+    private let backing = MockLLMClient()
+    func run<Template: PromptTemplate>(_ template: Template, input: Template.Input) async throws -> Template.Output {
+        calls += 1
+        return try await backing.run(template, input: input)
     }
 }

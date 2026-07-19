@@ -39,6 +39,7 @@ struct LiveTranscriptView<Middle: View>: View {
                 paneID: 0,
                 title: Loc.t("Оригинал", "Original", "Original", "Original", "Original", "Originale"),
                 showsTitle: false,   // the small pane is self-evident — no header (VoiceOver keeps the name)
+                copyLabel: Loc.t("Скопировать распознанный текст", "Copy the recognized text"),
                 finalText: text.originalFinal,
                 pendingText: text.originalPending,
                 placeholder: isStreaming
@@ -53,6 +54,7 @@ struct LiveTranscriptView<Middle: View>: View {
             TranscriptPane(
                 paneID: 1,
                 title: Loc.t("Перевод", "Translation", "Traduction", "Traducción", "Übersetzung", "Traduzione"),
+                copyLabel: Loc.t("Скопировать перевод", "Copy translation"),
                 finalText: text.translationFinal,
                 pendingText: text.translationPending,
                 placeholder: isStreaming
@@ -79,6 +81,8 @@ private struct TranscriptPane: View {
     /// Used for the on-pane header (when `showsTitle`) AND always for the VoiceOver label.
     let title: String
     var showsTitle = true
+    /// VoiceOver label of the pane's copy-to-clipboard button.
+    let copyLabel: String
     let finalText: String
     let pendingText: String
     let placeholder: String
@@ -95,18 +99,35 @@ private struct TranscriptPane: View {
         var span: CGFloat
     }
 
+    /// What the copy button puts on the clipboard: exactly the visible transcript.
+    private var copyText: String {
+        (finalText + pendingText).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s8) {
             if showsTitle {
-                Text(title.uppercased())
-                    .textStyle(Tokens.Text.caption2)
-                    .foregroundStyle(Tokens.Content.tertiary)
+                HStack {
+                    Text(title.uppercased())
+                        .textStyle(Tokens.Text.caption2)
+                        .foregroundStyle(Tokens.Content.tertiary)
+                    Spacer(minLength: Tokens.Space.s8)
+                    if !copyText.isEmpty {
+                        CopyButton(copyText, style: .icon, accessibilityLabel: copyLabel)
+                    }
+                }
             }
 
             ScrollView {
                 transcriptText
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+            // The headerless (Original) pane gets a floating copy icon in its top-right corner.
+            .overlay(alignment: .topTrailing) {
+                if !showsTitle, !copyText.isEmpty {
+                    CopyButton(copyText, style: .icon, accessibilityLabel: copyLabel)
+                }
             }
             .scrollPosition($position)
             .onScrollGeometryChange(for: PaneGeometry.self) { geometry in

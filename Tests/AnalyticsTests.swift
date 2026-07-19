@@ -89,7 +89,8 @@ import Adapters
 
     @Test func photoExplainTracksPhotoExplainCompleted() async throws {
         let analytics = MockAnalyticsTracker()
-        let useCase = PhotoExplainInteractor(llm: MockLLMClient(), analytics: analytics)
+        let useCase = PhotoExplainInteractor(llm: MockLLMClient(), history: MockHistoryRepository(),
+                                             analytics: analytics)
         _ = try await useCase(RecognizableImage(data: Data()), studiedLanguage: "English", nativeLanguage: "Russian")
         #expect(analytics.events == [.photoExplainCompleted])
     }

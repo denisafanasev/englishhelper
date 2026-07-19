@@ -21,14 +21,23 @@ so the original and its translation stay side by side wherever you are in the se
 translating until you stop it. If nobody has spoken for **5 minutes**, it stops itself (and saves),
 so a forgotten microphone never runs all day.
 
+**Pause and start fresh.** Two buttons flank Listen: **Pause** instantly mutes the session (nothing
+is recognized or recorded while you talk privately) and resumes just as instantly; **New** saves
+the current session to History — recording included — and clears the screen for the next one.
+
 **Every session is kept — with the sound.** Each listening session lands in **History** with the
 full original text, the full translation, and the **original audio**, so you can replay exactly
 what was said. And History entries can now be **swiped left to delete** — removing a session also
 removes its recording.
 
-**Small things.** The photo screen's recognition errors now offer a one-tap **Retry** of the same
-photo, and the mic button across the app was redesigned into the same pill shape as the action
-buttons — with its hint right inside.
+**Start it from the Lock Screen.** A seventh widget — **Get it · Online** — joins the six: one tap
+and the app opens with a live-translation session **already listening**. (On very first use it asks
+for the microphone once, like the other mic widgets.)
+
+**Small things.** Photo **explanations** now land in History too (See it already logged
+translations — now both modes do), the photo screen's recognition errors offer a one-tap **Retry**
+of the same photo, and the mic button across the app was redesigned into the same pill shape as the
+action buttons — with its hint right inside.
 
 ## 1.3.3 — 2026-07-12
 

@@ -67,10 +67,21 @@ public final class MockLiveTranslating: LiveTranslating, @unchecked Sendable {
         }
     }
 
+    /// Last requested pause state — assert on this in tests.
+    public var isPaused: Bool {
+        lock.withLock { paused }
+    }
+    private var paused = false
+
+    public func setPaused(_ newValue: Bool) async {
+        lock.withLock { paused = newValue }
+    }
+
     public func stop() async {
         let continuation = lock.withLock {
             let held = self.continuation
             self.continuation = nil
+            self.paused = false
             return held
         }
         continuation?.yield(.finished(recording: script.recording))
