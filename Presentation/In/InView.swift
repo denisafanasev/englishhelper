@@ -14,6 +14,8 @@ import DesignSystem
 public struct InView: View {
     @State private var model: InViewModel
     @FocusState private var fieldFocused: Bool
+    /// Dynamic-Type-scaled body line height — the single source of the "first window" height.
+    @ScaledMetric(relativeTo: .body) private var bodyLineHeight = Tokens.Text.body.lineHeight
     /// Bumped on every action-button tap — the trigger for its impact haptic (Paste AND Translate).
     @State private var actionTapCount = 0
     /// The clipboard can change while the app is backgrounded — re-check on return to foreground.
@@ -27,15 +29,33 @@ public struct InView: View {
         NavigationStack {
             ZStack {
                 ScreenBackground()
-                ScrollView {
-                    VStack(spacing: Tokens.Space.s20) {
-                        if model.needsAPIKey { apiKeyBanner }
-                        inputSection
-                        contentSection
+                if model.mode == .online {
+                    // Online mode: the content NEVER scrolls as a whole — panes scroll internally.
+                    // It is still wrapped in a ScrollView on purpose: the navigation bar binds its
+                    // large-title behavior to the FIRST scroll view it finds, and this one cannot
+                    // move (content sized exactly to the container, bounce off) — so the title
+                    // stays fully expanded, IDENTICAL to the other screens, while the transcript
+                    // panes scroll freely without dragging the header around.
+                    GeometryReader { geometry in
+                        ScrollView {
+                            onlineSection
+                                .padding(Tokens.Space.s20)
+                                .frame(width: geometry.size.width, height: geometry.size.height,
+                                       alignment: .top)
+                        }
+                        .scrollBounceBehavior(.basedOnSize)
                     }
-                    .padding(Tokens.Space.s20)
+                } else {
+                    ScrollView {
+                        VStack(spacing: Tokens.Space.s20) {
+                            if model.needsAPIKey { apiKeyBanner }
+                            inputSection
+                            contentSection
+                        }
+                        .padding(Tokens.Space.s20)
+                    }
+                    .scrollDismissesKeyboard(.interactively)
                 }
-                .scrollDismissesKeyboard(.interactively)
             }
             .navigationTitle(Loc.t("Понять", "Get it"))
             .settingsTrigger()
@@ -68,55 +88,65 @@ public struct InView: View {
 
     // MARK: Input
 
+    /// The Get-it "first window" (text-input box in Explain/Translate, Original pane in Online):
+    /// ONE exact TOTAL height everywhere — 4 body lines + the pane's s16 padding — so the button
+    /// right below it sits at the SAME position on all three screens of the section.
+    private var firstWindowContentHeight: CGFloat { 4 * bodyLineHeight }
+    private var firstWindowTotalHeight: CGFloat { firstWindowContentHeight + 2 * Tokens.Space.s16 }
+
+    /// Mode at the TOP (mirrors "Say it": the choice frames the interaction). Shared by the text
+    /// layout and the Online layout so the selector never jumps between modes.
+    private var modeSelector: some View {
+        SegmentedSelector(
+            InViewModel.Mode.allCases,
+            selected: model.mode,
+            label: { $0.title },
+            accessibilityID: "getit.mode",
+            onSelect: { model.selectMode($0) }
+        )
+        // `.contain` keeps each segment's OWN label (a bare container label would overwrite
+        // every segment as "Mode", leaving VoiceOver users unable to tell the options apart).
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Loc.t("Режим", "Mode"))
+    }
+
     private var inputSection: some View {
         // s12 spacing MUST match VoiceView's inputSection so the mode selector, field, mic, and caption
         // land at IDENTICAL positions on both screens — no jump when switching Say it ↔ Get it.
         VStack(spacing: Tokens.Space.s12) {
-            // Mode at the TOP (mirrors "Say it": the Explain/Translate choice frames the interaction,
-            // same as How-to-say/What-to-say there).
-            SegmentedSelector(
-                InViewModel.Mode.allCases,
-                selected: model.mode,
-                label: { $0.title },
-                accessibilityID: "getit.mode",
-                onSelect: { model.selectMode($0) }
-            )
-            // `.contain` keeps each segment's OWN label (a bare container label would overwrite
-            // every segment as "Mode", leaving VoiceOver users unable to tell the options apart).
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel(Loc.t("Режим", "Mode"))
+            modeSelector
 
+            // A fixed box of EXACTLY the Online Original pane's height — long text scrolls inside,
+            // the box never grows, so the buttons below never move.
             GlassField(Loc.t("Текст на изучаемом языке", "Text in the language you're learning"),
-                       text: $model.source, accessibilityID: "getit.input") {
+                       text: $model.source, accessibilityID: "getit.input",
+                       fixedHeight: firstWindowTotalHeight) {
                 fieldFocused = false
                 model.submit()
             }
             .focused($fieldFocused)
 
-            VStack(spacing: Tokens.Space.s8) {
-                MicButton(status: micStatus,
-                          onPressBegan: {
-                              fieldFocused = false
-                              model.micPressBegan()
-                          },
-                          onPressEnded: { model.micPressEnded() },
-                          onPressCancelled: { model.micPressCancelled() })
-                .accessibilityLabel(Loc.t("Микрофон", "Microphone"))
-                .accessibilityValue(model.isListening ? Loc.t("Слушаю", "Listening") : Loc.t("Готов", "Ready"))
-                // VoiceOver-only copy: for VoiceOver the control is a TOGGLE (activation can't
-                // hold), so the hints describe tap-to-start / tap-to-stop — and the stop hint names
-                // what the CURRENT mode will actually run.
-                .accessibilityHint(model.isListening
-                    ? (model.mode == .translate
-                        ? Loc.t("Коснитесь, чтобы остановить и перевести", "Tap to stop and translate")
-                        : Loc.t("Коснитесь, чтобы остановить и получить объяснение", "Tap to stop and get an explanation"))
-                    : Loc.t("Коснитесь, чтобы начать диктовку на изучаемом языке; сигнал отметит начало записи",
-                            "Tap to start dictating in the language you're learning; a tone marks the start"))
-
-                Text(micCaption)
-                    .textStyle(Tokens.Text.footnote)
-                    .foregroundStyle(Tokens.Content.tertiary)
-            }
+            // Pill-shaped push-to-talk (same form as the action button below); the status caption
+            // lives inside the pill — MUST stay visually identical to VoiceView's mic so the two
+            // screens read as one family.
+            MicButton(status: micStatus, title: micCaption,
+                      onPressBegan: {
+                          fieldFocused = false
+                          model.micPressBegan()
+                      },
+                      onPressEnded: { model.micPressEnded() },
+                      onPressCancelled: { model.micPressCancelled() })
+            .accessibilityLabel(Loc.t("Микрофон", "Microphone"))
+            .accessibilityValue(model.isListening ? Loc.t("Слушаю", "Listening") : Loc.t("Готов", "Ready"))
+            // VoiceOver-only copy: for VoiceOver the control is a TOGGLE (activation can't
+            // hold), so the hints describe tap-to-start / tap-to-stop — and the stop hint names
+            // what the CURRENT mode will actually run.
+            .accessibilityHint(model.isListening
+                ? (model.mode == .translate
+                    ? Loc.t("Коснитесь, чтобы остановить и перевести", "Tap to stop and translate")
+                    : Loc.t("Коснитесь, чтобы остановить и получить объяснение", "Tap to stop and get an explanation"))
+                : Loc.t("Коснитесь, чтобы начать диктовку на изучаемом языке; сигнал отметит начало записи",
+                        "Tap to start dictating in the language you're learning; a tone marks the start"))
 
             // One button, two personas: with an EMPTY field and text on the clipboard it is PASTE
             // (fills the field, then flips back to Translate/Explain for a deliberate submit);
@@ -130,6 +160,46 @@ public struct InView: View {
             .disabled(!actionEnabled)   // EHButton dims itself when disabled
             .sensoryFeedback(.impact(weight: .medium), trigger: actionTapCount)
         }
+    }
+
+    // MARK: Online (live translation)
+
+    private var onlineSection: some View {
+        VStack(spacing: Tokens.Space.s12) {
+            modeSelector
+            if model.needsLiveAPIKey { sonioxKeyBanner }
+            // The Listen control sits BETWEEN the two transcript panes (the view's middle slot).
+            LiveTranscriptView(text: model.liveText, isStreaming: model.isLiveListening,
+                               smallPaneContentHeight: firstWindowContentHeight) {
+                ListenButton(
+                    isListening: model.isLiveListening,
+                    isStopping: model.isLiveStopping,
+                    level: model.liveLevel,
+                    idleTitle: Loc.t("Слушать", "Listen", "Écouter", "Escuchar", "Zuhören", "Ascolta"),
+                    action: { model.toggleLive() }
+                )
+                .disabled(model.needsLiveAPIKey)
+                if let message = model.liveErrorMessage {
+                    Text(message)
+                        .textStyle(Tokens.Text.footnote)
+                        .foregroundStyle(Tokens.Signal.error)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+    }
+
+    private var sonioxKeyBanner: some View {
+        HStack(spacing: Tokens.Space.s12) {
+            Image(systemName: "key.slash").foregroundStyle(Tokens.Signal.warning)
+            Text(Loc.t("Нет ключа Soniox API — онлайн-перевод не работает. Добавьте ключ в Secrets.xcconfig.",
+                       "No Soniox API key — online translation won't work. Add a key in Secrets.xcconfig."))
+                .textStyle(Tokens.Text.footnote)
+                .foregroundStyle(Tokens.Content.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Tokens.Space.s12)
+        .glassPanel(cornerRadius: Tokens.Radius.control)
     }
 
     /// Enabled with something to do (input to submit OR clipboard to paste) and not mid-request/listening.
@@ -185,7 +255,7 @@ public struct InView: View {
         switch model.micStatus {
         case .listening: Loc.t("Слушаю… отпустите для перевода или объяснения", "Listening… release to translate or explain")
         case .processing: Loc.t("Минуту…", "One moment…")
-        case .idle: Loc.t("Удерживайте и говорите на изучаемом языке", "Hold and speak the language you're learning")
+        case .idle: Loc.t("Удерживайте и говорите", "Hold and speak")
         }
     }
 
@@ -357,9 +427,11 @@ public struct InView: View {
             Text(Loc.t("Доступ к микрофону", "Microphone access"))
                 .textStyle(Tokens.Text.title2)
                 .foregroundStyle(Tokens.Content.primary)
+            // Honest about Online mode: unlike push-to-talk dictation, live sessions ARE recorded
+            // (that's their replay feature) — the priming copy must never claim otherwise.
             Text(Loc.t(
-                "Чтобы услышать вашу речь и перевести её, приложению нужен микрофон. Запись не сохраняется.",
-                "To hear your speech and translate it, the app needs the microphone. Nothing is recorded."))
+                "Чтобы услышать и перевести речь, приложению нужен микрофон. Диктовка не сохраняется; онлайн-сессии записываются и остаются в Истории.",
+                "To hear and translate speech, the app needs the microphone. Dictation isn't stored; online sessions are recorded and kept in History."))
                 .textStyle(Tokens.Text.body)
                 .foregroundStyle(Tokens.Content.secondary)
                 .multilineTextAlignment(.center)

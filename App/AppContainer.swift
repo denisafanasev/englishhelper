@@ -50,6 +50,11 @@ public final class AppContainer: Sendable {
     public let voiceCaptureEN: any VoiceCaptureUseCase
     public let pronounce: any PlayPronunciationUseCase
     public let connectionHealth: any ConnectionHealthUseCase
+    public let transcriptionHealth: any TranscriptionHealthUseCase   // Soniox status (Settings)
+    public let liveTranslate: any LiveTranslateUseCase               // "Get it" Online mode
+    /// Session-recording playback/cleanup (History). A port, not a use case: it's a thin media
+    /// facility like `pronounce`, consumed by History's view models directly.
+    public let recordings: any SessionRecordingsManaging
     public let understand: any UnderstandUseCase
     public let cacheAdmin: any TranslationCacheAdminUseCase   // translation-cache stats + clear (Settings)
     public let explainExpression: any ExplainExpressionUseCase
@@ -66,7 +71,10 @@ public final class AppContainer: Sendable {
         history: any HistoryRepository,
         exporter: any DeckExporting,
         cache: (any TranslationCache)? = nil,
-        analytics: (any AnalyticsTracking)? = nil
+        analytics: (any AnalyticsTracking)? = nil,
+        transcriptionService: any TranscriptionServiceChecking = MockTranscriptionService(),
+        liveTranslating: any LiveTranslating = MockLiveTranslating(),
+        recordings: any SessionRecordingsManaging = MockSessionRecordings()
     ) {
         self.config = config
         self.usingFallbackStore = usingFallbackStore
@@ -93,7 +101,7 @@ public final class AppContainer: Sendable {
         self.photoExplain = PhotoExplainInteractor(llm: llm, analytics: analytics)    // "See it" Explain mode
         self.enrich = EnrichExpressionInteractor(llm: llm)
         self.studyList = StudyListInteractor(repository: expressions)
-        self.requestHistory = RequestHistoryInteractor(history: history)
+        self.requestHistory = RequestHistoryInteractor(history: history, recordings: recordings)
         self.exportDeck = ExportDeckInteractor(repository: expressions, exporter: exporter,
                                                analytics: analytics)
         // Anki exporter is pure (no deps), built here at the composition root.
@@ -110,6 +118,10 @@ public final class AppContainer: Sendable {
         self.voiceCaptureEN = VoiceCaptureInteractor(recognizer: speechRecognizerEN)
         self.pronounce = PlayPronunciationInteractor(synthesizer: speechSynthesizer)
         self.connectionHealth = ConnectionHealthInteractor(llm: llm)
+        self.transcriptionHealth = TranscriptionHealthInteractor(service: transcriptionService)
+        self.liveTranslate = LiveTranslateInteractor(live: liveTranslating, history: history,
+                                                     recordings: recordings, analytics: analytics)
+        self.recordings = recordings
         // Route translate / explain to the user-selected model (live read each request). Defaults:
         // translate → Haiku (speed), explain → Sonnet (quality).
         self.understand = UnderstandInteractor(llm: llm, history: history, cache: cache,
@@ -126,6 +138,9 @@ public final class AppContainer: Sendable {
     public static func bootLive(config: AppConfig = .load(),
                                 isReachable: (@Sendable () -> Bool)? = nil) throws -> AppContainer {
         let (modelContainer, usingFallbackStore) = try makePersistentContainer()
+        // Shared by the live translator (writes), History playback (reads), and the history
+        // repository's pruning (deletes audio of pruned rows).
+        let recordings = SessionRecordingsPlayer()
         return AppContainer(
             config: config,
             usingFallbackStore: usingFallbackStore,
@@ -148,14 +163,20 @@ public final class AppContainer: Sendable {
             // on-device OCR adapter is wired for the port contract / future use but NOT consumed today.
             textRecognizer: VisionTextRecognizer(),         // ← swap OCR engine here (when OCR is used)
             expressions: SwiftDataExpressionRepository(modelContainer: modelContainer),
-            history: SwiftDataHistoryRepository(modelContainer: modelContainer),
+            history: SwiftDataHistoryRepository(modelContainer: modelContainer, recordings: recordings),
             exporter: AlgoAppXMLExporter(),
             // Persistent translation cache: repeat text translations skip the model (Say it + Get-it Translate).
             cache: SwiftDataTranslationCache(modelContainer: modelContainer),
             // Live product analytics — wired ONLY when the App ID is configured: the SDK asserts (in
             // debug) if a signal is sent before `initialize`, which the entry point calls iff the ID
             // is present. No ID (fresh clone / CI) → analytics is simply off, like the API key.
-            analytics: config.telemetryDeckAppID != nil ? TelemetryDeckTracker() : nil
+            analytics: config.telemetryDeckAppID != nil ? TelemetryDeckTracker() : nil,
+            // Soniox (online translation). No key → the client reports .notConfigured, which Settings
+            // shows as a "no key" status — same graceful degradation as the Claude key.
+            transcriptionService: SonioxClient(apiKey: config.sonioxAPIKey ?? ""),
+            liveTranslating: SonioxLiveTranslator(apiKey: config.sonioxAPIKey ?? "",
+                                                  model: config.sonioxModel),   // ← swap live engine here
+            recordings: recordings
         )
     }
 
@@ -232,10 +253,12 @@ public final class AppContainer: Sendable {
             understand: understand,
             explain: explainExpression,
             voiceCapture: voiceCaptureEN,
+            liveTranslate: liveTranslate,
             pronounce: pronounce,
             saveExpression: saveExpression,
             studyList: studyList,
             isConfigured: config.isClaudeConfigured,
+            isLiveConfigured: config.isSonioxConfigured,
             longTask: LongTaskCoordinator()
         )
     }
@@ -269,8 +292,21 @@ public final class AppContainer: Sendable {
     public func makeHistoryViewModel() -> HistoryViewModel {
         HistoryViewModel(
             history: requestHistory, saveExpression: saveExpression,
-            studyList: studyList, pronounce: pronounce
+            studyList: studyList, pronounce: pronounce, recordings: recordings
         )
+    }
+
+    /// Reconcile the recordings store against history: a crash mid-session, the in-memory fallback
+    /// store, or a failed save can all leave audio files no history row references. Called once per
+    /// launch (best-effort). History is capped at `SwiftDataHistoryRepository.maxEntries`, so one
+    /// `recent` read sees every live row.
+    public func sweepOrphanedRecordings() async {
+        guard let entries = try? await requestHistory.recent(limit: SwiftDataHistoryRepository.maxEntries) else { return }
+        let referenced = Set(entries.compactMap { entry -> String? in
+            guard case .liveTranslation(_, _, let fileName?, _) = entry.result else { return nil }
+            return fileName
+        })
+        await recordings.sweep(keeping: referenced)
     }
 
     @MainActor
@@ -278,10 +314,12 @@ public final class AppContainer: Sendable {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
         return SettingsViewModel(
             connectionHealth: connectionHealth,
+            transcriptionHealth: transcriptionHealth,
             cacheAdmin: cacheAdmin,
             appVersion: version,
             modelName: config.claudeModel,
-            fastModelName: config.claudeFastModel
+            fastModelName: config.claudeFastModel,
+            sonioxModelName: config.sonioxModel
         )
     }
 }

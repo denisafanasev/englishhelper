@@ -74,6 +74,10 @@ public actor MockHistoryRepository: HistoryRepository {
     public func recent(limit: Int) async throws -> [HistoryEntry] {
         Array(entries.sorted { $0.createdAt > $1.createdAt }.prefix(limit))
     }
+
+    public func delete(id: HistoryEntry.ID) async throws {
+        entries.removeAll { $0.id == id }
+    }
 }
 
 /// In-memory `TranslationCache` for tests/previews — same contract as the SwiftData one without a store.

@@ -26,6 +26,8 @@ public enum AnalyticsEvent: String, CaseIterable, Sendable {
     case photoTranslateCompleted = "Photo.translateCompleted"
     /// "See it" Explain: photo scene explanation finished.
     case photoExplainCompleted   = "Photo.explainCompleted"
+    /// "Get it" Online: a live listening session finished with some recognized speech.
+    case liveTranslationCompleted = "Live.translationCompleted"
     /// A NEW expression was enriched and stored in the study list (de-dup returns don't count).
     case expressionSaved         = "Library.expressionSaved"
     /// The study list was exported as a deck file (AlgoApp or Anki).

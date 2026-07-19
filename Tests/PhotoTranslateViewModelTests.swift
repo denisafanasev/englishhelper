@@ -89,6 +89,25 @@ import Presentation
         #expect(vm.phase == .failed)
         #expect(vm.isOffline == false)
         #expect(vm.errorMessage?.isEmpty == false)
+        // Recognition is LLM-run (non-deterministic), so a re-run of the same photo is offered.
+        #expect(vm.canRetry)
+    }
+
+    /// A recognition failure (no text found) must offer a retry of the SAME photo — the LLM may
+    /// simply have misfired — and the retry must be able to succeed.
+    @Test func retryAfterRecognitionFailureReRunsTheSamePhoto() async throws {
+        let image = Data([0x0A, 0x0B])
+        let vm = makeVM(llm: FlakyEmptyBlocksLLM(emptiesBeforeSuccess: 1))
+        vm.selectMode(.translate)
+        vm.didPickFromLibrary(image)
+        try await waitUntil { vm.phase == .failed }
+        #expect(vm.imageData == image)   // the photo is retained, not lost
+        #expect(vm.canRetry)
+        vm.retry()
+        try await waitUntil { vm.phase == .result }
+        #expect(vm.phase == .result)
+        #expect(vm.blocks.isEmpty == false)
+        #expect(vm.imageData == image)
     }
 
     @Test func toggleSaveMarksBlockSaved() async throws {
@@ -167,5 +186,19 @@ private final class FlakyLLM: LLMClient, @unchecked Sendable {
 private struct EmptyBlocksLLM: LLMClient {
     func run<Template: PromptTemplate>(_ template: Template, input: Template.Input) async throws -> Template.Output {
         try template.decode(#"{"blocks":[]}"#)
+    }
+}
+
+/// Returns empty blocks (→ noTextFound) `emptiesBeforeSuccess` times, then a real block — simulates
+/// an LLM recognition misfire that succeeds on retry. Called sequentially, so the counter is safe.
+private final class FlakyEmptyBlocksLLM: LLMClient, @unchecked Sendable {
+    nonisolated(unsafe) private var remaining: Int
+    init(emptiesBeforeSuccess: Int) { self.remaining = emptiesBeforeSuccess }
+    func run<Template: PromptTemplate>(_ template: Template, input: Template.Input) async throws -> Template.Output {
+        if remaining > 0 {
+            remaining -= 1
+            return try template.decode(#"{"blocks":[]}"#)
+        }
+        return try template.decode(#"{"blocks":[{"en":"Exit","ru":"Выход"}]}"#)
     }
 }

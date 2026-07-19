@@ -11,6 +11,7 @@ public enum RequestKind: String, Codable, Sendable, CaseIterable, Hashable {
     case whatToSay
     case translate
     case photoTranslate
+    case liveTranslation
 }
 
 /// The typed payload of a completed request. One case per `RequestKind`.
@@ -23,6 +24,10 @@ public enum RequestResult: Codable, Sendable, Equatable, Hashable {
     case translate(ru: String)
     /// `photoTranslate` → pure Russian translation of OCR'd text.
     case photoTranslate(ru: String)
+    /// `liveTranslation` → one online listening session: everything that was heard (studied
+    /// language) + its live translation (native), plus the session recording for playback.
+    /// `audioFileName` is a file in the recordings store (nil = no audio kept); `duration` seconds.
+    case liveTranslation(original: String, ru: String, audioFileName: String?, duration: TimeInterval)
 
     public var kind: RequestKind {
         switch self {
@@ -30,6 +35,7 @@ public enum RequestResult: Codable, Sendable, Equatable, Hashable {
         case .whatToSay: .whatToSay
         case .translate: .translate
         case .photoTranslate: .photoTranslate
+        case .liveTranslation: .liveTranslation
         }
     }
 }

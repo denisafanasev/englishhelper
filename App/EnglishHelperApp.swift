@@ -147,5 +147,8 @@ private final class AppBoot {
             settings: container.makeSettingsViewModel(),
             degradedStorage: container.usingFallbackStore
         )
+        // Best-effort, off the launch path: delete session recordings no history row references
+        // (crash mid-session / fallback store / failed saves would otherwise leak them forever).
+        Task.detached(priority: .utility) { await container.sweepOrphanedRecordings() }
     }
 }

@@ -17,11 +17,40 @@ import Presentation
     @Test func healthOkOnMock() async {
         let vm = SettingsViewModel(
             connectionHealth: ConnectionHealthInteractor(llm: MockLLMClient()),
+            transcriptionHealth: TranscriptionHealthInteractor(service: MockTranscriptionService()),
             cacheAdmin: TranslationCacheAdminInteractor(cache: nil),
-            appVersion: "1.0", modelName: "claude-sonnet-4-6", fastModelName: "claude-haiku-4-5"
+            appVersion: "1.0", modelName: "claude-sonnet-4-6", fastModelName: "claude-haiku-4-5",
+            sonioxModelName: "stt-rt-v5"
         )
         await vm.check()
         #expect(vm.health == .ok)
+        #expect(vm.sonioxHealth == .ok)   // the Soniox probe runs alongside the Claude ones
+    }
+
+    /// Soniox failures surface independently: Claude can be green while Soniox reports its own error.
+    @Test func sonioxFailureIsIndependentOfClaude() async {
+        let vm = SettingsViewModel(
+            connectionHealth: ConnectionHealthInteractor(llm: MockLLMClient()),
+            transcriptionHealth: TranscriptionHealthInteractor(
+                service: MockTranscriptionService(failure: .unauthorized)
+            ),
+            cacheAdmin: TranslationCacheAdminInteractor(cache: nil),
+            appVersion: "1.0", modelName: "m", fastModelName: "h", sonioxModelName: "s"
+        )
+        await vm.check()
+        #expect(vm.health == .ok)
+        guard case .failed = vm.sonioxHealth else {
+            Issue.record("expected .failed sonioxHealth, got \(vm.sonioxHealth)")
+            return
+        }
+    }
+
+    /// No Soniox key → a "no key" failure (matching how a missing Claude key is shown), not a crash.
+    @Test func sonioxNoKeyMapsToFailed() async {
+        let health = await TranscriptionHealthInteractor(
+            service: MockTranscriptionService(failure: .notConfigured)
+        )()
+        #expect(health == .failed(.noKey))
     }
 
     @Test func cacheStatsLoadAndClear() async {
@@ -31,8 +60,9 @@ import Presentation
         _ = await cache.value(forKey: "a")   // one hit
         let vm = SettingsViewModel(
             connectionHealth: ConnectionHealthInteractor(llm: MockLLMClient()),
+            transcriptionHealth: TranscriptionHealthInteractor(service: MockTranscriptionService()),
             cacheAdmin: TranslationCacheAdminInteractor(cache: cache),
-            appVersion: "1.0", modelName: "m", fastModelName: "h"
+            appVersion: "1.0", modelName: "m", fastModelName: "h", sonioxModelName: "s"
         )
         await vm.loadCacheStats()
         #expect(vm.cacheStats.entryCount == 2)
@@ -48,8 +78,9 @@ import Presentation
             connectionHealth: ConnectionHealthInteractor(
                 llm: StubLLMClient(behavior: .failure(.notConfigured), latency: .milliseconds(1))
             ),
+            transcriptionHealth: TranscriptionHealthInteractor(service: MockTranscriptionService()),
             cacheAdmin: TranslationCacheAdminInteractor(cache: nil),
-            appVersion: "1.0", modelName: "m", fastModelName: "h"
+            appVersion: "1.0", modelName: "m", fastModelName: "h", sonioxModelName: "s"
         )
         await vm.check()
         guard case .failed = vm.health else {

@@ -57,8 +57,9 @@ public final class PhotoTranslateViewModel {
     private var resultsGeneration = 0
     private var playingBlockID: UUID?
     /// True when the last failure could plausibly succeed on a re-run of the SAME photo (network /
-    /// transient / server), so a "Retry" affordance is offered. False for content errors (no text,
-    /// no key, too long) where re-running can't help.
+    /// transient / server, and recognition errors — recognition is LLM-run, so non-deterministic),
+    /// so a "Retry" affordance is offered. False where re-running the same request can't help
+    /// (no key, response too long, undecodable image).
     private var lastErrorRetryable = false
 
     private let photoTranslate: any PhotoTranslateUseCase
@@ -165,6 +166,9 @@ public final class PhotoTranslateViewModel {
     public func imageLoadFailed() {
         requestTask?.cancel()
         isOffline = false
+        // `imageData` (if any) still holds the PREVIOUS photo — never offer to "retry" that one
+        // when it's the newly picked image that failed to load.
+        lastErrorRetryable = false
         errorMessage = Loc.t("Не удалось загрузить изображение. Попробуйте другое фото.",
                              "Couldn't load the image. Try another photo.",
                              "Impossible de charger l'image. Essayez une autre photo.",
@@ -224,15 +228,18 @@ public final class PhotoTranslateViewModel {
             case .noTextFound:
                 errorMessage = Loc.t("Не нашёл английский текст на фото. Попробуйте другое изображение.",
                                      "No English text found in the photo. Try another image.")
+                lastErrorRetryable = true    // recognition is LLM-run → a re-run can find the text
             case .unsupportedImage:
                 errorMessage = Loc.t("Не удалось обработать изображение.", "Couldn't process the image.")
+                lastErrorRetryable = false   // decoding the same bytes again can't succeed
             case .cancelled:
                 errorMessage = Loc.t("Отменено.", "Cancelled.")
+                lastErrorRetryable = false   // superseded by a newer request
             case .underlying:
                 errorMessage = Loc.t("Ошибка распознавания текста.", "Text recognition error.")
+                lastErrorRetryable = true    // recognizer failures are typically transient
             }
             isOffline = false
-            lastErrorRetryable = false   // a recognition/content error won't change on a re-run
         } else {
             let presented = presentableError(error)
             errorMessage = presented.message

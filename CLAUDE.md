@@ -1,11 +1,15 @@
-# EnglishHelper
+# EnglishHelper (ships publicly as **Gist It**)
 
-Personal-use iOS app (single user) for learning English from Russian. Three input modes:
-**Voice** ("how do I say…?"), **Translate** (EN→RU), and **Camera** (OCR→RU). Curated phrases go
-into a flat study list that's exported to an external SRS app (AlgoApp).
+Personal-use iOS app for living in a studied language (six languages, configurable studied/native
+pair; originally EN-from-RU). Five tabs: **Say it** (thought → 3 phrasings / situation → phrases),
+**Get it** (Translate / Explain / **Online** — a live interpreter that listens to surrounding speech
+and translates it in real time via Soniox), **See it** (photo → explain or translate), **Study**
+(flat list, exported to AlgoApp/Anki), **History** (every request; live sessions keep their audio;
+swipe-to-delete). Curated phrases go into the study list for the external SRS app.
 
 - iOS 26 · Swift 6 · SwiftUI · Xcode 26 · SwiftData (persistence) · async/await + actors.
-- Online-first; the LLM is Claude (Sonnet) via the Anthropic API.
+- Online-first; the LLM is Claude (Sonnet/Haiku) via the Anthropic API; live speech translation is
+  Soniox `stt-rt-v5` over WebSocket.
 - Monochrome "Liquid Glass" design system; system colors are functional signals only.
 
 ## Architecture — Clean Architecture, dependency rule strictly inward
@@ -35,9 +39,11 @@ Each layer is a **separate framework module**, so the compiler enforces the depe
 - **App** — the only place that knows concrete adapters; wires the graph and injects use cases.
 
 ### Ports (Domain) → adapters (Data)
-`LLMClient`, `SpeechRecognizing`, `SpeechSynthesizing`, `TextRecognizing`, `ExpressionRepository`,
-`HistoryRepository`, `DeckExporting`. The three media ports are backend-agnostic (on-device OR
-cloud) and leak no SDK/transport types.
+`LLMClient`, `SpeechRecognizing`, `SpeechSynthesizing`, `TextRecognizing`, `LiveTranslating`
+(live mic→cloud interpreter stream) + `SessionRecordingsManaging` (stored session audio),
+`TranscriptionServiceChecking` (Soniox health probe), `ExpressionRepository`, `HistoryRepository`
+(append/recent/delete), `TranslationCache`, `DeckExporting`, `AnalyticsTracking`. The media ports
+are backend-agnostic (on-device OR cloud) and leak no SDK/transport types.
 
 ### Prompt templates (Domain)
 `PromptTemplate` owns a system prompt + output JSON schema + typed decoder. v1 templates:
@@ -76,12 +82,37 @@ Tests: `xcodebuild test -scheme EnglishHelper -destination 'platform=iOS Simulat
 `xcodebuild test -scheme EnglishHelperUITests -destination 'platform=iOS Simulator,name=iPhone 17 Pro'`
 
 ## Config & secrets
-`AppConfig` reads `CLAUDE_API_KEY` + `CLAUDE_MODEL` from the app's Info.plist, populated at build
-time from `Secrets.xcconfig` (gitignored; layered in via `Config/Base.xcconfig` with `#include?`).
-Base URL defaults to `https://api.anthropic.com`. **An API key embedded in a built app is
-extractable** — acceptable for this personal/dev app; a production build would proxy via a backend.
+`AppConfig` reads `CLAUDE_API_KEY` + `CLAUDE_MODEL` (+ optional `CLAUDE_FAST_MODEL`,
+`SONIOX_API_KEY` — live online translation, `SONIOX_MODEL` — defaults to `stt-rt-v5`,
+`TELEMETRYDECK_APP_ID` — analytics) from the app's
+Info.plist, populated at build time from `Secrets.xcconfig` (gitignored; layered in via
+`Config/Base.xcconfig` with `#include?`). Base URL defaults to `https://api.anthropic.com`.
+**An API key embedded in a built app is extractable** — acceptable for this personal/dev app;
+a production build would proxy via a backend.
 
 ## Current Status
+
+**v1.4.1 — Online translation (live interpreter).** "Get it" gained a third mode, **Online**: a
+Listen TOGGLE (pill with a live sound diagram) streams the mic (AVAudioEngine → AVAudioConverter →
+16 kHz mono pcm_s16le, ~120 ms binary chunks) to Soniox `stt-rt-v5` over
+`wss://stt-rt.soniox.com/transcribe-websocket` with built-in one_way translation into the native
+language; the recommended low-latency endpointing config is on. Final tokens append, non-final
+tokens REPLACE, and `<end>`/`<fin>` utterance markers start a new PARAGRAPH in both transcripts
+(pure `SonioxTokenAccumulator`, unit-tested). Two synced auto-scroll panes
+(recognized 4-line pane + translation pane on the remaining height; bottom-stick with pause-on-
+scroll-up, proportional cross-sync via `onScrollGeometryChange`/`onScrollPhaseChange`).
+Sessions record AAC audio (Application Support/SessionRecordings), keep listening in the background
+(`UIBackgroundModes: audio`), auto-stop after 5 min of silence, survive interruptions (call → clean
+stop+save), and land in History as `RequestResult.liveTranslation(original:ru:audioFileName:duration:)`
+— JSON-blob persistence, so NO schema migration. History: swipe-left delete
+(`HistoryRepository.delete` + audio-file cleanup in `RequestHistoryInteractor`; pruning also deletes
+orphaned audio) and in-detail playback (`SessionRecordingsManaging`). New Domain ports:
+`LiveTranslating`, `SessionRecordingsManaging`; new use case `LiveTranslateInteractor` (saves the
+session best-effort, even on a mid-session failure). Soniox key + Settings health row landed in the
+same release. 175/175 tests green. **The live streaming path needs on-device verification** (mic +
+real WebSocket; the Simulator run only proves UI/wiring).
+
+Historical build log (v1 scaffold → v1.3.3) follows.
 
 **Scaffold (Prompt 1): COMPLETE.** Clean-architecture skeleton, mocks, DI, tests.
 

@@ -16,14 +16,16 @@ import Domain
 public final class InViewModel {
     public enum Phase: Equatable { case idle, listening, processing, result, failed }
 
-    /// What pressing the action button does: explain the input's nuance, or translate it. Order here
-    /// drives the on-screen segment order (Explain first); Explain is the default.
+    /// What this screen does with input: explain a phrase's nuance, translate it — or ONLINE:
+    /// listen to surrounding speech and translate it live. Order here drives the on-screen segment
+    /// order (Explain first); Explain is the default.
     public enum Mode: String, CaseIterable, Sendable {
-        case explain, translate
+        case explain, translate, online
         public var title: String {
             switch self {
             case .translate: Loc.t("Перевод", "Translate")
             case .explain: Loc.t("Объяснение", "Explain")
+            case .online: Loc.t("Онлайн", "Online", "En direct", "En vivo", "Live", "Dal vivo")
             }
         }
         /// Last-used mode, persisted so the screen comes back the way the user left it.
@@ -60,15 +62,35 @@ public final class InViewModel {
     public private(set) var clipboardHasText = false
     public var showMicPriming = false {
         // The sheet can close WITHOUT confirm/cancelPriming (interactive swipe-down just flips the
-        // binding) — any close must consume a pending routed auto-start, or a LATER press-originated
-        // confirm would wrongly start a hands-free capture. confirmPriming reads the flag first.
-        didSet { if !showMicPriming { routedStartPending = false } }
+        // binding) — any close must consume a pending routed/live auto-start, or a LATER
+        // press-originated confirm would wrongly start a capture. confirmPriming reads both first.
+        didSet {
+            if !showMicPriming {
+                routedStartPending = false
+                liveStartPending = false
+            }
+        }
     }
+
+    // Online (live translation) state — deliberately SEPARATE from `phase`: the text-mode state
+    // machine (idle/listening/…) belongs to typed/push-to-talk input and must survive a trip to
+    // the Online segment untouched.
+    public private(set) var isLiveListening = false
+    /// Graceful stop in flight (finals draining) — the button shows a brief "finishing" state.
+    public private(set) var isLiveStopping = false
+    public private(set) var liveText = LiveTranslationText.empty
+    /// Mic input level 0…1 for the on-button sound diagram.
+    public private(set) var liveLevel: Float = 0
+    public private(set) var liveErrorMessage: String?
 
     private var savedExpressionID: UUID?
     /// The input the on-screen result was generated from — restored on leaving the screen so an
     /// edit the user never submitted can't sit above a result it doesn't match.
     private var generatedSource: String?
+    /// The mode that produced the on-screen result. A round trip THROUGH Online back to this same
+    /// mode must not re-fire the request (the result is still valid) — only a genuine
+    /// Translate↔Explain switch re-runs.
+    private var generatedMode: Mode?
     /// Bumped on every new result so an in-flight save can tell "user un-saved" from "result was
     /// regenerated" and not silently delete a just-bookmarked expression.
     private var resultsGeneration = 0
@@ -79,10 +101,12 @@ public final class InViewModel {
     private let understand: any UnderstandUseCase        // faithful translate → studied + native
     private let explain: any ExplainExpressionUseCase
     private let voiceCapture: any VoiceCaptureUseCase    // studied-language ASR
+    private let liveTranslate: any LiveTranslateUseCase  // Online mode: mic → live STT + translation
     private let pronounce: any PlayPronunciationUseCase
     private let saveExpression: any SaveExpressionUseCase
     private let studyList: any StudyListUseCase
     private let isConfigured: Bool
+    private let isLiveConfigured: Bool                   // Soniox key present (Online mode can run)
     /// Keeps a slow explanation/translation alive briefly after backgrounding + notifies on completion.
     /// Nil in tests/previews (then it's a transparent pass-through).
     private let longTask: (any LongTaskCoordinating)?
@@ -92,6 +116,7 @@ public final class InViewModel {
     private var captureTask: Task<Void, Never>?
     private var requestTask: Task<Void, Never>?
     private var playTask: Task<Void, Never>?
+    private var liveTask: Task<Void, Never>?
 
     private let primingDefaultsKey = "didPrimeMic"        // shared with Out — one mic grant
 
@@ -99,20 +124,24 @@ public final class InViewModel {
         understand: any UnderstandUseCase,
         explain: any ExplainExpressionUseCase,
         voiceCapture: any VoiceCaptureUseCase,
+        liveTranslate: any LiveTranslateUseCase,
         pronounce: any PlayPronunciationUseCase,
         saveExpression: any SaveExpressionUseCase,
         studyList: any StudyListUseCase,
         isConfigured: Bool,
+        isLiveConfigured: Bool = true,
         longTask: (any LongTaskCoordinating)? = nil,
         pasteboard: any PasteboardReading = SystemPasteboard()
     ) {
         self.understand = understand
         self.explain = explain
         self.voiceCapture = voiceCapture
+        self.liveTranslate = liveTranslate
         self.pronounce = pronounce
         self.saveExpression = saveExpression
         self.studyList = studyList
         self.isConfigured = isConfigured
+        self.isLiveConfigured = isLiveConfigured
         self.longTask = longTask
         self.pasteboard = pasteboard
     }
@@ -122,6 +151,8 @@ public final class InViewModel {
     public var isListening: Bool { phase == .listening }
     public var canSubmit: Bool { !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     public var needsAPIKey: Bool { !isConfigured }
+    /// Online mode needs the Soniox key (banner + disabled Listen button when missing).
+    public var needsLiveAPIKey: Bool { !isLiveConfigured }
 
     // MARK: Paste affordance (the action button doubles as Paste while the field is empty)
 
@@ -227,13 +258,21 @@ public final class InViewModel {
 
     public func confirmPriming() {
         Prefs.store.set(true, forKey: primingDefaultsKey)
-        // Read BEFORE closing the sheet — showMicPriming's didSet consumes the flag on any close.
+        // Read BEFORE closing the sheet — showMicPriming's didSet consumes the flags on any close.
         let resumeRoutedStart = routedStartPending
+        let resumeLiveStart = liveStartPending
         showMicPriming = false
         // Press-originated priming must NOT auto-start: the finger left the button when the sheet
         // appeared, so an auto-started capture would have no release to stop it — the user just
         // holds again. The routed (widget) flow has no finger at all; it keeps its auto-start.
-        if resumeRoutedStart { startListening() }
+        // The Online Listen button is a TOGGLE (tap already ended), so its confirm also resumes.
+        // MUTUALLY EXCLUSIVE: both flags can theoretically be armed (a widget deep link landing
+        // while the Online priming sheet is up) — never start two captures; the visible mode wins.
+        if resumeLiveStart, mode == .online {
+            startLive()
+        } else if resumeRoutedStart, mode != .online {
+            startListening()
+        }
     }
 
     public func cancelPriming() { showMicPriming = false }
@@ -250,6 +289,7 @@ public final class InViewModel {
         translations = []
         explanation = nil
         generatedSource = nil
+        generatedMode = nil
         source = ""
         phase = .listening
         captureTask = Task { [weak self] in
@@ -278,6 +318,104 @@ public final class InViewModel {
         captureTask = nil
         guard phase == .listening else { return }
         if canSubmit { submit() } else { phase = .idle }
+    }
+
+    // MARK: Online (live translation)
+
+    /// The Listen button opened the priming sheet — confirming should start the session (the tap
+    /// already ended; unlike push-to-talk there is no held finger to conflict with).
+    private var liveStartPending = false
+
+    /// The Listen button: one tap starts a session, the next tap gracefully ends it (the finished
+    /// session is saved to History by the use case).
+    public func toggleLive() {
+        if isLiveListening {
+            stopLive()
+        } else if Prefs.store.bool(forKey: primingDefaultsKey) {
+            startLive()
+        } else {
+            liveStartPending = true
+            showMicPriming = true
+        }
+    }
+
+    private func startLive() {
+        guard !isLiveListening, liveTask == nil else { return }
+        liveErrorMessage = nil
+        liveText = .empty
+        liveLevel = 0
+        isLiveListening = true
+        isLiveStopping = false
+        let studiedCode = StudiedLanguage.current.languageCode
+        let nativeCode = TargetLanguage.current.languageCode
+        liveTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                for try await event in self.liveTranslate.start(studiedLanguage: studiedCode,
+                                                                nativeLanguage: nativeCode) {
+                    switch event {
+                    case .listening:
+                        break
+                    case .level(let level):
+                        // Small-delta gate: the level arrives ~20×/s; skipping sub-visible changes
+                        // keeps @Observable from re-rendering the whole screen on noise.
+                        if self.isLiveListening, !self.isLiveStopping,
+                           abs(level - self.liveLevel) > 0.02 || (level == 0) != (self.liveLevel == 0) {
+                            self.liveLevel = level
+                        }
+                    case .text(let text):
+                        self.liveText = text
+                    case .finished:
+                        break   // history is saved by the use case; UI keeps the transcript on screen
+                    }
+                }
+            } catch {
+                self.liveErrorMessage = Self.liveMessage(for: error)
+            }
+            self.isLiveListening = false
+            self.isLiveStopping = false
+            self.liveLevel = 0
+            self.liveTask = nil
+        }
+    }
+
+    /// Graceful stop: the session drains its final words, emits `.finished`, and the stream ends —
+    /// the consuming task above then resets the flags. Idempotent.
+    private func stopLive() {
+        guard isLiveListening, !isLiveStopping else { return }
+        isLiveStopping = true
+        liveLevel = 0
+        Task { [weak self] in await self?.liveTranslate.stop() }
+    }
+
+    private static func liveMessage(for error: Error) -> String {
+        guard let live = error as? LiveTranslationError else {
+            return Loc.t("Что-то пошло не так. Попробуйте ещё раз.", "Something went wrong. Try again.")
+        }
+        switch live {
+        case .permissionDenied:
+            return Loc.t("Нет доступа к микрофону. Включите его в Настройках.",
+                         "No microphone access. Enable it in Settings.")
+        case .notConfigured:
+            return Loc.t("Нет ключа Soniox API — онлайн-перевод не работает. Добавьте ключ в Secrets.xcconfig.",
+                         "No Soniox API key — online translation won't work. Add a key in Secrets.xcconfig.")
+        case .unauthorized:
+            return Loc.t("Сервис распознавания не принял ключ API.",
+                         "The speech service rejected the API key.")
+        case .balanceExhausted:
+            return Loc.t("Закончился баланс Soniox — пополните счёт в console.soniox.com.",
+                         "The Soniox balance is exhausted — add funds at console.soniox.com.")
+        case .offline:
+            return Loc.t("Нет соединения. Проверьте интернет и попробуйте снова.",
+                         "No connection. Check the internet and try again.")
+        case .serviceUnavailable:
+            return Loc.t("Сервис распознавания недоступен. Попробуйте позже.",
+                         "The speech service is unavailable. Try later.")
+        case .underlying(let detail):
+            return Loc.t("Ошибка онлайн-перевода: \(detail)", "Online translation error: \(detail)",
+                         "Erreur de traduction en direct : \(detail)", "Error de traducción en vivo: \(detail)",
+                         "Live-Übersetzungsfehler: \(detail)", "Errore di traduzione dal vivo: \(detail)")
+        }
     }
 
     private func captureFailed(_ error: Error) {
@@ -319,6 +457,7 @@ public final class InViewModel {
     /// One button: act on fresh input, or re-run when a result is already shown. The current `mode`
     /// decides whether the LLM TRANSLATES the input into the native language or EXPLAINS its nuance.
     public func submit() {
+        guard mode != .online else { return }   // Online has no submit — the Listen toggle drives it
         let text = source.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         let studiedLang = StudiedLanguage.current.promptName
@@ -354,8 +493,11 @@ public final class InViewModel {
                     self.studied = result.studied
                     self.explanation = result
                     self.translations = []
+                case .online:
+                    return   // unreachable — submit() guards mode != .online
                 }
                 self.generatedSource = text
+                self.generatedMode = mode
                 self.isSaved = false
                 self.savedExpressionID = nil
                 self.resultsGeneration += 1
@@ -377,6 +519,7 @@ public final class InViewModel {
     /// / Say it) and run it immediately. The phrase is explained on its own — no source-photo context;
     /// `alternatives` (sibling Say-it phrasings) is the only extra context, used to contrast registers.
     public func startExplain(text: String, alternatives: [String] = []) {
+        if mode == .online { stopLive() }   // routed Explain takes over the screen — end the session
         mode = .explain
         source = text
         explainAlternatives = alternatives
@@ -395,12 +538,33 @@ public final class InViewModel {
     /// it both ways; otherwise just remember the choice.
     private func applyMode(_ newMode: Mode, persist: Bool) {
         guard newMode != mode else { return }
+        let oldMode = mode
         mode = newMode
         if persist { Prefs.store.set(newMode.rawValue, forKey: Mode.storageKey) }
+        // Leaving Online mid-session: end it GRACEFULLY (it saves to History) — never keep a hot
+        // mic under a screen that no longer shows it.
+        if oldMode == .online { stopLive() }
+        // Entering Online: park the text-mode machinery untouched (it resumes when they switch
+        // back); nothing to re-run — the live screen starts idle.
+        if newMode == .online {
+            requestTask?.cancel()
+            requestTask = nil
+            if phase == .listening {
+                captureTask?.cancel()
+                captureTask = nil
+                phase = .idle
+            }
+            if phase == .processing { phase = .idle }
+            stopPlayback()
+            return
+        }
         // Re-run the input the result was GENERATED from, not an edited-but-unsubmitted draft —
         // running new text happens only via the button. (A deliberately CLEARED field falls through
         // to the reset branch instead of resurrecting deleted text.)
         if phase == .result, canSubmit, let generatedSource { source = generatedSource }
+        // Round trip THROUGH Online back to the mode that produced the on-screen result: it is
+        // still valid — re-firing would waste a request and reset the bookmark state.
+        if oldMode == .online, phase == .result, newMode == generatedMode { return }
         // Re-run the SAME input in the new mode — including after a FAILURE (e.g. the model was
         // unavailable in the previous mode), so switching mode retries instead of staying stuck.
         if canSubmit, phase == .result || phase == .processing || phase == .failed {
@@ -411,6 +575,7 @@ public final class InViewModel {
             translations = []
             explanation = nil
             generatedSource = nil
+            generatedMode = nil
             // Nothing to re-run (no input): drop any stale result/in-flight/error back to idle.
             if phase == .result || phase == .processing || phase == .failed {
                 phase = .idle
@@ -425,8 +590,10 @@ public final class InViewModel {
     /// return the input still matches the result on screen — the only way to run the new text is to
     /// actually press the button.
     public func screenDisappeared() {
-        // The mic must never keep recording from a hidden tab — and unlike stopListening(), leaving
-        // must NOT auto-submit: no LLM request may fire from a screen the user isn't on.
+        // The push-to-talk mic must never keep recording from a hidden tab — and unlike
+        // stopListening(), leaving must NOT auto-submit: no LLM request may fire from a screen the
+        // user isn't on. A LIVE session is the opposite by design: the user asked for
+        // keep-listening-in-background, so a tab switch (like backgrounding) leaves it running.
         if phase == .listening {
             captureTask?.cancel()
             captureTask = nil
@@ -545,6 +712,7 @@ public final class InViewModel {
         translations = []
         explanation = nil
         generatedSource = nil
+        generatedMode = nil
         source = ""
         errorMessage = nil
         isPlaying = false

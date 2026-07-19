@@ -76,6 +76,19 @@ public actor SwiftDataHistoryRepository: HistoryRepository {
     /// requested capacity because the store prunes below it.
     public static let maxEntries = 200
 
+    /// Recordings store for cleanup: rows pruned here silently would otherwise leak their audio
+    /// files forever (nothing else ever sees a pruned row). Nil in tests/mock boots.
+    private var recordings: (any SessionRecordingsManaging)?
+
+    /// Designated init with the recordings dependency (@ModelActor only generates
+    /// `init(modelContainer:)`, which leaves `recordings` nil).
+    public init(modelContainer: ModelContainer, recordings: (any SessionRecordingsManaging)?) {
+        let context = ModelContext(modelContainer)
+        self.modelExecutor = DefaultSerialModelExecutor(modelContext: context)
+        self.modelContainer = modelContainer
+        self.recordings = recordings
+    }
+
     public func append(_ entry: HistoryEntry) async throws {
         modelContext.insert(try HistoryModel(entry))
         do {
@@ -85,19 +98,44 @@ public actor SwiftDataHistoryRepository: HistoryRepository {
         }
         // The entry is already persisted, so pruning is best-effort: a prune failure must NOT report
         // the append itself as failed (the caller would think nothing was saved when it actually was).
-        try? pruneBeyondLimit()
+        try? await pruneBeyondLimit()
     }
 
-    /// Delete everything older than the newest `maxEntries` entries.
-    private func pruneBeyondLimit() throws {
+    public func delete(id: HistoryEntry.ID) async throws {
+        var descriptor = FetchDescriptor<HistoryModel>(predicate: #Predicate { $0.id == id })
+        descriptor.fetchLimit = 1
+        guard let model = try modelContext.fetch(descriptor).first else { return }   // already gone
+        modelContext.delete(model)
+        do { try modelContext.save() }
+        catch { throw RepositoryError.persistenceFailed(error.localizedDescription) }
+        // NOTE: the caller (RequestHistoryInteractor) removes the associated audio file — it holds
+        // the decoded entry; decoding `resultData` again here would duplicate that work.
+    }
+
+    /// Delete everything older than the newest `maxEntries` entries — including their audio files.
+    private func pruneBeyondLimit() async throws {
         var descriptor = FetchDescriptor<HistoryModel>(
             sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
         )
         descriptor.fetchOffset = Self.maxEntries
         let stale = try modelContext.fetch(descriptor)
         guard !stale.isEmpty else { return }
+        // Collect referenced recordings BEFORE deleting the rows (the file name lives in the blob).
+        let orphanedAudio: [String] = stale.compactMap { model in
+            guard let entry = try? model.toDomain(),
+                  case .liveTranslation(_, _, let fileName?, _) = entry.result else { return nil }
+            return fileName
+        }
         for model in stale { modelContext.delete(model) }
-        try modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            // Roll the in-context deletions back: half-applied deletes would otherwise ride along
+            // with the NEXT save — vanishing rows without their audio cleanup below ever running.
+            modelContext.rollback()
+            throw RepositoryError.persistenceFailed(error.localizedDescription)
+        }
+        for fileName in orphanedAudio { await recordings?.delete(fileName: fileName) }
     }
 
     public func recent(limit: Int) async throws -> [HistoryEntry] {

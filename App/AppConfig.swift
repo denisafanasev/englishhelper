@@ -16,26 +16,39 @@ public struct AppConfig: Sendable {
     public let claudeModel: String       // standard tier (Sonnet) — used for everything but plain translate
     public let claudeFastModel: String   // fast tier (Haiku) — used for plain translation, for speed
     public let claudeBaseURL: URL
+    /// Soniox (speech-to-text — online translation). Nil = feature unconfigured; Settings
+    /// shows a "no key" status instead of failing.
+    public let sonioxAPIKey: String?
+    /// Soniox real-time model — overridable in Secrets.xcconfig like the Claude models.
+    public let sonioxModel: String
     /// TelemetryDeck App ID (NOT a secret — it only routes signals to our dashboard). Lives in the
     /// xcconfig alongside the Claude key for one-place config; nil (absent) just disables analytics.
     public let telemetryDeckAppID: String?
 
     public static let defaultModel = "claude-sonnet-5"
     public static let defaultFastModel = "claude-haiku-4-5"
+    public static let defaultSonioxModel = "stt-rt-v5"
     public static let defaultBaseURL = URL(string: "https://api.anthropic.com")!
 
     public init(claudeAPIKey: String?, claudeModel: String,
                 claudeFastModel: String = defaultFastModel, claudeBaseURL: URL,
+                sonioxAPIKey: String? = nil,
+                sonioxModel: String = defaultSonioxModel,
                 telemetryDeckAppID: String? = nil) {
         self.claudeAPIKey = claudeAPIKey
         self.claudeModel = claudeModel
         self.claudeFastModel = claudeFastModel
         self.claudeBaseURL = claudeBaseURL
+        self.sonioxAPIKey = sonioxAPIKey
+        self.sonioxModel = sonioxModel
         self.telemetryDeckAppID = telemetryDeckAppID
     }
 
     /// `true` when a non-empty API key is present (the live LLM adapter can run).
     public var isClaudeConfigured: Bool { (claudeAPIKey?.isEmpty == false) }
+
+    /// `true` when a non-empty Soniox key is present (online translation can run).
+    public var isSonioxConfigured: Bool { (sonioxAPIKey?.isEmpty == false) }
 
     public static func load(bundle: Bundle = .main) -> AppConfig {
         let info = bundle.infoDictionary
@@ -48,6 +61,8 @@ public struct AppConfig: Sendable {
             claudeModel: string("CLAUDE_MODEL") ?? defaultModel,
             claudeFastModel: string("CLAUDE_FAST_MODEL") ?? defaultFastModel,
             claudeBaseURL: string("CLAUDE_BASE_URL").flatMap(URL.init(string:)) ?? defaultBaseURL,
+            sonioxAPIKey: string("SONIOX_API_KEY"),
+            sonioxModel: string("SONIOX_MODEL") ?? defaultSonioxModel,
             telemetryDeckAppID: string("TELEMETRYDECK_APP_ID")
         )
     }

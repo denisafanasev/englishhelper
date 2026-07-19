@@ -23,13 +23,15 @@ import Presentation
         repo: MockExpressionRepository = MockExpressionRepository(seed: []),
         isConfigured: Bool = true,
         recognizer: any SpeechRecognizing = MockSpeechRecognizing(),
+        live: any LiveTranslating = MockLiveTranslating(),
+        history: MockHistoryRepository = MockHistoryRepository(),
         pasteboard: any PasteboardReading = MockPasteboard(text: nil)   // deterministic: never the sim's real clipboard
     ) -> InViewModel {
-        let history = MockHistoryRepository()
-        return InViewModel(
+        InViewModel(
             understand: UnderstandInteractor(llm: llm, history: history),
             explain: ExplainExpressionInteractor(llm: llm),
             voiceCapture: VoiceCaptureInteractor(recognizer: recognizer),
+            liveTranslate: LiveTranslateInteractor(live: live, history: history),
             pronounce: PlayPronunciationInteractor(synthesizer: MockSpeechSynthesizing()),
             saveExpression: SaveExpressionInteractor(
                 enrich: EnrichExpressionInteractor(llm: llm), repository: repo

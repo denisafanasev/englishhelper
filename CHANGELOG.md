@@ -2,6 +2,34 @@
 
 Release notes for **Gist It** (formerly EnglishHelper), written for the people who use it.
 
+## 1.4.1 — 2026-07-18
+
+**Online: your live interpreter.** Get it has a third mode — **Online**. Tap **Listen** and the
+phone starts translating the speech around you in real time: a lecture, a tour guide, an
+announcement, the person across the counter. What's being said appears in a small window in the
+original language, and the running **translation streams into the big window** below it, word by
+word, without waiting for sentences to finish. Both texts break into **paragraphs at natural
+pauses** in the speech, so a long session reads like a conversation, not a wall of words. Tap the
+button again (it shows a live sound diagram while listening) to stop.
+
+**Scroll back without losing the thread.** Both windows follow the newest words on their own. Scroll
+up to re-read something — the text keeps arriving below in the meantime — and the moment you pull
+back down to the bottom, the auto-follow picks up again. The two windows also scroll **together**,
+so the original and its translation stay side by side wherever you are in the session.
+
+**Keeps listening when you look away.** Lock the screen or switch to another app — the session keeps
+translating until you stop it. If nobody has spoken for **5 minutes**, it stops itself (and saves),
+so a forgotten microphone never runs all day.
+
+**Every session is kept — with the sound.** Each listening session lands in **History** with the
+full original text, the full translation, and the **original audio**, so you can replay exactly
+what was said. And History entries can now be **swiped left to delete** — removing a session also
+removes its recording.
+
+**Small things.** The photo screen's recognition errors now offer a one-tap **Retry** of the same
+photo, and the mic button across the app was redesigned into the same pill shape as the action
+buttons — with its hint right inside.
+
 ## 1.3.3 — 2026-07-12
 
 **Hold to talk.** The mic button now works like a walkie-talkie: **press and hold**, speak, and
