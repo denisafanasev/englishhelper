@@ -120,7 +120,10 @@ public struct PhotoTranslateView: View {
     }
 
     private var idleSection: some View {
+        // Buttons FIRST, hint below: the source buttons stay pinned to the top (aligned with the
+        // input controls on the Say it / Get it screens), and the hint fills the space under them.
         VStack(spacing: Tokens.Space.s20) {
+            sourceButtons
             if model.mode == .explain {
                 StatusView(
                     systemImage: "sparkle.magnifyingglass",
@@ -150,9 +153,7 @@ public struct PhotoTranslateView: View {
                         "Fotografa un cartello, un menu o una pagina: riconoscerò il testo e lo mostrerò nella lingua che stai imparando, con una traduzione.")
                 )
             }
-            sourceButtons
         }
-        .padding(.top, Tokens.Space.s24)
     }
 
     private var sourceButtons: some View {

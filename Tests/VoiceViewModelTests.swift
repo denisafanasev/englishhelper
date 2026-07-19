@@ -21,7 +21,8 @@ import Presentation
     }
 
     private func makeVM(llm: any LLMClient = MockLLMClient(), isConfigured: Bool = true,
-                        recognizer: any SpeechRecognizing = MockSpeechRecognizing()) -> VoiceViewModel {
+                        recognizer: any SpeechRecognizing = MockSpeechRecognizing(),
+                        pasteboard: any PasteboardReading = VoiceMockPasteboard(text: nil)) -> VoiceViewModel {
         let history = MockHistoryRepository()
         let repo = MockExpressionRepository(seed: [])
         return VoiceViewModel(
@@ -34,7 +35,8 @@ import Presentation
                 enrich: EnrichExpressionInteractor(llm: llm), repository: repo
             ),
             studyList: StudyListInteractor(repository: repo),
-            isConfigured: isConfigured
+            isConfigured: isConfigured,
+            pasteboard: pasteboard
         )
     }
 
@@ -368,4 +370,70 @@ private final class HoldingRecognizer: SpeechRecognizing, @unchecked Sendable {
             // No finish: the session ends only via onTermination (release cancels the capture task).
         }
     }
+}
+
+
+
+// MARK: - Paste affordance (same contract as the Get-it screen)
+
+@Suite(.serialized) @MainActor struct VoiceViewModelPasteTests {
+
+    private func makeVM(pasteboard: any PasteboardReading) -> VoiceViewModel {
+        let llm = MockLLMClient()
+        let history = MockHistoryRepository()
+        let repo = MockExpressionRepository(seed: [])
+        return VoiceViewModel(
+            howToSay: HowToSayInteractor(llm: llm, history: history),
+            regenerateHowToSay: RegenerateHowToSayInteractor(llm: llm, history: history),
+            whatToSay: WhatToSayInteractor(llm: llm, history: history),
+            voiceCapture: VoiceCaptureInteractor(recognizer: MockSpeechRecognizing()),
+            pronounce: PlayPronunciationInteractor(synthesizer: MockSpeechSynthesizing()),
+            saveExpression: SaveExpressionInteractor(
+                enrich: EnrichExpressionInteractor(llm: llm), repository: repo
+            ),
+            studyList: StudyListInteractor(repository: repo),
+            isConfigured: true,
+            pasteboard: pasteboard
+        )
+    }
+
+    @Test func emptyFieldWithClipboardShowsPasteAndPastes() {
+        let vm = makeVM(pasteboard: VoiceMockPasteboard(text: "как сказать спасибо"))
+        vm.refreshClipboardState()
+        #expect(vm.showsPasteAction)
+        vm.pasteIntoInput()
+        #expect(vm.intent == "как сказать спасибо")
+        #expect(!vm.showsPasteAction)   // now it's the mode action again
+        #expect(vm.phase == .idle)      // paste never auto-submits
+    }
+
+    /// A stale has-text signal with nothing usable behind it turns the affordance off.
+    @Test func whitespaceClipboardPasteDisarmsAffordance() {
+        let vm = makeVM(pasteboard: VoiceMockPasteboard(text: "   "))
+        vm.refreshClipboardState()
+        #expect(vm.showsPasteAction)
+        vm.pasteIntoInput()
+        #expect(vm.intent.isEmpty)
+        #expect(!vm.showsPasteAction)   // disarmed, not a do-nothing Paste button
+    }
+
+    /// Clearing the field re-arms Paste (the didSet refresh path).
+    @Test func clearingFieldReArmsPaste() {
+        let pasteboard = VoiceMockPasteboard(text: nil)
+        let vm = makeVM(pasteboard: pasteboard)
+        vm.refreshClipboardState()
+        #expect(!vm.showsPasteAction)
+        vm.intent = "draft"
+        pasteboard.text = "copied later"
+        vm.intent = ""                  // ✕ button → didSet re-checks the clipboard
+        #expect(vm.showsPasteAction)
+    }
+}
+
+/// Deterministic canned clipboard for the Say-it Paste affordance tests (mirrors Get it's double).
+private final class VoiceMockPasteboard: PasteboardReading, @unchecked Sendable {
+    var text: String?
+    init(text: String?) { self.text = text }
+    var hasText: Bool { text != nil }
+    func readText() -> String? { text }
 }

@@ -25,26 +25,89 @@ public final class HistoryDetailViewModel {
     private let saveExpression: any SaveExpressionUseCase
     private let studyList: any StudyListUseCase
     private let pronounce: any PlayPronunciationUseCase
+    /// Session-recording playback for live-translation entries (nil in lean test setups).
+    private let recordings: (any SessionRecordingsManaging)?
     private var playTask: Task<Void, Never>?
+    private var recordingTask: Task<Void, Never>?
 
     public init(
         entry: HistoryEntry,
         saveExpression: any SaveExpressionUseCase,
         studyList: any StudyListUseCase,
-        pronounce: any PlayPronunciationUseCase
+        pronounce: any PlayPronunciationUseCase,
+        recordings: (any SessionRecordingsManaging)? = nil
     ) {
         self.entry = entry
         self.saveExpression = saveExpression
         self.studyList = studyList
         self.pronounce = pronounce
+        self.recordings = recordings
     }
 
     /// For `.translate` / `.photoTranslate` the saveable English source is the request text.
     public var translationRU: String? {
         switch entry.result {
         case .translate(let ru), .photoTranslate(let ru): ru
-        case .howToSay, .whatToSay: nil
+        case .howToSay, .whatToSay, .photoExplain, .liveTranslation: nil
         }
+    }
+
+    // MARK: Live-session recording playback
+
+    /// The session's stored audio, if this entry is a live translation AND the file still exists.
+    public var recordingFileName: String? {
+        guard case .liveTranslation(_, _, let fileName?, _) = entry.result,
+              let recordings, recordings.exists(fileName: fileName) else { return nil }
+        return fileName
+    }
+
+    public private(set) var isPlayingRecording = false
+    public private(set) var recordingProgress: Double = 0
+    /// Playback failures get their OWN channel: `errorMessage` is the study-list alert ("Study
+    /// list" title) — a recording problem under that title reads as nonsense.
+    public private(set) var playbackError: String?
+
+    public func clearPlaybackError() { playbackError = nil }
+
+    /// Play / stop the original session audio (toggle).
+    public func toggleRecordingPlayback() {
+        if isPlayingRecording {
+            stopRecordingPlayback()
+            return
+        }
+        guard let fileName = recordingFileName, let recordings else { return }
+        stopPlayback()   // never talk over TTS
+        isPlayingRecording = true
+        recordingProgress = 0
+        recordingTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                for try await state in recordings.play(fileName: fileName) {
+                    switch state {
+                    case .playing(let progress): self.recordingProgress = progress
+                    case .finished: break
+                    }
+                }
+            } catch RecordingPlaybackError.busy {
+                self.playbackError = Loc.t("Сначала остановите онлайн-прослушивание.",
+                                           "Stop the live listening session first.")
+            } catch {
+                self.playbackError = Loc.t("Не удалось воспроизвести запись.", "Couldn't play the recording.")
+            }
+            if !Task.isCancelled {
+                self.isPlayingRecording = false
+                self.recordingProgress = 0
+            }
+        }
+    }
+
+    /// Hard stop — also called when the detail screen disappears (a minutes-long recording must
+    /// not keep playing with no visible way to stop it).
+    public func stopRecordingPlayback() {
+        recordingTask?.cancel()
+        recordingTask = nil
+        isPlayingRecording = false
+        recordingProgress = 0
     }
 
     public func isSaved(_ key: String) -> Bool { savedKeys.contains(key) }
@@ -75,6 +138,8 @@ public final class HistoryDetailViewModel {
                 savedKeys.insert(key)
                 savedIDs[key] = id
             }
+        case .photoExplain, .liveTranslation:
+            break   // native-language explanation / whole-session text — nothing saveable here
         }
     }
     public static func variantKey(_ variant: PhraseVariant) -> String { variant.id.uuidString }

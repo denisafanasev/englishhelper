@@ -70,17 +70,34 @@ public struct SaveExpressionInteractor: SaveExpressionUseCase {
     }
 }
 
-// MARK: - History (read)
+// MARK: - History (read + delete)
 
 public protocol RequestHistoryUseCase: Sendable {
     func recent(limit: Int) async throws -> [HistoryEntry]
+    /// Remove one entry (user swipe-delete) — including its session recording, if it has one.
+    func delete(_ entry: HistoryEntry) async throws
 }
 
 public struct RequestHistoryInteractor: RequestHistoryUseCase {
     private let history: HistoryRepository
-    public init(history: HistoryRepository) { self.history = history }
+    /// Optional so mock/test boots without a recordings store still build; then audio cleanup is a no-op.
+    private let recordings: (any SessionRecordingsManaging)?
+
+    public init(history: HistoryRepository, recordings: (any SessionRecordingsManaging)? = nil) {
+        self.history = history
+        self.recordings = recordings
+    }
+
     public func recent(limit: Int) async throws -> [HistoryEntry] {
         try await history.recent(limit: limit)
+    }
+
+    public func delete(_ entry: HistoryEntry) async throws {
+        try await history.delete(id: entry.id)
+        // Row is gone — the audio file (if any) must go with it, or it leaks forever.
+        if case .liveTranslation(_, _, let fileName?, _) = entry.result {
+            await recordings?.delete(fileName: fileName)
+        }
     }
 }
 

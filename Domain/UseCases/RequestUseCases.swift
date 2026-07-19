@@ -335,17 +335,19 @@ public struct PhotoTranslateInteractor: PhotoTranslateUseCase {
 
 public protocol PhotoExplainUseCase: Sendable {
     /// Image → an explanation of WHAT it shows and its local/cultural context (a place + its history, a
-    /// sign + the local rule, …), written in the native language. Not recorded in history — a reference
-    /// lookup, like text Explain.
+    /// sign + the local rule, …), written in the native language. Recorded in history (text only — the
+    /// photo itself is never persisted, same as photoTranslate).
     func callAsFunction(_ image: RecognizableImage, studiedLanguage: String, nativeLanguage: String) async throws -> SceneExplanation
 }
 
 public struct PhotoExplainInteractor: PhotoExplainUseCase {
     private let llm: LLMClient
+    private let history: HistoryRepository
     /// Optional product analytics (nil = disabled, e.g. tests / mock boot). Events carry NO user content.
     private let analytics: (any AnalyticsTracking)?
-    public init(llm: LLMClient, analytics: (any AnalyticsTracking)? = nil) {
+    public init(llm: LLMClient, history: HistoryRepository, analytics: (any AnalyticsTracking)? = nil) {
         self.llm = llm
+        self.history = history
         self.analytics = analytics
     }
 
@@ -353,6 +355,12 @@ public struct PhotoExplainInteractor: PhotoExplainUseCase {
         let result = try await llm.run(
             PhotoExplainTemplate(studiedLanguage: studiedLanguage, nativeLanguage: nativeLanguage), input: image
         )
+        // Best-effort, like every history.append: the explanation must reach the user even if the
+        // log write fails. The TITLE doubles as the row's input text (there is no typed input).
+        try? await history.append(HistoryEntry(
+            inputText: result.title,
+            result: .photoExplain(title: result.title, details: result.details)
+        ))
         analytics?.track(.photoExplainCompleted)
         return result
     }

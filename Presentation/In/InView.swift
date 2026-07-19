@@ -14,6 +14,8 @@ import DesignSystem
 public struct InView: View {
     @State private var model: InViewModel
     @FocusState private var fieldFocused: Bool
+    /// Dynamic-Type-scaled body line height — the single source of the "first window" height.
+    @ScaledMetric(relativeTo: .body) private var bodyLineHeight = Tokens.Text.body.lineHeight
     /// Bumped on every action-button tap — the trigger for its impact haptic (Paste AND Translate).
     @State private var actionTapCount = 0
     /// The clipboard can change while the app is backgrounded — re-check on return to foreground.
@@ -27,15 +29,33 @@ public struct InView: View {
         NavigationStack {
             ZStack {
                 ScreenBackground()
-                ScrollView {
-                    VStack(spacing: Tokens.Space.s20) {
-                        if model.needsAPIKey { apiKeyBanner }
-                        inputSection
-                        contentSection
+                if model.mode == .online {
+                    // Online mode: the content NEVER scrolls as a whole — panes scroll internally.
+                    // It is still wrapped in a ScrollView on purpose: the navigation bar binds its
+                    // large-title behavior to the FIRST scroll view it finds, and this one cannot
+                    // move (content sized exactly to the container, bounce off) — so the title
+                    // stays fully expanded, IDENTICAL to the other screens, while the transcript
+                    // panes scroll freely without dragging the header around.
+                    GeometryReader { geometry in
+                        ScrollView {
+                            onlineSection
+                                .padding(Tokens.Space.s20)
+                                .frame(width: geometry.size.width, height: geometry.size.height,
+                                       alignment: .top)
+                        }
+                        .scrollBounceBehavior(.basedOnSize)
                     }
-                    .padding(Tokens.Space.s20)
+                } else {
+                    ScrollView {
+                        VStack(spacing: Tokens.Space.s20) {
+                            if model.needsAPIKey { apiKeyBanner }
+                            inputSection
+                            contentSection
+                        }
+                        .padding(Tokens.Space.s20)
+                    }
+                    .scrollDismissesKeyboard(.interactively)
                 }
-                .scrollDismissesKeyboard(.interactively)
             }
             .navigationTitle(Loc.t("Понять", "Get it"))
             .settingsTrigger()
@@ -68,33 +88,50 @@ public struct InView: View {
 
     // MARK: Input
 
+    /// The Get-it "first window" (text-input box in Explain/Translate, Original pane in Online):
+    /// ONE exact TOTAL height everywhere — 4 body lines + the pane's s16 padding — so the button
+    /// right below it sits at the SAME position on all three screens of the section.
+    private var firstWindowContentHeight: CGFloat { 4 * bodyLineHeight }
+    private var firstWindowTotalHeight: CGFloat { firstWindowContentHeight + 2 * Tokens.Space.s16 }
+
+    /// Mode at the TOP (mirrors "Say it": the choice frames the interaction). Shared by the text
+    /// layout and the Online layout so the selector never jumps between modes.
+    private var modeSelector: some View {
+        SegmentedSelector(
+            InViewModel.Mode.allCases,
+            selected: model.mode,
+            label: { $0.title },
+            accessibilityID: "getit.mode",
+            onSelect: { model.selectMode($0) }
+        )
+        // `.contain` keeps each segment's OWN label (a bare container label would overwrite
+        // every segment as "Mode", leaving VoiceOver users unable to tell the options apart).
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Loc.t("Режим", "Mode"))
+    }
+
     private var inputSection: some View {
         // s12 spacing MUST match VoiceView's inputSection so the mode selector, field, mic, and caption
         // land at IDENTICAL positions on both screens — no jump when switching Say it ↔ Get it.
         VStack(spacing: Tokens.Space.s12) {
-            // Mode at the TOP (mirrors "Say it": the Explain/Translate choice frames the interaction,
-            // same as How-to-say/What-to-say there).
-            SegmentedSelector(
-                InViewModel.Mode.allCases,
-                selected: model.mode,
-                label: { $0.title },
-                accessibilityID: "getit.mode",
-                onSelect: { model.selectMode($0) }
-            )
-            // `.contain` keeps each segment's OWN label (a bare container label would overwrite
-            // every segment as "Mode", leaving VoiceOver users unable to tell the options apart).
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel(Loc.t("Режим", "Mode"))
+            modeSelector
 
+            // A fixed box of EXACTLY the Online Original pane's height — long text scrolls inside,
+            // the box never grows, so the buttons below never move.
             GlassField(Loc.t("Текст на изучаемом языке", "Text in the language you're learning"),
-                       text: $model.source, accessibilityID: "getit.input") {
+                       text: $model.source, accessibilityID: "getit.input",
+                       fixedHeight: firstWindowTotalHeight) {
                 fieldFocused = false
                 model.submit()
             }
             .focused($fieldFocused)
 
-            VStack(spacing: Tokens.Space.s8) {
-                MicButton(status: micStatus,
+            // Mic + action side by side in ONE row (half width each) — same compact block as the
+            // Say-it screen, so the two screens read as one family.
+            HStack(spacing: Tokens.Space.s12) {
+                // Pill-shaped push-to-talk (same form as the action button next to it); the status
+                // caption lives inside the pill.
+                MicButton(status: micStatus, title: micCaption,
                           onPressBegan: {
                               fieldFocused = false
                               model.micPressBegan()
@@ -113,23 +150,104 @@ public struct InView: View {
                     : Loc.t("Коснитесь, чтобы начать диктовку на изучаемом языке; сигнал отметит начало записи",
                             "Tap to start dictating in the language you're learning; a tone marks the start"))
 
-                Text(micCaption)
-                    .textStyle(Tokens.Text.footnote)
-                    .foregroundStyle(Tokens.Content.tertiary)
+                // One button, two personas: with an EMPTY field and text on the clipboard it is PASTE
+                // (fills the field, then flips back to Translate/Explain for a deliberate submit);
+                // otherwise it is the mode's action. Every tap gives an impact haptic.
+                EHButton(actionTitle, icon: actionIcon, kind: .primary, fillWidth: true,
+                         accessibilityID: "getit.action") {
+                    fieldFocused = false
+                    actionTapCount += 1
+                    if model.showsPasteAction { model.pasteIntoInput() } else { model.submit() }
+                }
+                .disabled(!actionEnabled)   // EHButton dims itself when disabled
             }
-
-            // One button, two personas: with an EMPTY field and text on the clipboard it is PASTE
-            // (fills the field, then flips back to Translate/Explain for a deliberate submit);
-            // otherwise it is the mode's action. Every tap gives an impact haptic.
-            EHButton(actionTitle, icon: actionIcon, kind: .primary, fillWidth: true,
-                     accessibilityID: "getit.action") {
-                fieldFocused = false
-                actionTapCount += 1
-                if model.showsPasteAction { model.pasteIntoInput() } else { model.submit() }
-            }
-            .disabled(!actionEnabled)   // EHButton dims itself when disabled
             .sensoryFeedback(.impact(weight: .medium), trigger: actionTapCount)
         }
+    }
+
+    // MARK: Online (live translation)
+
+    private var onlineSection: some View {
+        VStack(spacing: Tokens.Space.s12) {
+            modeSelector
+            if model.needsLiveAPIKey { sonioxKeyBanner }
+            // The controls sit BETWEEN the two transcript panes (the view's middle slot):
+            // Pause (mute/unmute the running session) · Listen (start/stop) · direction switch.
+            LiveTranscriptView(text: model.liveText, isStreaming: model.isLiveListening,
+                               smallPaneContentHeight: firstWindowContentHeight) {
+                // s8 (not s12): four controls share this row — the tighter gap buys the Listen
+                // pill the width it needs on the smallest iPhones.
+                HStack(spacing: Tokens.Space.s8) {
+                    // Pause / Resume: compact glyph — the label is VoiceOver's (and the UI tests').
+                    liveSideButton(
+                        icon: model.isLivePaused ? "play.fill" : "pause.fill",
+                        label: model.isLivePaused
+                            ? Loc.t("Дальше", "Resume", "Reprendre", "Seguir", "Weiter", "Riprendi")
+                            : Loc.t("Пауза", "Pause", "Pause", "Pausa", "Pause", "Pausa"),
+                        action: { model.toggleLivePause() }
+                    )
+                    .disabled(!model.isLiveListening || model.isLiveStopping)
+
+                    ListenButton(
+                        isListening: model.isLiveListening,
+                        isStopping: model.isLiveStopping,
+                        level: model.liveLevel,
+                        idleTitle: Loc.t("Слушать", "Listen", "Écouter", "Escuchar", "Zuhören", "Ascolta"),
+                        action: { model.toggleLive() }
+                    )
+                    .disabled(model.needsLiveAPIKey)
+
+                    // Direction toggle (default studied → native). On a running session it draws a
+                    // divider and continues in the opposite direction; idle — just the setting.
+                    directionToggle
+                }
+                if let message = model.liveErrorMessage {
+                    Text(message)
+                        .textStyle(Tokens.Text.footnote)
+                        .foregroundStyle(Tokens.Signal.error)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+    }
+
+    /// A 50×50 glass glyph flanking the Listen pill (Pause / New). Dims itself when disabled —
+    /// `.buttonStyle(.plain)` doesn't (same rationale as EHButton).
+    private func liveSideButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
+        LiveSideButton(icon: icon, label: label, action: action)
+    }
+
+    /// The language-direction SWITCH: two positions (left = studied, right = native); the GREEN
+    /// highlight marks the language being LISTENED TO — the same live green as the Listen pill —
+    /// and slides left↔right on tap. Green on EN = hearing EN, translating into RU; and vice versa.
+    private var directionToggle: some View {
+        DirectionSwitch(
+            leftLabel: StudiedLanguage.current.abbreviation,
+            rightLabel: TargetLanguage.current.abbreviation,
+            isRightActive: model.isLiveReversed,
+            accessibilityTitle: Loc.t("Направление перевода", "Translation direction",
+                                      "Sens de traduction", "Dirección de traducción",
+                                      "Übersetzungsrichtung", "Direzione di traduzione"),
+            accessibilityValue: model.isLiveReversed
+                ? "\(TargetLanguage.current.abbreviation)→\(StudiedLanguage.current.abbreviation)"
+                : "\(StudiedLanguage.current.abbreviation)→\(TargetLanguage.current.abbreviation)",
+            action: { model.toggleLiveDirection() }
+        )
+        .disabled(model.isLiveStopping)
+        .sensoryFeedback(.impact(weight: .medium), trigger: model.isLiveReversed)
+    }
+
+    private var sonioxKeyBanner: some View {
+        HStack(spacing: Tokens.Space.s12) {
+            Image(systemName: "key.slash").foregroundStyle(Tokens.Signal.warning)
+            Text(Loc.t("Нет ключа Soniox API — онлайн-перевод не работает. Добавьте ключ в Secrets.xcconfig.",
+                       "No Soniox API key — online translation won't work. Add a key in Secrets.xcconfig."))
+                .textStyle(Tokens.Text.footnote)
+                .foregroundStyle(Tokens.Content.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Tokens.Space.s12)
+        .glassPanel(cornerRadius: Tokens.Radius.control)
     }
 
     /// Enabled with something to do (input to submit OR clipboard to paste) and not mid-request/listening.
@@ -182,10 +300,11 @@ public struct InView: View {
     }
 
     private var micCaption: String {
+        // Short captions: the pill shares its row with the action button (half width each).
         switch model.micStatus {
-        case .listening: Loc.t("Слушаю… отпустите для перевода или объяснения", "Listening… release to translate or explain")
+        case .listening: Loc.t("Слушаю…", "Listening…")
         case .processing: Loc.t("Минуту…", "One moment…")
-        case .idle: Loc.t("Удерживайте и говорите на изучаемом языке", "Hold and speak the language you're learning")
+        case .idle: Loc.t("Удерживайте и говорите", "Hold and speak")
         }
     }
 
@@ -357,9 +476,11 @@ public struct InView: View {
             Text(Loc.t("Доступ к микрофону", "Microphone access"))
                 .textStyle(Tokens.Text.title2)
                 .foregroundStyle(Tokens.Content.primary)
+            // Honest about Online mode: unlike push-to-talk dictation, live sessions ARE recorded
+            // (that's their replay feature) — the priming copy must never claim otherwise.
             Text(Loc.t(
-                "Чтобы услышать вашу речь и перевести её, приложению нужен микрофон. Запись не сохраняется.",
-                "To hear your speech and translate it, the app needs the microphone. Nothing is recorded."))
+                "Чтобы услышать и перевести речь, приложению нужен микрофон. Диктовка не сохраняется; онлайн-сессии записываются и остаются в Истории.",
+                "To hear and translate speech, the app needs the microphone. Dictation isn't stored; online sessions are recorded and kept in History."))
                 .textStyle(Tokens.Text.body)
                 .foregroundStyle(Tokens.Content.secondary)
                 .multilineTextAlignment(.center)
@@ -385,5 +506,74 @@ public struct InView: View {
         case .listening: .listening
         case .processing: .processing
         }
+    }
+}
+
+/// Compact glass glyph button (Pause / New) flanking the Listen pill in Online mode. Fixed 50×50:
+/// it must never compete with the pill for width, whatever the label localizes to.
+private struct LiveSideButton: View {
+    let icon: String
+    let label: String
+    let action: () -> Void
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(Tokens.Content.primary)
+                .frame(width: 50, height: 50)
+                .glassPanel(cornerRadius: Tokens.Radius.pill)
+        }
+        .buttonStyle(.plain)
+        .opacity(isEnabled ? 1 : 0.4)
+        .accessibilityLabel(label)
+    }
+}
+
+/// Two-position language switch for Online mode. The LIVE-GREEN capsule marks the language the
+/// microphone listens to and SLIDES between the positions on tap (whole control = one button;
+/// VoiceOver reads the full direction, e.g. "EN→RU").
+private struct DirectionSwitch: View {
+    let leftLabel: String
+    let rightLabel: String
+    let isRightActive: Bool
+    let accessibilityTitle: String
+    let accessibilityValue: String
+    let action: () -> Void
+    @Environment(\.isEnabled) private var isEnabled
+    @Namespace private var knob
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 2) {
+                segment(leftLabel, active: !isRightActive)
+                segment(rightLabel, active: isRightActive)
+            }
+            .padding(4)
+            .frame(height: 50)
+            .glassPanel(cornerRadius: Tokens.Radius.pill)
+            .animation(Tokens.Motion.quick, value: isRightActive)
+        }
+        .buttonStyle(.plain)
+        .opacity(isEnabled ? 1 : 0.4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel(accessibilityTitle)
+        .accessibilityValue(accessibilityValue)
+    }
+
+    private func segment(_ text: String, active: Bool) -> some View {
+        Text(text)
+            .font(.system(size: 12, weight: .bold))
+            .foregroundStyle(active ? Tokens.Content.onSignal : Tokens.Content.secondary)
+            .frame(width: 60, height: 42)
+            .background {
+                if active {
+                    Capsule()
+                        .fill(Tokens.Signal.live)
+                        .matchedGeometryEffect(id: "active", in: knob)
+                }
+            }
     }
 }

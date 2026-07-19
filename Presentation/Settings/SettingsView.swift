@@ -82,10 +82,10 @@ public struct SettingsView: View {
     private var connectionCard: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s12) {
             HStack {
-                sectionTitle(Loc.t("Подключение к Claude", "Claude connection"))
+                sectionTitle(Loc.t("Подключение к сервисам", "Service connections"))
                 Spacer()
-                // One re-check button covers both models (only once neither is mid-check).
-                if model.health != .checking, model.fastHealth != .checking {
+                // One re-check button covers every service (only once none is mid-check).
+                if model.health != .checking, model.fastHealth != .checking, model.sonioxHealth != .checking {
                     Button { Task { await model.check() } } label: {
                         Image(systemName: "arrow.clockwise")
                     }
@@ -94,10 +94,14 @@ public struct SettingsView: View {
                     .accessibilityLabel(Loc.t("Проверить снова", "Check again"))
                 }
             }
-            // Both models the app routes to: standard (Sonnet, everything) + fast (Haiku, plain translate).
+            // Both Claude models the app routes to: standard (Sonnet, everything) + fast (Haiku,
+            // plain translate) — then the Soniox real-time model (online translation), shown by
+            // its model id exactly like the Claude rows.
             modelStatusRow(model.modelName, health: model.health)
             Divider().overlay(Tokens.Hairline.default)
             modelStatusRow(model.fastModelName, health: model.fastHealth)
+            Divider().overlay(Tokens.Hairline.default)
+            modelStatusRow("soniox · \(model.sonioxModelName)", health: model.sonioxHealth)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Tokens.Space.s16)
@@ -317,6 +321,8 @@ public struct SettingsView: View {
             infoRow(Loc.t("Модель", "Model"), model.modelName)
             Divider().overlay(Tokens.Hairline.default)
             infoRow(Loc.t("Быстрая модель", "Fast model"), model.fastModelName)
+            Divider().overlay(Tokens.Hairline.default)
+            infoRow(Loc.t("Модель распознавания", "Speech model"), model.sonioxModelName)
             Divider().overlay(Tokens.Hairline.default)
             infoRow(Loc.t("Голос озвучки", "Speech voice"), studied.language.title)
         }

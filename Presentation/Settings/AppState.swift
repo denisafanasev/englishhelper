@@ -263,6 +263,8 @@ public enum TargetLanguage: String, CaseIterable, Sendable {
         case .italian: "it-IT"
         }
     }
+    /// ISO-639-1 code ("ru") — the online-translation service speaks language codes, not names.
+    public var languageCode: String { String(speechLocale.prefix(2)) }
     static let storageKey = "targetLanguage"
     public static var current: TargetLanguage {
         TargetLanguage(rawValue: UserDefaults.standard.string(forKey: storageKey) ?? "") ?? .russian
@@ -328,6 +330,8 @@ public enum StudiedLanguage: String, CaseIterable, Sendable {
         case .italian: "it-IT"
         }
     }
+    /// ISO-639-1 code ("en") — the online-translation service speaks language codes, not names.
+    public var languageCode: String { String(speechLocale.prefix(2)) }
     static let storageKey = "studiedLanguage"
     public static var current: StudiedLanguage {
         StudiedLanguage(rawValue: UserDefaults.standard.string(forKey: storageKey) ?? "") ?? .english

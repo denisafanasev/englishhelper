@@ -15,7 +15,7 @@ public enum ConnectionHealth: Sendable, Equatable {
 
     /// Localizable failure reasons (the UI maps these to text).
     public enum Reason: Sendable, Equatable {
-        case noKey, offline, timeout, overloaded, badResponse, unavailable, unknown
+        case noKey, unauthorized, offline, timeout, overloaded, badResponse, unavailable, unknown
     }
 }
 
@@ -46,6 +46,37 @@ public struct ConnectionHealthInteractor: ConnectionHealthUseCase {
             case .responseTooLong: return .failed(.badResponse)   // not expected for the tiny health ping
             case .requestFailed: return .failed(.unavailable)
             case .invalidOutput: return .failed(.badResponse)
+            case .cancelled: return .cancelled   // sheet dismissed mid-check — not a connectivity fault
+            }
+        } catch {
+            return .failed(.unknown)
+        }
+    }
+}
+
+// MARK: - Transcription service (Soniox) health
+
+public protocol TranscriptionHealthUseCase: Sendable {
+    /// Probe the cloud transcription service so Settings can show its status alongside Claude's.
+    func callAsFunction() async -> ConnectionHealth
+}
+
+public struct TranscriptionHealthInteractor: TranscriptionHealthUseCase {
+    private let service: any TranscriptionServiceChecking
+    public init(service: any TranscriptionServiceChecking) { self.service = service }
+
+    public func callAsFunction() async -> ConnectionHealth {
+        do {
+            try await service.ping()
+            return .ok
+        } catch let error as TranscriptionServiceError {
+            switch error {
+            case .notConfigured: return .failed(.noKey)
+            case .unauthorized: return .failed(.unauthorized)
+            case .offline: return .failed(.offline)
+            case .timedOut: return .failed(.timeout)
+            case .unavailable: return .failed(.unavailable)
+            case .badResponse: return .failed(.badResponse)
             case .cancelled: return .cancelled   // sheet dismissed mid-check — not a connectivity fault
             }
         } catch {

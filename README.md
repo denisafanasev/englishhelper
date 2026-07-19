@@ -35,7 +35,9 @@ street:
 - 🧠 **Get it — understand what reached you.** You *heard* or *read* something and want to be sure.
   Type it, or **dictate** it in the language you're learning. **Translate** gives a faithful meaning;
   **Explain** tells you what it *really* says — how formal or blunt it sounds, when people actually use
-  it, and a familiar comparison so it clicks.
+  it, and a familiar comparison so it clicks. And when the language is coming at you faster than you
+  can type — a lecture, a counter clerk, a tour guide — **Online** just listens and translates the
+  room in real time, both transcripts scrolling live.
 - 💬 **Say it — put words in your mouth.** You need to *speak*. Say or type the thought in your own
   language and get **three natural phrasings** to choose from. Or describe the **situation** —
   "ordering coffee", "apologising for being late", "haggling at a market" — and get the handful of
@@ -55,10 +57,10 @@ changeable later in Settings. Then the app opens on five tabs:
 | Tab | What it's for |
 |---|---|
 | **Сказать / Say it** *(center, default)* | Speak or type a thought in your native language → get **3** natural phrasings ("How to say"), or describe a **situation** → get the 3–10 most useful phrases for it ("What to say"). Pick a tone (Polite / Casual / Slang); tap a card to hear it; bookmark to save. |
-| **Понять / Get it** | Type or dictate an expression in the studied language. **Translate** gives a faithful meaning; **Explain** breaks down what it means, how formal or blunt it sounds, where it's used, and a familiar comparison. |
+| **Понять / Get it** | Type or dictate an expression in the studied language. **Translate** gives a faithful meaning; **Explain** breaks down what it means, how formal or blunt it sounds, where it's used, and a familiar comparison. **Online** turns the phone into a live interpreter: tap **Listen** and surrounding speech is recognized and translated in real time — recognized text in a small pane, the running translation in a big one, both auto-scrolling (scroll up to re-read; grab the bottom to re-engage) and copyable. **Pause** mutes the session instantly; the **direction switch** (EN | RU) flips who is being translated — mid-session it draws a divider and continues. Every session is saved to History with its audio. |
 | **Смотреть / See it** | Point the camera (or pick a photo) at a sign, menu, or page → on-device text recognition → translation drawn over the image. Explain or save any phrase from the result. |
 | **Изучаю / Study** | Your flat study list. Add manually, mark learned, swipe to delete, and **export to AlgoApp** (your SRS app) via the system share sheet. |
-| **История / History** | A chronological log of every request; tap an entry to see the full result, replay it, copy, or explain. |
+| **История / History** | A chronological log of every request; tap an entry to see the full result, replay it, copy, or explain. Live-translation sessions keep their **original audio** for playback. Swipe left to delete an entry (a session's recording is deleted with it). |
 
 A **Settings** sheet (gear, top-right of every screen) covers a live Claude connection check, the
 three language pickers, the appearance theme, and app/model info.
@@ -72,8 +74,9 @@ three language pickers, the appearance theme, and app/model info.
 - **Instant, offline repeats.** Ask for the same translation or phrasing again and it comes straight
   from an on-device **cache** — no wait, no connection needed. (Asking for *fresh* variants still
   goes to Claude.)
-- **One tap from the Lock Screen.** Six **widgets**, one per scenario, deep-link straight into the app
-  with the **camera ready** (See it) or the **mic already listening** (Get it / Say it).
+- **One tap from the Lock Screen.** Seven **widgets**, one per scenario, deep-link straight into the
+  app with the **camera ready** (See it), the **mic already listening** (Get it / Say it), or a
+  **live-translation session already running** (Get it · Online).
 - **Share a photo straight in.** Send an image to Gist It from Photos or any app to translate it.
 - **Light / dark / system** theme, and a live check that Claude is reachable.
 
@@ -85,9 +88,12 @@ Russian · English · French · Spanish · German · Italian — available for t
 ### Under the hood
 
 Language work runs on **Claude Sonnet 5** for everything but plain translation, which uses the faster
-**Claude Haiku** tier for speed; you can override the model per scenario in Settings. Text recognition
-(**See it**) and speech both run **on-device**. The app is online-first — it needs a connection to
-reach Claude — but cached translations and saved phrases stay available offline.
+**Claude Haiku** tier for speed; you can override the model per scenario in Settings. Push-to-talk
+dictation and all speech playback run **on-device**; the **Online** live interpreter streams 16 kHz
+PCM over a WebSocket to **Soniox** (`stt-rt-v5`), whose real-time model recognizes AND translates in
+the same stream (partial tokens render instantly; sessions auto-stop after 5 minutes of silence and
+keep listening in the background). The app is online-first — it needs a connection to reach Claude —
+but cached translations and saved phrases stay available offline.
 
 ---
 
@@ -109,7 +115,7 @@ Each layer is a **separate Swift framework module**, so the compiler enforces th
 ```
 
 - **Domain** — entities, port protocols, prompt templates, use cases. Foundation only; no platform/UI/transport frameworks (enforced by `ForbiddenImportTests`).
-- **Data** — adapters implementing the Domain ports (`ClaudeLLMClient`, native Speech/Vision adapters, SwiftData repositories, AlgoApp exporter). Compiled as the **`Adapters`** module (a module named `Data` would shadow `Foundation.Data`).
+- **Data** — adapters implementing the Domain ports (`ClaudeLLMClient`, native Speech/Vision adapters, `SonioxLiveTranslator` — the live mic→WebSocket interpreter with session recording, SwiftData repositories, AlgoApp exporter). Compiled as the **`Adapters`** module (a module named `Data` would shadow `Foundation.Data`).
 - **DesignSystem** — `Tokens.swift` (single source of truth) + components built on it; also hosts the runtime localizer (`Loc` / `LocCatalog`).
 - **Presentation** — SwiftUI views + MVVM view models; consumes **use cases** only.
 - **App** — the only place that knows the concrete adapters; wires the graph and injects use cases.
@@ -147,11 +153,12 @@ xcodebuild test  -scheme EnglishHelperUITests -destination 'platform=iOS Simulat
 
 ### Security note
 
-`AppConfig` reads `CLAUDE_API_KEY` and `CLAUDE_MODEL` from the app's Info.plist, populated at build
-time from `Secrets.xcconfig` (gitignored; layered in via `Config/Base.xcconfig` with `#include?`).
-The base URL defaults to `https://api.anthropic.com`; the model defaults to `claude-sonnet-5`.
-**A key embedded in a built app is extractable** — fine for personal/dev use; production would proxy
-Claude through a backend.
+`AppConfig` reads `CLAUDE_API_KEY`, `CLAUDE_MODEL`, and `SONIOX_API_KEY` (the Online live
+interpreter; omit it and the mode simply shows a "no key" banner) from the app's Info.plist,
+populated at build time from `Secrets.xcconfig` (gitignored; layered in via `Config/Base.xcconfig`
+with `#include?`). The base URL defaults to `https://api.anthropic.com`; the model defaults to
+`claude-sonnet-5`. **A key embedded in a built app is extractable** — fine for personal/dev use;
+production would proxy Claude/Soniox through a backend (Soniox also offers temporary API keys).
 
 ---
 
@@ -165,6 +172,7 @@ swapping an engine touches exactly ONE registration line:
 speechRecognizer:  NativeSpeechRecognizer(localeProvider: …),   // ← swap ASR engine here
 speechSynthesizer: NativeSpeechSynthesizer(localeProvider: …),  // ← swap TTS engine here
 textRecognizer:    VisionTextRecognizer(),                      // ← swap OCR engine here
+liveTranslating:   SonioxLiveTranslator(apiKey: …),             // ← swap live-interpreter engine here
 ```
 
 To move speech recognition to a cloud ASR, change only the first line — no other file changes,
@@ -199,7 +207,24 @@ CHANGELOG.md     user-facing release notes
 
 ## Status
 
-**v1.3.3 (build 11)** — voice input is now **push-to-talk**: capture runs while the mic button is
+**v1.4.1 (build 1)** — **Online: a live interpreter inside Get it.** A third mode listens to the
+speech around you and translates it in real time: tap **Listen** (a toggle with a live sound
+diagram) and the recognized speech streams into a small pane while its translation runs in the big
+one — partial words render instantly and firm up as Soniox (`stt-rt-v5`, one WebSocket stream for
+recognition AND translation) commits them. Both panes auto-follow the newest text, pause when you
+scroll up, re-engage at the bottom, scroll each other proportionally, break into paragraphs at
+speech pauses, and are copyable. The control row: **Pause** (instant mute/resume — the connection
+stays warm on keepalives), **Listen**, and a **direction switch** (two positions, the live-green
+highlight marks the language being heard; studied→native by default — flipping mid-session
+finalizes the tail, draws a divider in both transcripts, and rotates the stream to the reversed
+language pair, same session, same recording).
+Sessions keep listening in the **background**, auto-stop after **5 minutes of silence**,
+and each one is saved to **History** with its original **audio recording** (playable from the
+Request card of the entry; History rows are now swipe-to-delete, which also removes the audio). The mic pill was redesigned into the same capsule
+form as the action buttons, and photo recognition errors now offer **Retry**. New in the stack: a
+backend-agnostic `LiveTranslating` Domain port, the `SonioxLiveTranslator` adapter (16 kHz PCM
+chunks, silence watchdog, interruption-safe, AAC session recording), and a `SessionRecordings`
+store. Previously, in v1.3.3: voice input became **push-to-talk**: capture runs while the mic button is
 held (press haptic + the standard iOS record chimes around the actual recording, sequenced in the
 speech adapter so the beep is never captured); a deliberate release stops and submits, while a
 SYSTEM touch-cancel (call / permission alert / scroll steal / backgrounding) stops WITHOUT firing a

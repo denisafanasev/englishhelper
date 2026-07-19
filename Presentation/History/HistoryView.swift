@@ -29,7 +29,16 @@ public struct HistoryView: View {
                 HistoryDetailView(model: model.makeDetailViewModel(for: entry))
             }
             .task { await model.load() }
+            .alert(Loc.t("История", "History"), isPresented: actionErrorBinding) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(model.actionError ?? "")
+            }
         }
+    }
+
+    private var actionErrorBinding: Binding<Bool> {
+        Binding(get: { model.actionError != nil }, set: { if !$0 { model.clearActionError() } })
     }
 
     @ViewBuilder private var contentSection: some View {
@@ -52,6 +61,11 @@ public struct HistoryView: View {
                         .listRowSeparator(.hidden)
                         .listRowInsets(EdgeInsets(top: Tokens.Space.s4, leading: Tokens.Space.s16,
                                                   bottom: Tokens.Space.s4, trailing: Tokens.Space.s16))
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) { model.delete(entry) } label: {
+                                Label(Loc.t("Удалить", "Delete"), systemImage: "trash")
+                            }
+                        }
                 }
             }
             .listStyle(.plain)
@@ -118,12 +132,22 @@ private struct HistoryDetailView: View {
 
                 // For translate/photo the request text IS the studied-language rendering, so its
                 // playback (in the studied voice), copy, and explain sit in the card header — the same
-                // icon row as the phrase cards.
+                // icon row as the phrase cards. A live session's REAL recording also belongs here:
+                // it is the original of the request, not part of the translation below.
                 labeledCard(title: Loc.t("Запрос", "Request"),
                             actions: { if isPlayableSource { requestActions } }) {
-                    Text(entry.inputText)
-                        .textStyle(Tokens.Text.body)
-                        .foregroundStyle(Tokens.Content.primary)
+                    VStack(alignment: .leading, spacing: Tokens.Space.s12) {
+                        // The RECORDING comes first — it IS the original; the recognized text
+                        // below is derived from it.
+                        if case .liveTranslation(_, _, _, let duration) = entry.result,
+                           model.recordingFileName != nil {
+                            recordingRow(duration: duration)
+                            Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)
+                        }
+                        Text(entry.inputText)
+                            .textStyle(Tokens.Text.body)
+                            .foregroundStyle(Tokens.Content.primary)
+                    }
                 }
 
                 resultSection
@@ -135,11 +159,24 @@ private struct HistoryDetailView: View {
         .navigationTitle(kindTitle(entry.kind))
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.loadSavedState() }
+        // A minutes-long session recording must not keep playing after the screen is gone.
+        .onDisappear { model.stopRecordingPlayback() }
         .alert(Loc.t("Изучаемое", "Study list"), isPresented: errorBinding) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(model.errorMessage ?? "")
         }
+        // Recording-playback failures carry their own, correctly-titled alert.
+        .alert(Loc.t("Запись", "Recording", "Enregistrement", "Grabación", "Aufnahme", "Registrazione"),
+               isPresented: playbackErrorBinding) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(model.playbackError ?? "")
+        }
+    }
+
+    private var playbackErrorBinding: Binding<Bool> {
+        Binding(get: { model.playbackError != nil }, set: { if !$0 { model.clearPlaybackError() } })
     }
 
     @ViewBuilder private var resultSection: some View {
@@ -183,15 +220,97 @@ private struct HistoryDetailView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(Tokens.Space.s16)
             .glassPanel(cornerRadius: Tokens.Radius.card)
+
+        case .photoExplain(let title, let details):
+            // Same shape as the See-it explanation card: title + hairline + details, copyable.
+            // The "Запрос" card above shows the title too (it doubles as inputText) — acceptable
+            // duplication; the photo itself was never persisted.
+            VStack(alignment: .leading, spacing: Tokens.Space.s12) {
+                HStack {
+                    sectionTitle(Loc.t("Объяснение", "Explanation", "Explication", "Explicación",
+                                       "Erklärung", "Spiegazione"))
+                    Spacer(minLength: Tokens.Space.s8)
+                    CopyButton(title + "\n\n" + details, style: .icon,
+                               accessibilityLabel: Loc.t("Скопировать объяснение", "Copy explanation"))
+                }
+                Text(title)
+                    .textStyle(Tokens.Text.headline)
+                    .foregroundStyle(Tokens.Content.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Rectangle().fill(Tokens.Hairline.default).frame(height: Tokens.Hairline.width)
+                Text(details)
+                    .textStyle(Tokens.Text.body)
+                    .foregroundStyle(Tokens.Content.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(Tokens.Space.s16)
+            .glassPanel(cornerRadius: Tokens.Radius.card)
+
+        case .liveTranslation(_, let ru, _, _):
+            // The recognized speech AND its recording live in the "Запрос" card above; here — the
+            // translation only.
+            VStack(alignment: .leading, spacing: Tokens.Space.s12) {
+                HStack {
+                    sectionTitle(Loc.t("Перевод", "Translation"))
+                    Spacer(minLength: Tokens.Space.s8)
+                    CopyButton(ru, style: .icon,
+                               accessibilityLabel: Loc.t("Скопировать перевод", "Copy translation"))
+                }
+                Text(ru)
+                    .textStyle(Tokens.Text.body)
+                    .foregroundStyle(Tokens.Content.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(Tokens.Space.s16)
+            .glassPanel(cornerRadius: Tokens.Radius.card)
         }
     }
 
+    /// Play/stop of the ORIGINAL session audio + duration; a thin progress bar while playing.
+    private func recordingRow(duration: TimeInterval) -> some View {
+        HStack(spacing: Tokens.Space.s12) {
+            Button { model.toggleRecordingPlayback() } label: {
+                Image(systemName: model.isPlayingRecording ? "stop.circle.fill" : "play.circle.fill")
+                    .font(.system(size: 28))
+                    .foregroundStyle(Tokens.Content.primary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(model.isPlayingRecording
+                ? Loc.t("Остановить запись", "Stop the recording")
+                : Loc.t("Прослушать оригинальную запись", "Play the original recording"))
+
+            VStack(alignment: .leading, spacing: Tokens.Space.s4) {
+                Text(Loc.t("Оригинальная запись", "Original recording", "Enregistrement original",
+                           "Grabación original", "Originalaufnahme", "Registrazione originale"))
+                    .textStyle(Tokens.Text.subhead)
+                    .foregroundStyle(Tokens.Content.primary)
+                if model.isPlayingRecording {
+                    ProgressView(value: model.recordingProgress)
+                        .tint(Tokens.Content.primary)
+                } else {
+                    Text(Self.durationLabel(duration))
+                        .textStyle(Tokens.Text.footnote)
+                        .foregroundStyle(Tokens.Content.tertiary)
+                }
+            }
+        }
+    }
+
+    private static func durationLabel(_ duration: TimeInterval) -> String {
+        let total = Int(duration.rounded())
+        return String(format: "%d:%02d", total / 60, total % 60)
+    }
+
     /// Translate / photo requests store the studied-language rendering as the request text, so it's
-    /// playable (in the studied voice). A how-to-say request is a raw intent — not played.
+    /// playable (in the studied voice). A how-to-say request is a raw intent — not played; a live
+    /// session has the REAL recording instead of TTS.
     private var isPlayableSource: Bool {
         switch entry.kind {
         case .translate, .photoTranslate: true
-        case .howToSay, .whatToSay: false
+        // photoExplain's inputText is the native-language TITLE — nothing to speak in the studied voice.
+        case .howToSay, .whatToSay, .photoExplain, .liveTranslation: false
         }
     }
 
@@ -277,6 +396,8 @@ private func kindIcon(_ kind: RequestKind) -> String {
     case .whatToSay: "bubble.left.and.bubble.right"
     case .translate: "character.bubble"
     case .photoTranslate: "camera"
+    case .photoExplain: "sparkle.magnifyingglass"
+    case .liveTranslation: "waveform"
     }
 }
 
@@ -286,6 +407,10 @@ private func kindTitle(_ kind: RequestKind) -> String {
     case .whatToSay: Loc.t("Что сказать", "What to say", "Quoi dire", "Qué decir", "Was sagen", "Cosa dire")
     case .translate: Loc.t("Перевод", "Translation")
     case .photoTranslate: Loc.t("Фото-перевод", "Photo translation")
+    case .photoExplain: Loc.t("Фото-объяснение", "Photo explanation", "Explication photo",
+                              "Explicación de foto", "Foto-Erklärung", "Spiegazione foto")
+    case .liveTranslation: Loc.t("Онлайн-перевод", "Live translation", "Traduction en direct",
+                                 "Traducción en vivo", "Live-Übersetzung", "Traduzione dal vivo")
     }
 }
 
@@ -294,6 +419,8 @@ private func resultSnippet(_ result: RequestResult) -> String {
     case .howToSay(let variants), .whatToSay(let variants): variants.first?.en ?? "—"
     case .translate(let ru): ru
     case .photoTranslate(let ru): ru
+    case .photoExplain(_, let details): details
+    case .liveTranslation(_, let ru, _, _): ru
     }
 }
 

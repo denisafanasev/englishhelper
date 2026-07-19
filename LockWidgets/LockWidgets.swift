@@ -2,16 +2,17 @@
 //  LockWidgets.swift
 //  EnglishHelper — Lock Screen widgets (WidgetKit extension)
 //
-//  Six accessoryCircular Lock Screen widgets — one per scenario — that DEEP-LINK straight in via the
-//  englishhelper:// scheme and (per RootView) open the camera or mic on arrival:
+//  Seven accessoryCircular Lock Screen widgets — one per scenario — that DEEP-LINK straight in via the
+//  englishhelper:// scheme and (per RootView) open the camera, mic, or live session on arrival:
 //
 //    See it · Explain     seeit            See it · Translate     seeit-translate
 //    Get it · Explain      getit            Get it · Translate      getit-translate
+//    Get it · Online       getit-online
 //    Say it · How to say   sayit            Say it · What to say    sayit-what
 //
-//  The icon encodes TWO axes so all six read apart: INPUT MODALITY = the centered base glyph (camera /
+//  The icon encodes TWO axes so all seven read apart: INPUT MODALITY = the centered base glyph (camera /
 //  character bubble / mic) and MODE = a small corner glyph (lightbulb for Explain / What-to-say, globe
-//  for Translate / How-to-say).
+//  for Translate / How-to-say, radiowaves for Online live translation).
 //
 //  Each widget is USER-CONFIGURABLE (AppIntentConfiguration): when you add or edit it you pick an
 //  appearance — Standard (frosted disc + thin ring), Bordered (bold ring), or Filled (solid disc).
@@ -151,6 +152,20 @@ struct GetItTranslateWidget: Widget {
     }
 }
 
+struct GetItOnlineWidget: Widget {
+    let kind = "tech.10xt.englishhelper.widget.getit.online"
+    var body: some WidgetConfiguration {
+        AppIntentConfiguration(kind: kind, intent: StyleIntent.self, provider: LockProvider()) { entry in
+            WidgetFace(modality: "character.bubble.fill", mode: "dot.radiowaves.left.and.right", style: entry.style)
+                .widgetURL(URL(string: "englishhelper://getit-online"))
+        }
+        .configurationDisplayName("Get it · Online")
+        .description("Listen and translate speech live.")
+        .supportedFamilies([.accessoryCircular])
+        .contentMarginsDisabled()
+    }
+}
+
 struct SayItHowWidget: Widget {
     let kind = "tech.10xt.englishhelper.widget.sayit"
     var body: some WidgetConfiguration {
@@ -186,6 +201,7 @@ struct LockWidgetsBundle: WidgetBundle {
         SeeItTranslateWidget()
         GetItExplainWidget()
         GetItTranslateWidget()
+        GetItOnlineWidget()
         SayItHowWidget()
         SayItWhatWidget()
     }

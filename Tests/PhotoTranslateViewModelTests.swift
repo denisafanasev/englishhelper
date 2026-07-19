@@ -17,11 +17,12 @@ import Presentation
     /// not whatever a previous test (or app run on this simulator) left behind.
     init() { UserDefaults.standard.removeObject(forKey: "seeItMode") }
 
-    private func makeVM(llm: any LLMClient = MockLLMClient()) -> PhotoTranslateViewModel {
+    private func makeVM(llm: any LLMClient = MockLLMClient(),
+                        history: MockHistoryRepository = MockHistoryRepository()) -> PhotoTranslateViewModel {
         let repo = MockExpressionRepository(seed: [])
         return PhotoTranslateViewModel(
-            photoTranslate: PhotoTranslateInteractor(llm: llm, history: MockHistoryRepository()),
-            photoExplain: PhotoExplainInteractor(llm: llm),
+            photoTranslate: PhotoTranslateInteractor(llm: llm, history: history),
+            photoExplain: PhotoExplainInteractor(llm: llm, history: history),
             pronounce: PlayPronunciationInteractor(synthesizer: MockSpeechSynthesizing()),
             saveExpression: SaveExpressionInteractor(
                 enrich: EnrichExpressionInteractor(llm: llm), repository: repo
@@ -70,6 +71,30 @@ import Presentation
         #expect(vm.explanation?.details.isEmpty == false)
     }
 
+    /// Both See-it modes land in history: Explain writes a photoExplain entry (title + details).
+    @Test func explainModeAppendsToHistory() async throws {
+        let history = MockHistoryRepository()
+        let vm = makeVM(history: history)
+        vm.didPickFromLibrary(Data())                // default mode = Explain
+        try await waitUntil { vm.phase == .result }
+        let entries = try await history.recent(limit: 5)
+        #expect(entries.count == 1)
+        guard case .photoExplain(let title, let details) = entries.first?.result else {
+            Issue.record("expected a photoExplain entry, got \(String(describing: entries.first))")
+            return
+        }
+        #expect(title == vm.explanation?.title)
+        #expect(details == vm.explanation?.details)
+        #expect(entries.first?.inputText == title)   // the title doubles as the row's input text
+    }
+
+    @Test func photoExplainSurvivesCodingRoundTrip() throws {
+        let result = RequestResult.photoExplain(title: "Blue plaque", details: "Marks a notable resident.")
+        let decoded = try JSONDecoder().decode(RequestResult.self, from: JSONEncoder().encode(result))
+        #expect(decoded == result)
+        #expect(decoded.kind == .photoExplain)
+    }
+
     @Test func producesBlocks() async throws {
         let vm = makeVM()
         vm.selectMode(.translate)
@@ -89,6 +114,25 @@ import Presentation
         #expect(vm.phase == .failed)
         #expect(vm.isOffline == false)
         #expect(vm.errorMessage?.isEmpty == false)
+        // Recognition is LLM-run (non-deterministic), so a re-run of the same photo is offered.
+        #expect(vm.canRetry)
+    }
+
+    /// A recognition failure (no text found) must offer a retry of the SAME photo — the LLM may
+    /// simply have misfired — and the retry must be able to succeed.
+    @Test func retryAfterRecognitionFailureReRunsTheSamePhoto() async throws {
+        let image = Data([0x0A, 0x0B])
+        let vm = makeVM(llm: FlakyEmptyBlocksLLM(emptiesBeforeSuccess: 1))
+        vm.selectMode(.translate)
+        vm.didPickFromLibrary(image)
+        try await waitUntil { vm.phase == .failed }
+        #expect(vm.imageData == image)   // the photo is retained, not lost
+        #expect(vm.canRetry)
+        vm.retry()
+        try await waitUntil { vm.phase == .result }
+        #expect(vm.phase == .result)
+        #expect(vm.blocks.isEmpty == false)
+        #expect(vm.imageData == image)
     }
 
     @Test func toggleSaveMarksBlockSaved() async throws {
@@ -167,5 +211,19 @@ private final class FlakyLLM: LLMClient, @unchecked Sendable {
 private struct EmptyBlocksLLM: LLMClient {
     func run<Template: PromptTemplate>(_ template: Template, input: Template.Input) async throws -> Template.Output {
         try template.decode(#"{"blocks":[]}"#)
+    }
+}
+
+/// Returns empty blocks (→ noTextFound) `emptiesBeforeSuccess` times, then a real block — simulates
+/// an LLM recognition misfire that succeeds on retry. Called sequentially, so the counter is safe.
+private final class FlakyEmptyBlocksLLM: LLMClient, @unchecked Sendable {
+    nonisolated(unsafe) private var remaining: Int
+    init(emptiesBeforeSuccess: Int) { self.remaining = emptiesBeforeSuccess }
+    func run<Template: PromptTemplate>(_ template: Template, input: Template.Input) async throws -> Template.Output {
+        if remaining > 0 {
+            remaining -= 1
+            return try template.decode(#"{"blocks":[]}"#)
+        }
+        return try template.decode(#"{"blocks":[{"en":"Exit","ru":"Выход"}]}"#)
     }
 }

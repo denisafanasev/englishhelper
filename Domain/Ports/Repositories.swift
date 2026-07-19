@@ -25,11 +25,14 @@ public extension ExpressionRepository {
     }
 }
 
-/// Append + fetch of request history. Append-only by intent.
+/// Append + fetch of request history, plus explicit row removal (user swipe-delete). The log is
+/// still append-only from the REQUEST side — nothing ever edits an entry in place.
 public protocol HistoryRepository: Sendable {
     func append(_ entry: HistoryEntry) async throws
     /// Most-recent-first, capped at `limit`.
     func recent(limit: Int) async throws -> [HistoryEntry]
+    /// Remove one entry. A missing id is a silent no-op (the row may already be pruned).
+    func delete(id: HistoryEntry.ID) async throws
 }
 
 /// A persistent cache of completed TEXT-translation requests (Say it · How to say / What to say, and

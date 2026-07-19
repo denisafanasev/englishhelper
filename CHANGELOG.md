@@ -2,6 +2,52 @@
 
 Release notes for **Gist It** (formerly EnglishHelper), written for the people who use it.
 
+## 1.4.1 — 2026-07-18
+
+**Online: your live interpreter.** Get it has a third mode — **Online**. Tap **Listen** and the
+phone starts translating the speech around you in real time: a lecture, a tour guide, an
+announcement, the person across the counter. What's being said appears in a small window in the
+original language, and the running **translation streams into the big window** below it, word by
+word, without waiting for sentences to finish. Both texts break into **paragraphs at natural
+pauses** in the speech, so a long session reads like a conversation, not a wall of words. Tap the
+button again (it shows a live sound diagram while listening) to stop.
+
+**Scroll back without losing the thread.** Both windows follow the newest words on their own. Scroll
+up to re-read something — the text keeps arriving below in the meantime — and the moment you pull
+back down to the bottom, the auto-follow picks up again. The two windows also scroll **together**,
+so the original and its translation stay side by side wherever you are in the session.
+
+**Keeps listening when you look away.** Lock the screen or switch to another app — the session keeps
+translating until you stop it. If nobody has spoken for **5 minutes**, it stops itself (and saves),
+so a forgotten microphone never runs all day.
+
+**Pause without hanging up.** A **Pause** button sits next to Listen: it instantly mutes the
+session (nothing is recognized or recorded while you talk privately) and resumes just as
+instantly — the connection stays warm the whole time.
+
+**Flip the direction mid-conversation.** A **direction toggle** (EN→RU / RU→EN) sits next to the
+buttons — by default the session listens to the language you're learning and translates into your
+own. Tap it to answer back: on a running session it draws a **divider line** in both windows and
+keeps going in the opposite direction — same session, same recording. Tapped while idle, it just
+sets the direction for the next session.
+
+**Copy what you heard.** Both text windows have a copy button — the recognized speech and the
+running translation are one tap away from the clipboard.
+
+**Every session is kept — with the sound.** Each listening session lands in **History** with the
+full original text, the full translation, and the **original audio**, so you can replay exactly
+what was said. And History entries can now be **swiped left to delete** — removing a session also
+removes its recording.
+
+**Start it from the Lock Screen.** A seventh widget — **Get it · Online** — joins the six: one tap
+and the app opens with a live-translation session **already listening**. (On very first use it asks
+for the microphone once, like the other mic widgets.)
+
+**Small things.** Photo **explanations** now land in History too (See it already logged
+translations — now both modes do), the photo screen's recognition errors offer a one-tap **Retry**
+of the same photo, and the mic button across the app was redesigned into the same pill shape as the
+action buttons — with its hint right inside.
+
 ## 1.3.3 — 2026-07-12
 
 **Hold to talk.** The mic button now works like a walkie-talkie: **press and hold**, speak, and

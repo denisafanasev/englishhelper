@@ -37,6 +37,15 @@
 	<string>$(CLAUDE_MODEL)</string>
 	<key>CLAUDE_FAST_MODEL</key>
 	<string>$(CLAUDE_FAST_MODEL)</string>
+	<key>SONIOX_API_KEY</key>
+	<string>$(SONIOX_API_KEY)</string>
+	<key>SONIOX_MODEL</key>
+	<string>$(SONIOX_MODEL)</string>
+	<!-- Online translation keeps listening with the app backgrounded / screen locked. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 	<key>TELEMETRYDECK_APP_ID</key>
 	<string>$(TELEMETRYDECK_APP_ID)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>

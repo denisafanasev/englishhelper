@@ -3,9 +3,11 @@
 //  EnglishHelper — DesignSystem
 //
 //  Voice capture control, PUSH-TO-TALK: capture runs while the finger is DOWN; lifting it submits.
+//  Shaped as a full-width pill IDENTICAL to the primary EHButton (Capsule, minHeight 50), so the
+//  mic and the action button below it read as one family; the status caption lives INSIDE the pill.
 //  Press-down gives an impact haptic (the audible start/stop cues come from the speech adapter,
 //  which sequences them around the actual recording). State is expressed through MOTION (per the
-//  design: diverging rings while listening, spinner while processing), with a Reduce Motion
+//  design: diverging capsule rings while listening, spinner while processing), with a Reduce Motion
 //  fallback to a static treatment.
 //
 //  A deliberate finger-lift (onPressEnded) is distinguished from a SYSTEM touch-cancel
@@ -23,10 +25,10 @@ public struct MicButton: View {
     public enum Status: Sendable { case idle, listening, processing }
 
     private let status: Status
+    private let title: String
     private let onPressBegan: () -> Void
     private let onPressEnded: () -> Void
     private let onPressCancelled: () -> Void
-    private let size: CGFloat
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pulse = false
     /// GestureState (not @State): resets to `false` even when the system CANCELS the gesture
@@ -38,12 +40,13 @@ public struct MicButton: View {
     /// already handled; reset without it = the system killed the touch → onPressCancelled.
     @State private var handledDeliberateEnd = false
 
-    public init(status: Status, size: CGFloat = 88,
+    /// `title` is the status caption shown inside the pill (the caller keys it off the same status).
+    public init(status: Status, title: String,
                 onPressBegan: @escaping () -> Void,
                 onPressEnded: @escaping () -> Void,
                 onPressCancelled: @escaping () -> Void) {
         self.status = status
-        self.size = size
+        self.title = title
         self.onPressBegan = onPressBegan
         self.onPressEnded = onPressEnded
         self.onPressCancelled = onPressCancelled
@@ -51,12 +54,14 @@ public struct MicButton: View {
 
     public var body: some View {
         ZStack {
+            // Diverging rings while listening — same pulse as the old round mic, capsule-shaped.
+            // Drawn OUTSIDE the pill bounds on purpose (no reserved frame): the layout stays as
+            // compact as a plain button.
             if status == .listening && !reduceMotion {
                 ForEach(0..<2, id: \.self) { i in
-                    Circle()
+                    Capsule()
                         .stroke(Tokens.Signal.live.opacity(0.5), lineWidth: 2)
-                        .frame(width: size, height: size)
-                        .scaleEffect(pulse ? 1.6 : 1.0)
+                        .scaleEffect(pulse ? 1.10 : 1.0)
                         .opacity(pulse ? 0 : 0.6)
                         .animation(
                             .easeOut(duration: 1.6).repeatForever(autoreverses: false)
@@ -65,19 +70,29 @@ public struct MicButton: View {
                         )
                 }
             }
-            Circle()
-                .fill(fill)
-                .frame(width: size, height: size)
-                .overlay {
-                    if status == .listening && reduceMotion {
-                        Circle().strokeBorder(Tokens.Signal.live, lineWidth: 3)
-                    }
+            // Pill geometry mirrors EHButton exactly (headline font, minHeight 50, s20 padding,
+            // Capsule) so the mic reads as the same control family as the action button below it.
+            HStack(spacing: Tokens.Space.s8) {
+                icon
+                Text(title)
+                    .multilineTextAlignment(.center)   // long captions wrap; the pill grows like EHButton
+            }
+            .font(Tokens.Text.headline.font)
+            .tracking(-0.2)
+            .foregroundStyle(foreground)
+            .frame(minHeight: 50)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, Tokens.Space.s20)
+            .background(fill)
+            .clipShape(Capsule())
+            .overlay {
+                if status == .listening && reduceMotion {
+                    Capsule().strokeBorder(Tokens.Signal.live, lineWidth: 3)
                 }
-            icon
+            }
         }
-        .frame(width: size * 1.6, height: size * 1.6)   // room for rings
-        .contentShape(Circle())
-        .scaleEffect(isPressed ? 0.92 : 1.0)
+        .contentShape(Capsule())
+        .scaleEffect(isPressed ? 0.97 : 1.0)
         .animation(.spring(duration: 0.15), value: isPressed)
         // minimumDistance 0 = the press is recognized at touch-DOWN, so capture starts immediately.
         // Plain .gesture (not highPriority) DELIBERATELY leaves the enclosing ScrollView able to
@@ -126,17 +141,22 @@ public struct MicButton: View {
         }
     }
 
+    private var foreground: Color {
+        switch status {
+        case .idle, .processing: Tokens.Content.onInvert
+        case .listening:         .white
+        }
+    }
+
     @ViewBuilder private var icon: some View {
         switch status {
         case .idle:
-            Image(systemName: "mic.fill").font(.system(size: size * 0.36, weight: .medium))
-                .foregroundStyle(Tokens.Content.onInvert)
+            Image(systemName: "mic.fill")
         case .listening:
-            Image(systemName: "waveform").font(.system(size: size * 0.36, weight: .semibold))
-                .foregroundStyle(.white)
+            Image(systemName: "waveform")
                 .symbolEffect(.variableColor.iterative, isActive: !reduceMotion)
         case .processing:
-            ProgressView().tint(Tokens.Content.onInvert).controlSize(.large)
+            ProgressView().tint(Tokens.Content.onInvert)
         }
     }
 }
