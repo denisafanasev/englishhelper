@@ -1,14 +1,11 @@
-# AWS Amplify Hosting build spec — static one-pager, no build step.
-# App root for a monorepo connect: docs/marketing/landing
 version: 1
-frontend:
-  phases:
-    build:
-      commands: []
-  artifacts:
-    baseDirectory: .
-    files:
-      - index.html
-      - og-image.png
-  cache:
-    paths: []
+applications:
+  - appRoot: docs/marketing/landing
+    frontend:
+      phases:
+        build:
+          commands: []
+      artifacts:
+        baseDirectory: .
+        files:
+          - '**/*'
