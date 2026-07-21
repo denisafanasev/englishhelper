@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  /* Gist It — Open Graph preview · 1200×630 */
+  :root { --ink:#111114; --ink2:#55555c; --ink3:#8a8a92; --hair:#e3e3e8; --bg:#f4f4f6; --green:#34c759; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:1200px; height:630px; }
+  body { font-family:-apple-system,"SF Pro Display","Helvetica Neue",Arial,sans-serif;
+         background:var(--bg); color:var(--ink); overflow:hidden; }
+  .canvas { width:1200px; height:630px; padding:56px 64px 48px; display:flex; flex-direction:column; }
+  .top { display:flex; align-items:center; justify-content:space-between; }
+  .brand { display:flex; align-items:center; gap:14px; }
+  .mark { width:52px; height:52px; border-radius:14px; background:var(--ink); color:#fff;
+          display:flex; align-items:center; justify-content:center; font-size:27px; font-weight:800; }
+  .brand .name { font-size:30px; font-weight:800; letter-spacing:-0.6px; }
+  .brand .dot { width:10px; height:10px; border-radius:50%; background:var(--green); }
+  .beta { border:2px solid var(--ink); border-radius:999px; padding:10px 22px;
+          font-size:16px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; }
+  .headline { margin-top:54px; }
+  .headline h1 { font-size:56px; line-height:1.14; font-weight:800; letter-spacing:-1.4px; }
+  .headline h1 .thin { color:var(--ink3); font-weight:700; }
+  .rule { width:560px; height:8px; border-radius:4px; background:var(--green); margin-top:20px; }
+  .sub { margin-top:20px; font-size:24px; color:var(--ink2); font-weight:500; }
+  .sub b { color:var(--ink); font-weight:700; }
+  .bottom { margin-top:auto; display:flex; align-items:center; justify-content:space-between; }
+  .chips { display:flex; gap:12px; }
+  .chip { background:var(--card,#fff); border:1px solid var(--hair); border-radius:999px; padding:13px 22px;
+          font-size:15.5px; font-weight:700; letter-spacing:1.2px; color:var(--ink2); text-transform:uppercase;
+          display:flex; align-items:center; gap:9px; background:#fff; }
+  .chip i { width:8px; height:8px; border-radius:50%; background:var(--green); display:block; }
+  .cta { background:var(--ink); color:#fff; border-radius:999px; padding:17px 30px;
+         font-size:21px; font-weight:750; display:flex; align-items:center; gap:12px; }
+  .cta .arrow { color:var(--green); font-weight:800; }
+</style>
+</head>
+<body>
+<div class="canvas">
+  <div class="top">
+    <div class="brand"><div class="mark">G</div><div class="name">Gist It</div><div class="dot"></div></div>
+    <div class="beta">Beta · iPhone</div>
+  </div>
+  <div class="headline">
+    <h1><span class="thin">A translator tells you what a phrase means.</span><br>
+        Gist It tells you what’s really going on.</h1>
+    <div class="rule"></div>
+    <div class="sub">Signs · phrases · <b>live speech in real time</b> — in their <b>cultural context</b>.</div>
+  </div>
+  <div class="bottom">
+    <div class="chips">
+      <div class="chip"><i></i>Photo</div>
+      <div class="chip"><i></i>Text</div>
+      <div class="chip"><i></i>Live speech</div>
+    </div>
+    <div class="cta">Join the beta — TestFlight <span class="arrow">→</span></div>
+  </div>
+</div>
+</body>
+</html>

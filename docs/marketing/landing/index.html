@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gist It — a companion for actually living in another language</title>
+<meta name="description" content="Gist It explains what things really mean — signs, phrases, and live speech — in their cultural context, with the tone you choose. Join the iPhone beta on TestFlight.">
+
+<!-- ══ Social sharing preview (Open Graph + Twitter Card) ═══════════════════
+     Абсолютные URL указывают на gistit.10xt.tech — если Amplify-домен будет
+     другим (или временный *.amplifyapp.com), замените og:url / og:image /
+     canonical на фактический адрес, иначе соцсети не подтянут превью. -->
+<link rel="canonical" href="https://gistit.10xt.tech/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Gist It">
+<meta property="og:title" content="Gist It — a translator that tells you what’s really going on">
+<meta property="og:description" content="Signs, phrases, and live speech — explained in their cultural context, with the tone you choose: Polite · Casual · Slang. iPhone beta on TestFlight.">
+<meta property="og:url" content="https://gistit.10xt.tech/">
+<meta property="og:image" content="https://gistit.10xt.tech/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Gist It — a translator tells you what a phrase means. Gist It tells you what’s really going on. Photo · Text · Live speech. Join the beta on TestFlight.">
+<meta property="og:locale" content="en_US">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Gist It — a translator that tells you what’s really going on">
+<meta name="twitter:description" content="Signs, phrases, and live speech — explained in their cultural context, with the tone you choose. iPhone beta on TestFlight.">
+<meta name="twitter:image" content="https://gistit.10xt.tech/og-image.png">
+<!-- ═════════════════════════════════════════════════════════════════════ -->
+
+<meta name="theme-color" content="#f4f4f6">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23111114'/%3E%3Ctext x='32' y='44' font-family='-apple-system,Arial,sans-serif' font-size='34' font-weight='800' fill='%23fff' text-anchor='middle'%3EG%3C/text%3E%3Ccircle cx='52' cy='14' r='6' fill='%2334c759'/%3E%3C/svg%3E">
+<style>
+  /* Gist It landing · design-system: strict mono + live-green lines */
+  :root {
+    --ink: #111114; --ink2: #55555c; --ink3: #8a8a92;
+    --hair: #e3e3e8; --bg: #f4f4f6; --card: #ffffff; --green: #34c759;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg); color: var(--ink); -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; text-decoration: none; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+  /* header */
+  header { padding: 26px 0; }
+  header .wrap { display: flex; align-items: center; justify-content: space-between; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .mark { width: 42px; height: 42px; border-radius: 11px; background: var(--ink); color: #fff;
+          display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 800; }
+  .brand .name { font-size: 23px; font-weight: 800; letter-spacing: -0.5px; }
+  .brand .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+  .hbtn { border: 1.5px solid var(--ink); border-radius: 999px; padding: 10px 20px;
+          font-size: 14px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; }
+  .hbtn:hover { background: var(--ink); color: #fff; }
+
+  /* hero */
+  .hero { padding: 44px 0 10px; }
+  .hero h1 { font-size: clamp(30px, 4.6vw, 56px); line-height: 1.12; font-weight: 800; letter-spacing: -0.02em; }
+  .hero h1 .thin { color: var(--ink3); font-weight: 700; display: block; }
+  .rule { width: min(560px, 60%); height: 7px; border-radius: 4px; background: var(--green); margin-top: 16px; }
+  .hero .sub { margin-top: 18px; font-size: clamp(16px, 1.8vw, 21px); color: var(--ink2); font-weight: 500; max-width: 780px; }
+  .hero .sub b { color: var(--ink); font-weight: 700; }
+  .hero .cta-row { display: flex; align-items: center; gap: 18px; margin-top: 28px; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 12px; background: var(--ink); color: #fff;
+    border-radius: 999px; padding: 17px 30px; font-size: 19px; font-weight: 750; letter-spacing: -0.2px;
+  }
+  .btn .arrow { color: var(--green); font-weight: 800; }
+  .btn:hover { background: #000; }
+  .cta-note { font-size: 14px; color: var(--ink2); font-weight: 600; line-height: 1.5; }
+
+  /* cards */
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin: 46px 0 0; }
+  @media (max-width: 940px) { .cards { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--hair); border-radius: 22px;
+          padding: 22px; display: flex; flex-direction: column; gap: 14px;
+          box-shadow: 0 1px 2px rgba(17,17,20,.04); }
+  .cap { display: flex; align-items: center; gap: 10px; }
+  .cap svg { width: 21px; height: 21px; stroke: var(--ink); flex: none; }
+  .cap span { font-size: 12.5px; font-weight: 700; letter-spacing: 2px; color: var(--ink3); text-transform: uppercase; }
+  .cap b { color: var(--ink); }
+  .hairline { height: 1px; background: var(--hair); }
+  .sign { background: var(--ink); border-radius: 14px; padding: 18px 14px; text-align: center; }
+  .sign .inner { border: 2px solid #fff; border-radius: 8px; padding: 12px 8px; color: #fff;
+                 font-size: clamp(15px, 1.6vw, 22px); font-weight: 800; letter-spacing: 3px; white-space: nowrap; }
+  .explain b.title { font-size: 17px; font-weight: 700; display: block; }
+  .explain p { font-size: 14.5px; line-height: 1.5; color: var(--ink2); margin-top: 6px; }
+  .mini { display: flex; gap: 12px; align-items: center; }
+  .mini .chip { background: var(--ink); color: #fff; border-radius: 7px; padding: 7px 11px;
+                font-weight: 800; letter-spacing: 2px; font-size: 12px; white-space: nowrap; }
+  .mini p { font-size: 13.5px; color: var(--ink2); line-height: 1.4; }
+  .tagrow { display: flex; gap: 8px; margin-top: auto; flex-wrap: wrap; }
+  .tag { border: 1px solid var(--hair); background: var(--bg); border-radius: 8px; padding: 5px 10px;
+         font-size: 11.5px; font-weight: 700; letter-spacing: .6px; color: var(--ink2); text-transform: uppercase; }
+  .bubble { background: var(--bg); border: 1px solid var(--hair); border-radius: 14px; padding: 13px 15px;
+            font-size: 16.5px; font-weight: 650; }
+  .kv { display: flex; flex-direction: column; gap: 10px; }
+  .kv .row { display: flex; gap: 10px; align-items: baseline; }
+  .kv .k { font-size: 11px; font-weight: 800; letter-spacing: 1.6px; color: var(--ink3); min-width: 104px; text-transform: uppercase; flex: none; }
+  .kv .v { font-size: 15px; font-weight: 600; }
+  .kv .v.muted { color: var(--ink2); font-weight: 500; }
+  .tones { display: flex; background: var(--bg); border: 1px solid var(--hair); border-radius: 999px; padding: 4px; gap: 4px; margin-top: auto; }
+  .tone { flex: 1; text-align: center; border-radius: 999px; padding: 9px 0; font-size: 13.5px; font-weight: 700; color: var(--ink2); }
+  .tone.on { background: var(--ink); color: #fff; }
+  .pane { background: var(--bg); border: 1px solid var(--hair); border-radius: 14px; padding: 13px 15px;
+          font-size: 14.5px; line-height: 1.45; font-weight: 550; min-height: 74px; }
+  .pane .pend { color: var(--ink3); }
+  .pane .lbl { font-size: 10.5px; font-weight: 800; letter-spacing: 1.6px; color: var(--ink3); display: block; margin-bottom: 5px; }
+  .liverow { display: flex; gap: 10px; align-items: center; }
+  .listenpill { flex: 1; height: 46px; border-radius: 999px; background: var(--green);
+                display: flex; align-items: center; padding: 0 16px; gap: 12px; min-width: 0; }
+  .stopq { width: 13px; height: 13px; border-radius: 3.5px; background: #fff; flex: none; }
+  .bars { flex: 1; display: flex; align-items: center; gap: 3.5px; overflow: hidden; }
+  .bars i { width: 3px; border-radius: 2px; background: rgba(255,255,255,.95); display: block; flex: none; }
+  .lang { display: flex; background: var(--card); border: 1px solid var(--hair); border-radius: 999px; padding: 3.5px; flex: none; }
+  .lang span { font-size: 12px; font-weight: 800; padding: 8px 13px; border-radius: 999px; color: var(--ink2); }
+  .lang span.on { background: var(--green); color: #fff; }
+  .live-note { font-size: 13.5px; color: var(--ink2); font-weight: 550; margin-top: auto; line-height: 1.5; }
+  .live-note b { color: var(--ink); }
+
+  /* little things */
+  .things { margin-top: 54px; }
+  .things h2 { font-size: clamp(22px, 2.6vw, 30px); font-weight: 800; letter-spacing: -0.4px; }
+  .things .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-top: 22px; }
+  @media (max-width: 940px) { .things .grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px) { .things .grid { grid-template-columns: 1fr; } }
+  .thing { background: var(--card); border: 1px solid var(--hair); border-radius: 18px; padding: 18px; }
+  .thing b { font-size: 15px; display: block; letter-spacing: -0.1px; }
+  .thing p { font-size: 13.5px; color: var(--ink2); line-height: 1.5; margin-top: 6px; }
+  .thing .tick { color: var(--green); font-weight: 800; margin-right: 6px; }
+
+  /* beta CTA */
+  .beta { margin-top: 56px; background: var(--ink); border-radius: 26px; color: #fff; padding: 40px; }
+  .beta .inner { display: flex; align-items: center; justify-content: space-between; gap: 28px; flex-wrap: wrap; }
+  .beta h2 { font-size: clamp(24px, 3vw, 34px); font-weight: 800; letter-spacing: -0.5px; }
+  .beta p { color: rgba(255,255,255,.72); font-size: 16px; margin-top: 10px; max-width: 560px; line-height: 1.55; }
+  .beta .steps { margin-top: 16px; color: rgba(255,255,255,.72); font-size: 14.5px; line-height: 1.8; }
+  .beta .steps b { color: #fff; }
+  .btn-inverse { display: inline-flex; align-items: center; gap: 12px; background: #fff; color: var(--ink);
+                 border-radius: 999px; padding: 18px 30px; font-size: 19px; font-weight: 750; white-space: nowrap; }
+  .btn-inverse .arrow { color: var(--green); font-weight: 800; }
+  .beta .url { display: block; margin-top: 12px; color: rgba(255,255,255,.6); font-size: 13.5px; font-weight: 600; text-align: center; }
+
+  /* footer */
+  footer { padding: 36px 0 44px; }
+  footer .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .flags { display: flex; align-items: center; gap: 7px; opacity: .5; }
+  .flag { width: 25px; height: 17px; border-radius: 3px; overflow: hidden; position: relative;
+          border: .5px solid rgba(17,17,20,.25); filter: saturate(.65); flex: none; }
+  .flag i { position: absolute; display: block; }
+  .flags .cap6 { font-size: 11.5px; color: var(--ink2); font-weight: 650; letter-spacing: .8px; margin-left: 6px; }
+  .fineprint { font-size: 12.5px; color: var(--ink3); font-weight: 550; }
+  .fineprint a { color: var(--ink2); font-weight: 650; }
+  .fineprint a:hover { text-decoration: underline; color: var(--ink); }
+  .beta .steps .sep { padding: 0 6px; }
+
+  /* mobile (phones) */
+  @media (max-width: 560px) {
+    .wrap { padding: 0 18px; }
+    header { padding: 18px 0; }
+    .hbtn { padding: 9px 14px; font-size: 12px; letter-spacing: .8px; }
+    .brand .name { font-size: 20px; }
+    .mark { width: 36px; height: 36px; border-radius: 10px; font-size: 19px; }
+
+    .hero { padding: 28px 0 6px; }
+    .rule { width: 72%; height: 6px; }
+    .cta-row { flex-direction: column; align-items: stretch; gap: 12px; margin-top: 22px; }
+    .btn, .btn-inverse { width: 100%; justify-content: center; font-size: 17px; padding: 16px 22px; }
+    .cta-note { text-align: center; }
+
+    .cards { gap: 16px; margin-top: 34px; }
+    .card { padding: 18px; border-radius: 18px; }
+    .sign .inner { font-size: clamp(13px, 4.4vw, 18px); letter-spacing: 2px; }
+    .kv .k { min-width: 92px; }
+
+    .things { margin-top: 40px; }
+
+    .beta { margin-top: 40px; padding: 26px 20px; border-radius: 20px; }
+    .beta .inner { flex-direction: column; align-items: stretch; gap: 22px; }
+    .beta .steps .step { display: block; }
+    .beta .steps .sep { display: none; }
+
+    footer { padding: 28px 0 40px; }
+    footer .wrap { flex-direction: column; align-items: flex-start; gap: 14px; }
+    .flags { flex-wrap: wrap; }
+    .flags .cap6 { width: 100%; margin: 4px 0 0; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="brand"><div class="mark">G</div><div class="name">Gist It</div><div class="dot"></div></div>
+    <a class="hbtn" href="https://testflight.apple.com/join/yaRBFkRk">Beta · TestFlight</a>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <h1><span class="thin">A translator tells you what a phrase means.</span>
+      Gist It tells you what’s really going on.</h1>
+    <div class="rule"></div>
+    <p class="sub">Meaning in its <b>cultural context</b> — for signs you photograph, phrases you type,
+      and <b>live speech translated in real time</b>. With the tone you choose: <b>Polite · Casual · Slang</b>.</p>
+    <div class="cta-row">
+      <a class="btn" href="https://testflight.apple.com/join/yaRBFkRk">Join the beta — TestFlight <span class="arrow">→</span></a>
+      <div class="cta-note">iPhone · iOS 26 · free while in beta<br>Early version — your feedback shapes it.</div>
+    </div>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="cards">
+
+    <div class="card">
+      <div class="cap">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.2C3 7 4 6 5.2 6h2l1.6-2.2h6.4L16.8 6h2C20 6 21 7 21 8.2v9.6c0 1.2-1 2.2-2.2 2.2H5.2C4 20 3 19 3 17.8z"/><circle cx="12" cy="13" r="3.6"/></svg>
+        <span><b>Photo</b> · point at a sign</span>
+      </div>
+      <div class="sign"><div class="inner">FERMETURE&nbsp;ANNUELLE</div></div>
+      <div class="explain">
+        <b class="title">The sacred French August</b>
+        <p>Not “closed for good” — just the annual holiday shutdown. Half of Paris hangs this sign in August and reopens in September. Gist It explains the sign <i>and</i> the custom behind it.</p>
+      </div>
+      <div class="hairline"></div>
+      <div class="mini"><span class="chip">SORTIE</span><p>simply “exit” — cultural small print explains itself</p></div>
+      <div class="tagrow"><span class="tag">menus · signs · notices</span><span class="tag">context</span></div>
+    </div>
+
+    <div class="card">
+      <div class="cap">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.4C4 5 5 4 6.4 4h11.2C19 4 20 5 20 6.4v8.2c0 1.4-1 2.4-2.4 2.4H9l-4 3.4V6.4z"/><path d="M8 9h8M8 12.4h5.5"/></svg>
+        <span><b>Text</b> · what did they mean?</span>
+      </div>
+      <div class="bubble">“C’était pas terrible, hein?”</div>
+      <div class="kv">
+        <div class="row"><span class="k">Meaning</span><span class="v">“It wasn’t great.”</span></div>
+        <div class="row"><span class="k">Watch out</span><span class="v muted">false friend — <i>pas terrible</i> ≠ “not terrible”</span></div>
+        <div class="row"><span class="k">Tone</span><span class="v muted">casual French understatement — think “meh”</span></div>
+      </div>
+      <div class="hairline"></div>
+      <div class="kv">
+        <div class="row"><span class="k">Say it back</span><span class="v">“Ouais, bof — on a connu mieux.”</span></div>
+      </div>
+      <div class="tones"><span class="tone">Polite</span><span class="tone on">Casual</span><span class="tone">Slang</span></div>
+    </div>
+
+    <div class="card">
+      <div class="cap">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/></svg>
+        <span><b>Live speech</b> · real time</span>
+      </div>
+      <div class="pane"><span class="lbl">Original</span>…la correspondance pour la ligne quatre <span class="pend">se trouve au fond du qu…</span></div>
+      <div class="liverow">
+        <div class="listenpill">
+          <div class="stopq"></div>
+          <div class="bars">
+            <i style="height:6px"></i><i style="height:11px"></i><i style="height:18px"></i><i style="height:25px"></i><i style="height:15px"></i><i style="height:22px"></i><i style="height:9px"></i><i style="height:17px"></i><i style="height:26px"></i><i style="height:12px"></i><i style="height:20px"></i><i style="height:7px"></i><i style="height:14px"></i><i style="height:23px"></i><i style="height:10px"></i><i style="height:18px"></i><i style="height:6px"></i>
+          </div>
+        </div>
+        <div class="lang"><span class="on">FR</span><span>EN</span></div>
+      </div>
+      <div class="pane"><span class="lbl">Translation</span>…the transfer to line four <span class="pend">is at the far end of the platf…</span></div>
+      <div class="live-note">A lecture, a tour, the café counter — your phone <b>listens and translates the room</b> in real time. Pause it, flip the direction mid-conversation, and every session is saved with its audio.</div>
+    </div>
+
+  </div>
+</section>
+
+<section class="things">
+  <div class="wrap">
+    <h2>Little things that make it feel like an assistant</h2>
+    <div class="grid">
+      <div class="thing"><b><span class="tick">—</span>Hear it before you say it</b><p>Every phrase plays back in the language you’re learning, one tap.</p></div>
+      <div class="thing"><b><span class="tick">—</span>Sessions you can replay</b><p>Live translations land in History with the original audio recording.</p></div>
+      <div class="thing"><b><span class="tick">—</span>Save the keepers</b><p>Bookmark any phrase into your study list and export it to your SRS app.</p></div>
+      <div class="thing"><b><span class="tick">—</span>One tap from the Lock Screen</b><p>Widgets open the camera, the mic, or a live session already listening.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="beta">
+    <div class="inner">
+      <div>
+        <h2>Join the beta</h2>
+        <p>Early version — the core works, the edges are being polished. Your feedback and ideas directly shape what gets built next.</p>
+        <div class="steps">
+          <span class="step"><b>1.</b> Install TestFlight from the App Store</span><span class="sep">·</span><span class="step"><b>2.</b> Open the invite link on your iPhone</span><span class="sep">·</span><span class="step"><b>3.</b> Install Gist It</span>
+        </div>
+      </div>
+      <div>
+        <a class="btn-inverse" href="https://testflight.apple.com/join/yaRBFkRk">Get it on TestFlight <span class="arrow">→</span></a>
+        <span class="url">testflight.apple.com/join/yaRBFkRk</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="flags">
+      <div class="flag" style="background:#1f3d7a">
+        <i style="left:0;top:6.5px;width:25px;height:4px;background:#fff"></i>
+        <i style="left:10.5px;top:0;width:4px;height:17px;background:#fff"></i>
+        <i style="left:0;top:7.5px;width:25px;height:2px;background:#c33"></i>
+        <i style="left:11.5px;top:0;width:2px;height:17px;background:#c33"></i>
+      </div>
+      <div class="flag"><i style="left:0;top:0;width:25px;height:6px;background:#fff"></i><i style="left:0;top:6px;width:25px;height:5.5px;background:#27408b"></i><i style="left:0;top:11.5px;width:25px;height:5.5px;background:#c33"></i></div>
+      <div class="flag"><i style="left:0;top:0;width:8.3px;height:17px;background:#27408b"></i><i style="left:8.3px;top:0;width:8.3px;height:17px;background:#fff"></i><i style="left:16.6px;top:0;width:8.4px;height:17px;background:#c33"></i></div>
+      <div class="flag"><i style="left:0;top:0;width:25px;height:4.5px;background:#c33"></i><i style="left:0;top:4.5px;width:25px;height:8px;background:#e6c34c"></i><i style="left:0;top:12.5px;width:25px;height:4.5px;background:#c33"></i></div>
+      <div class="flag"><i style="left:0;top:0;width:25px;height:5.5px;background:#222"></i><i style="left:0;top:5.5px;width:25px;height:5.5px;background:#c33"></i><i style="left:0;top:11px;width:25px;height:6px;background:#e6c34c"></i></div>
+      <div class="flag"><i style="left:0;top:0;width:8.3px;height:17px;background:#3d8b57"></i><i style="left:8.3px;top:0;width:8.3px;height:17px;background:#fff"></i><i style="left:16.6px;top:0;width:8.4px;height:17px;background:#c33"></i></div>
+      <span class="cap6">EN · RU · FR · ES · DE · IT</span>
+    </div>
+    <div class="fineprint">Gist It · beta · © 2026 <a href="https://10xt.tech">10XT LIMITED</a></div>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  /* Gist It — beta social ad · 1536×1024 · design-system: strict mono + live-green lines */
+  :root {
+    --ink: #111114;
+    --ink2: #55555c;
+    --ink3: #8a8a92;
+    --hair: #e3e3e8;
+    --bg: #f4f4f6;
+    --card: #ffffff;
+    --green: #34c759;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1536px; height: 1024px; }
+  body {
+    font-family: -apple-system, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg); color: var(--ink);
+    width: 1536px; height: 1024px; overflow: hidden; position: relative;
+  }
+  .canvas { position: absolute; inset: 0; padding: 44px 56px 40px; display: flex; flex-direction: column; }
+
+  /* ── header ─────────────────────────────────────────── */
+  .top { display: flex; align-items: center; justify-content: space-between; }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .mark {
+    width: 46px; height: 46px; border-radius: 12px; background: var(--ink);
+    color: #fff; display: flex; align-items: center; justify-content: center;
+    font-size: 24px; font-weight: 800; letter-spacing: -0.5px;
+  }
+  .brand .name { font-size: 27px; font-weight: 800; letter-spacing: -0.6px; }
+  .brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); margin-left: 2px; }
+  .beta-pill {
+    border: 1.5px solid var(--ink); border-radius: 999px; padding: 9px 20px;
+    font-size: 15px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
+  }
+
+  /* ── headline ───────────────────────────────────────── */
+  .headline { margin-top: 34px; }
+  .headline h1 { font-size: 51px; line-height: 1.13; font-weight: 800; letter-spacing: -1.3px; }
+  .headline h1 .thin { color: var(--ink3); font-weight: 700; }
+  .rule { width: 636px; height: 7px; border-radius: 4px; background: var(--green); margin-top: 10px; }
+  .sub { margin-top: 14px; font-size: 20.5px; color: var(--ink2); font-weight: 500; letter-spacing: -0.2px; }
+  .sub b { color: var(--ink); font-weight: 700; }
+
+  /* ── modality cards ─────────────────────────────────── */
+  .cards { display: flex; gap: 22px; margin-top: 32px; }
+  .card {
+    flex: 1; height: 508px; background: var(--card); border: 1px solid var(--hair); border-radius: 22px;
+    padding: 20px 22px; display: flex; flex-direction: column; gap: 13px;
+    box-shadow: 0 1px 2px rgba(17,17,20,.04);
+  }
+  .card .cap { display: flex; align-items: center; gap: 10px; }
+  .card .cap svg { width: 21px; height: 21px; stroke: var(--ink); }
+  .card .cap span { font-size: 12.5px; font-weight: 700; letter-spacing: 2px; color: var(--ink3); text-transform: uppercase; }
+  .card .cap b { color: var(--ink); }
+  .hairline { height: 1px; background: var(--hair); }
+
+  /* card 1 — sign */
+  .sign {
+    background: var(--ink); border-radius: 14px; padding: 20px 16px 22px; text-align: center;
+  }
+  .sign .inner {
+    border: 2px solid #fff; border-radius: 8px; padding: 13px 8px;
+    color: #fff; font-size: 25px; font-weight: 800; letter-spacing: 4px;
+  }
+  .explain b.title { font-size: 16.5px; font-weight: 700; display: block; letter-spacing: -0.2px; }
+  .explain p { font-size: 14.5px; line-height: 1.45; color: var(--ink2); margin-top: 6px; }
+  .mini { display: flex; gap: 12px; align-items: center; }
+  .mini .chip { background: var(--ink); color: #fff; border-radius: 7px; padding: 7px 11px; font-weight: 800; letter-spacing: 2px; font-size: 12px; white-space: nowrap; }
+  .mini p { font-size: 13.5px; color: var(--ink2); line-height: 1.35; }
+  .tagrow { display: flex; gap: 8px; margin-top: auto; }
+  .tag {
+    border: 1px solid var(--hair); background: var(--bg); border-radius: 8px; padding: 5px 10px;
+    font-size: 11.5px; font-weight: 700; letter-spacing: .6px; color: var(--ink2); text-transform: uppercase;
+  }
+
+  /* card 2 — text */
+  .bubble {
+    background: var(--bg); border: 1px solid var(--hair); border-radius: 14px; padding: 13px 15px;
+    font-size: 16.5px; font-weight: 650; letter-spacing: -0.2px;
+  }
+  .kv { display: flex; flex-direction: column; gap: 9px; }
+  .kv .row { display: flex; gap: 10px; align-items: baseline; }
+  .kv .k { font-size: 11px; font-weight: 800; letter-spacing: 1.6px; color: var(--ink3); min-width: 108px; text-transform: uppercase; }
+  .kv .v { font-size: 15px; font-weight: 600; }
+  .kv .v.muted { color: var(--ink2); font-weight: 500; }
+  .tones { display: flex; background: var(--bg); border: 1px solid var(--hair); border-radius: 999px; padding: 4px; gap: 4px; margin-top: auto; }
+  .tone { flex: 1; text-align: center; border-radius: 999px; padding: 8px 0; font-size: 13.5px; font-weight: 700; color: var(--ink2); }
+  .tone.on { background: var(--ink); color: #fff; }
+
+  /* card 3 — live */
+  .pane {
+    background: var(--bg); border: 1px solid var(--hair); border-radius: 14px; padding: 13px 15px;
+    font-size: 14.5px; line-height: 1.45; font-weight: 550; min-height: 78px;
+  }
+  .pane .pend { color: var(--ink3); }
+  .pane .lbl { font-size: 10.5px; font-weight: 800; letter-spacing: 1.6px; color: var(--ink3); display: block; margin-bottom: 5px; }
+  .liverow { display: flex; gap: 10px; align-items: center; }
+  .listenpill {
+    flex: 1; height: 46px; border-radius: 999px; background: var(--green);
+    display: flex; align-items: center; padding: 0 16px; gap: 12px;
+  }
+  .stopq { width: 13px; height: 13px; border-radius: 3.5px; background: #fff; }
+  .bars { flex: 1; display: flex; align-items: center; gap: 3.5px; }
+  .bars i { width: 3px; border-radius: 2px; background: rgba(255,255,255,.95); display: block; }
+  .lang { display: flex; background: var(--card); border: 1px solid var(--hair); border-radius: 999px; padding: 3.5px; }
+  .lang span { font-size: 12px; font-weight: 800; padding: 8px 13px; border-radius: 999px; color: var(--ink2); }
+  .lang span.on { background: var(--green); color: #fff; }
+  .live-note { font-size: 13.5px; color: var(--ink2); font-weight: 550; margin-top: auto; }
+  .live-note b { color: var(--ink); }
+
+  /* ── footer ─────────────────────────────────────────── */
+  .footer { display: flex; align-items: flex-end; justify-content: space-between; margin-top: auto; }
+  .flags { display: flex; align-items: center; gap: 7px; opacity: .5; }
+  .flag { width: 25px; height: 17px; border-radius: 3px; overflow: hidden; position: relative; border: .5px solid rgba(17,17,20,.25); filter: saturate(.65); }
+  .flag i { position: absolute; display: block; }
+  .flags .cap6 { font-size: 11.5px; color: var(--ink2); font-weight: 650; letter-spacing: .8px; margin-left: 6px; }
+  .feedback { font-size: 15px; color: var(--ink2); font-weight: 550; text-align: center; padding-bottom: 10px; }
+  .cta { text-align: right; }
+  .cta .btn {
+    display: inline-flex; align-items: center; gap: 12px; background: var(--ink); color: #fff;
+    border-radius: 999px; padding: 16px 28px; font-size: 20px; font-weight: 750; letter-spacing: -0.2px;
+  }
+  .cta .btn .arrow { color: var(--green); font-weight: 800; }
+  .cta .url { margin-top: 9px; font-size: 14.5px; color: var(--ink2); font-weight: 600; letter-spacing: .1px; }
+</style>
+</head>
+<body>
+<div class="canvas">
+
+  <div class="top">
+    <div class="brand">
+      <div class="mark">G</div>
+      <div class="name">Gist It</div>
+      <div class="dot"></div>
+    </div>
+    <div class="beta-pill">Beta · iPhone · TestFlight</div>
+  </div>
+
+  <div class="headline">
+    <h1><span class="thin">A translator tells you what a phrase means.</span><br>
+      Gist It tells you what’s really going on.</h1>
+    <div class="rule"></div>
+    <div class="sub">Meaning in its <b>cultural context</b> — with the tone you choose: <b>Polite · Casual · Slang</b>.</div>
+  </div>
+
+  <div class="cards">
+
+    <!-- PHOTO -->
+    <div class="card">
+      <div class="cap">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.2C3 7 4 6 5.2 6h2l1.6-2.2h6.4L16.8 6h2C20 6 21 7 21 8.2v9.6c0 1.2-1 2.2-2.2 2.2H5.2C4 20 3 19 3 17.8z"/><circle cx="12" cy="13" r="3.6"/></svg>
+        <span><b>Photo</b> · point at a sign</span>
+      </div>
+      <div class="sign"><div class="inner">MIND&nbsp;THE&nbsp;GAP</div></div>
+      <div class="explain">
+        <b class="title">Классика лондонского метро</b>
+        <p>Не просто «осторожно, зазор»: фраза-символ Лондона — её печатают на кружках и футболках. Приложение объяснит и знак, и его культурный вес.</p>
+      </div>
+      <div class="hairline"></div>
+      <div class="mini"><span class="chip">WAY&nbsp;OUT</span><p>просто «выход» — а не план побега; культурные мелочи объясняются сами</p></div>
+      <div class="tagrow"><span class="tag">меню · вывески · объявления</span><span class="tag">контекст</span></div>
+    </div>
+
+    <!-- TEXT -->
+    <div class="card">
+      <div class="cap">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.4C4 5 5 4 6.4 4h11.2C19 4 20 5 20 6.4v8.2c0 1.4-1 2.4-2.4 2.4H9l-4 3.4V6.4z"/><path d="M8 9h8M8 12.4h5.5"/></svg>
+        <span><b>Text</b> · what did they mean?</span>
+      </div>
+      <div class="bubble">“Did you hand your boy a P45?”</div>
+      <div class="kv">
+        <div class="row"><span class="k">Meaning</span><span class="v">«Ты его уволил?»</span></div>
+        <div class="row"><span class="k">Tone</span><span class="v muted">неформально, с подколом</span></div>
+        <div class="row"><span class="k">Analogy</span><span class="v muted">«дать расчёт» — P45 выдают при увольнении</span></div>
+      </div>
+      <div class="hairline"></div>
+      <div class="kv">
+        <div class="row"><span class="k">Say it back</span><span class="v">“Yeah — had to let him go.”</span></div>
+      </div>
+      <div class="tones"><span class="tone">Polite</span><span class="tone on">Casual</span><span class="tone">Slang</span></div>
+    </div>
+
+    <!-- LIVE -->
+    <div class="card">
+      <div class="cap">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/></svg>
+        <span><b>Live speech</b> · real time</span>
+      </div>
+      <div class="pane"><span class="lbl">Original</span>…please mind the gap <span class="pend">between the train and the platf…</span></div>
+      <div class="liverow">
+        <div class="listenpill">
+          <div class="stopq"></div>
+          <div class="bars">
+            <i style="height:6px"></i><i style="height:11px"></i><i style="height:18px"></i><i style="height:25px"></i><i style="height:15px"></i><i style="height:22px"></i><i style="height:9px"></i><i style="height:17px"></i><i style="height:26px"></i><i style="height:12px"></i><i style="height:20px"></i><i style="height:7px"></i><i style="height:14px"></i><i style="height:23px"></i><i style="height:10px"></i><i style="height:18px"></i><i style="height:6px"></i>
+          </div>
+        </div>
+        <div class="lang"><span class="on">EN</span><span>RU</span></div>
+      </div>
+      <div class="pane"><span class="lbl">Translation</span>…пожалуйста, осторожно: зазор <span class="pend">между поездом и плат…</span></div>
+      <div class="live-note">Лекция, экскурсия, разговор у стойки — телефон <b>слушает и переводит поток речи</b>, пишет и сохраняет сессию в историю.</div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <div class="flags">
+      <!-- EN -->
+      <div class="flag" style="background:#1f3d7a">
+        <i style="left:0;top:6.5px;width:25px;height:4px;background:#fff"></i>
+        <i style="left:10.5px;top:0;width:4px;height:17px;background:#fff"></i>
+        <i style="left:0;top:7.5px;width:25px;height:2px;background:#c33"></i>
+        <i style="left:11.5px;top:0;width:2px;height:17px;background:#c33"></i>
+      </div>
+      <!-- RU -->
+      <div class="flag"><i style="left:0;top:0;width:25px;height:6px;background:#fff"></i><i style="left:0;top:6px;width:25px;height:5.5px;background:#27408b"></i><i style="left:0;top:11.5px;width:25px;height:5.5px;background:#c33"></i></div>
+      <!-- FR -->
+      <div class="flag"><i style="left:0;top:0;width:8.3px;height:17px;background:#27408b"></i><i style="left:8.3px;top:0;width:8.3px;height:17px;background:#fff"></i><i style="left:16.6px;top:0;width:8.4px;height:17px;background:#c33"></i></div>
+      <!-- ES -->
+      <div class="flag"><i style="left:0;top:0;width:25px;height:4.5px;background:#c33"></i><i style="left:0;top:4.5px;width:25px;height:8px;background:#e6c34c"></i><i style="left:0;top:12.5px;width:25px;height:4.5px;background:#c33"></i></div>
+      <!-- DE -->
+      <div class="flag"><i style="left:0;top:0;width:25px;height:5.5px;background:#222"></i><i style="left:0;top:5.5px;width:25px;height:5.5px;background:#c33"></i><i style="left:0;top:11px;width:25px;height:6px;background:#e6c34c"></i></div>
+      <!-- IT -->
+      <div class="flag"><i style="left:0;top:0;width:8.3px;height:17px;background:#3d8b57"></i><i style="left:8.3px;top:0;width:8.3px;height:17px;background:#fff"></i><i style="left:16.6px;top:0;width:8.4px;height:17px;background:#c33"></i></div>
+      <span class="cap6">6 ЯЗЫКОВ</span>
+    </div>
+    <div class="feedback">Ранняя версия — ваши идеи и фидбэк очень нужны</div>
+    <div class="cta">
+      <div class="btn">Join the beta — TestFlight <span class="arrow">→</span></div>
+      <div class="url">testflight.apple.com/join/yaRBFkRk</div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
