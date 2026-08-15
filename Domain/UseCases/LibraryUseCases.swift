@@ -120,6 +120,22 @@ public struct TranslationCacheAdminInteractor: TranslationCacheAdminUseCase {
     public func clear() async { await cache?.clear() }
 }
 
+// MARK: - Storage usage (Settings: disk space of cache / history / session audio)
+
+public protocol StorageUsageUseCase: Sendable {
+    func callAsFunction() async -> StorageUsage
+}
+
+public struct StorageUsageInteractor: StorageUsageUseCase {
+    /// Optional so the app still builds without a reader (mock boot / tests) — then usage is zero.
+    private let reader: (any StorageUsageReading)?
+    public init(reader: (any StorageUsageReading)?) { self.reader = reader }
+
+    public func callAsFunction() async -> StorageUsage {
+        await reader?.usage() ?? .zero
+    }
+}
+
 // MARK: - Export deck
 
 public protocol ExportDeckUseCase: Sendable {

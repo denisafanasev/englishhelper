@@ -39,6 +39,9 @@ public final class PhotoTranslateViewModel {
     /// saved preference.
     public private(set) var mode: Mode = Mode.current
     public private(set) var imageData: Data?
+    /// Per-mode results for the CURRENT photo — both can be non-nil at once (each mode's run is
+    /// cached so Explain ↔ Translate switches restore the earlier result instead of re-running
+    /// the request). The view picks which one to render by `mode`, not by which exists.
     public private(set) var blocks: [TranslatedBlock] = []          // Translate mode result
     public private(set) var explanation: SceneExplanation?          // Explain mode result
     public private(set) var errorMessage: String?
@@ -52,8 +55,9 @@ public final class PhotoTranslateViewModel {
 
     private var savedBlockIDs: Set<UUID> = []          // optimistic "saved" flag (instant UI)
     private var savedExpressionIDs: [UUID: UUID] = [:]  // block.id → stored Expression.id
-    /// Bumped on every new photo result so an in-flight save can tell "user un-saved" from "a new
-    /// photo replaced the result" and not silently delete a just-bookmarked expression.
+    /// Bumped whenever `blocks` are REPLACED (a translate run completing) so an in-flight save can
+    /// tell "user un-saved" from "a new result replaced the blocks" and not silently delete a
+    /// just-bookmarked expression. An explain run doesn't bump it — the cached blocks survive it.
     private var resultsGeneration = 0
     private var playingBlockID: UUID?
     /// True when the last failure could plausibly succeed on a re-run of the SAME photo (network /
@@ -101,16 +105,33 @@ public final class PhotoTranslateViewModel {
     /// SESSION-ONLY: a routed action must never overwrite the user's saved selector choice.
     public func routeMode(_ newMode: Mode) { applyMode(newMode, persist: false) }
 
-    /// If a photo is already loaded, re-run it in the new mode; otherwise just remember the choice
-    /// for the next photo. Mirrors Get-it's mode switch.
+    /// If a photo is already loaded, show the new mode's CACHED result when this photo already ran
+    /// in it, else re-run; otherwise just remember the choice for the next photo.
     private func applyMode(_ newMode: Mode, persist: Bool) {
         guard newMode != mode else { return }
         mode = newMode
         if persist { Prefs.store.set(newMode.rawValue, forKey: Mode.storageKey) }
-        // Re-run the SAME photo in the new mode — including after a FAILURE (e.g. the model was
-        // unavailable in the previous mode), so switching mode retries instead of staying stuck.
-        if let data = imageData, phase == .result || phase == .processing || phase == .failed {
+        guard imageData != nil, phase == .result || phase == .processing || phase == .failed else { return }
+        if hasCachedResult(for: newMode) {
+            // The SAME photo already ran in this mode → restore that result, NO repeat request:
+            // hopping Explain ↔ Translate over an unchanged photo must not re-bill the model.
+            requestTask?.cancel()   // an in-flight run of the OTHER mode must not overwrite phase/error
+            errorMessage = nil
+            isOffline = false
+            lastErrorRetryable = false
+            phase = .result
+        } else if let data = imageData {
+            // First visit to this mode for this photo — and after a FAILURE (e.g. the model was
+            // unavailable in the previous mode), so switching mode retries instead of staying stuck.
             process(data)
+        }
+    }
+
+    /// Whether the CURRENT photo already has this mode's completed result cached.
+    private func hasCachedResult(for mode: Mode) -> Bool {
+        switch mode {
+        case .translate: !blocks.isEmpty
+        case .explain: explanation != nil
         }
     }
 
@@ -139,10 +160,21 @@ public final class PhotoTranslateViewModel {
 
     public func didCapture(_ data: Data) {
         presentCamera = false
-        process(data)
+        startNewPhoto(data)
     }
 
     public func didPickFromLibrary(_ data: Data) {
+        startNewPhoto(data)
+    }
+
+    /// A NEW photo invalidates BOTH modes' cached results (they belong to the previous image).
+    /// `process` itself only clears the mode it re-runs, so retries and mode switches keep the
+    /// other mode's cache — this wrapper is the only place both go at once.
+    private func startNewPhoto(_ data: Data) {
+        blocks = []
+        explanation = nil
+        savedBlockIDs = []
+        savedExpressionIDs = [:]
         process(data)
     }
 
@@ -183,10 +215,16 @@ public final class PhotoTranslateViewModel {
     private func process(_ data: Data) {
         requestTask?.cancel()
         imageData = data
-        blocks = []
-        explanation = nil
-        savedBlockIDs = []
-        savedExpressionIDs = [:]
+        // Only the mode being (re)run is invalidated — the OTHER mode's result for this photo
+        // stays cached so a mode switch can restore it without a repeat request.
+        switch mode {
+        case .translate:
+            blocks = []
+            savedBlockIDs = []       // the saved flags map onto `blocks` — they go together
+            savedExpressionIDs = [:]
+        case .explain:
+            explanation = nil
+        }
         errorMessage = nil
         isOffline = false
         lastErrorRetryable = false
@@ -203,12 +241,12 @@ public final class PhotoTranslateViewModel {
                     self.blocks = try await withBackgroundCompletion(self.longTask, .photoTranslate) {
                         try await self.photoTranslate(image, studiedLanguage: studied, nativeLanguage: native)
                     }
+                    self.resultsGeneration += 1   // blocks replaced → stale in-flight save mappings
                 case .explain:
                     self.explanation = try await withBackgroundCompletion(self.longTask, .photoExplain) {
                         try await self.photoExplain(image, studiedLanguage: studied, nativeLanguage: native)
                     }
                 }
-                self.resultsGeneration += 1
                 self.phase = .result
             } catch is CancellationError {
                 // superseded

@@ -437,7 +437,7 @@ import Presentation
         vm.refreshClipboardState()                        // what .onAppear does
         #expect(vm.showsPasteAction)
         #expect(vm.hasActionAvailable)
-        vm.pasteIntoInput()
+        vm.pasteIntoInput("break a leg")                  // what the system paste control delivers
         #expect(vm.source == "break a leg")
         #expect(!vm.showsPasteAction)                     // now it's Translate/Explain again
         #expect(vm.hasActionAvailable)
@@ -452,7 +452,7 @@ import Presentation
         let vm = makeVM(pasteboard: MockPasteboard(text: "   \n"))
         vm.refreshClipboardState()
         #expect(vm.showsPasteAction)                      // metadata says text — button offers Paste
-        vm.pasteIntoInput()
+        vm.pasteIntoInput("   \n")
         #expect(vm.source.isEmpty)                        // nothing injected
         #expect(!vm.showsPasteAction)                     // affordance disarmed
         #expect(!vm.hasActionAvailable)                   // button disables
@@ -508,18 +508,9 @@ import Presentation
         #expect(!vm.hasActionAvailable)
     }
 
-    /// A stale Paste affordance (clipboard emptied since the last check) must not inject anything —
-    /// the tap just re-syncs the state and the button disables.
-    @Test func staleClipboardPasteIsNoOpAndResyncs() {
-        let pasteboard = MockPasteboard(text: "was here")
-        let vm = makeVM(pasteboard: pasteboard)
-        vm.refreshClipboardState()
-        #expect(vm.showsPasteAction)
-        pasteboard.text = nil                             // clipboard emptied since the last check
-        vm.pasteIntoInput()
-        #expect(vm.source.isEmpty)                        // nothing injected
-        #expect(!vm.clipboardHasText)                     // state re-synced → button disables
-    }
+    // (The stale-clipboard no-op moved into the system paste control itself: UIPasteControl
+    // auto-disables when the pasteboard holds nothing acceptable and delivers no providers,
+    // so the view model never sees a stale tap.)
 
     /// Press-originated priming must NOT auto-start (no finger to release); the ROUTED priming
     /// path must (the widget promised a hands-free mic).
@@ -540,14 +531,13 @@ import Presentation
     }
 }
 
-/// Mutable canned clipboard — `hasText`/`readText` mirror UIPasteboard semantics without touching
+/// Mutable canned clipboard — `hasText` mirrors UIPasteboard's metadata check without touching
 /// the simulator's real (nondeterministic) pasteboard.
 @MainActor
 private final class MockPasteboard: PasteboardReading {
     var text: String?
     init(text: String?) { self.text = text }
     var hasText: Bool { text?.isEmpty == false }
-    func readText() -> String? { text }
 }
 
 /// A capture stream that behaves like the LIVE mic under push-to-talk: yields a partial (if any)

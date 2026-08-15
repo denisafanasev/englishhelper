@@ -2,6 +2,30 @@
 
 Release notes for **Gist It** (formerly EnglishHelper), written for the people who use it.
 
+## 1.4.2 — 2026-08-15
+
+**Paste without the pop-up.** The **Paste** button (on Say it and Get it, whenever the field is
+empty and your clipboard holds text) is now the system's own paste control — your tap on it *is*
+the permission, so iOS no longer asks **"Allow Paste?"** every time you bring text over from
+another app. Same one-tap flow, no dialog, ever. The app still never reads your clipboard on its
+own: it only checks *whether* there's text until the moment you tap.
+
+**See it remembers what it already did.** Switch a processed photo between **Explain** and
+**Translate** freely: each mode's result is now kept for the current photo, so switching back
+shows the earlier result **instantly** instead of recognizing the whole photo again (and again).
+Bookmarks on translated blocks survive the round-trip. A new photo starts fresh, and switching
+modes after an error still retries — that behavior hasn't changed.
+
+**See how much space the app uses.** Settings has a new **Disk usage** card: how much the
+translation cache, your history, and the session recordings take on disk, with a total. Text
+sizes are estimated from the stored content; audio is the actual size of the recording files.
+
+**Buttons read properly in all six languages.** Button labels no longer break words across lines
+(«Удержива-йте» is gone — the hint now reads «Зажмите и говорите») and two-line labels are
+centered. The German, Spanish, French, and Italian labels that were too long for the half-width
+buttons got shorter wording, and the hold-to-talk and "Listening…" hints are now translated in
+French, Spanish, German, and Italian instead of falling back to English.
+
 ## 1.4.1 — 2026-07-18
 
 **Online: your live interpreter.** Get it has a third mode — **Online**. Tap **Listen** and the

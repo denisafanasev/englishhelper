@@ -124,17 +124,30 @@ public struct VoiceView: View {
                                 "Tap to start dictating in your native language; a tone marks the start"))
                 }
 
-                // One button, two personas: with an EMPTY field and text on the clipboard it is
-                // PASTE (fills the field, then flips back to the mode action for a deliberate
-                // submit); otherwise it is the mode's action. Every tap gives an impact haptic.
-                // Same contract as the Get-it screen.
-                EHButton(actionTitle, icon: actionIcon, kind: .primary, fillWidth: true,
-                         accessibilityID: "sayit.action") {
-                    fieldFocused = false
-                    actionTapCount += 1
-                    if model.showsPasteAction { model.pasteIntoInput() } else { model.pick() }
+                // One slot, two personas: with an EMPTY field and text on the clipboard it is the
+                // SYSTEM paste control — its tap IS the pasteboard consent, so iOS never shows the
+                // "Allow Paste?" dialog (a programmatic read prompts on every new clipboard).
+                // Otherwise it is the mode's action. Every tap gives an impact haptic. Same
+                // contract as the Get-it screen.
+                Group {
+                    if model.showsPasteAction {
+                        EHPasteButton { text in
+                            fieldFocused = false
+                            actionTapCount += 1
+                            model.pasteIntoInput(text)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                        .accessibilityIdentifier("sayit.action")
+                    } else {
+                        EHButton(actionTitle, icon: actionIcon, kind: .primary, fillWidth: true,
+                                 accessibilityID: "sayit.action") {
+                            fieldFocused = false
+                            actionTapCount += 1
+                            model.pick()
+                        }
+                        .disabled(!actionEnabled)   // EHButton dims itself when disabled
+                    }
                 }
-                .disabled(!actionEnabled)   // EHButton dims itself when disabled
                 .sensoryFeedback(.impact(weight: .medium), trigger: actionTapCount)
             }
 
@@ -160,7 +173,9 @@ public struct VoiceView: View {
         switch model.micStatus {
         case .listening: Loc.t("Слушаю…", "Listening…")
         case .processing: Loc.t("Минуту…", "One moment…")
-        case .idle: Loc.t("Удерживайте и говорите", "Hold and speak")
+        // "Зажмите", not "Удерживайте": the longest word must fit the HALF-width pill's line on the
+        // narrowest iPhone (~93 pt of text width), or the caption char-wraps mid-word ("Удерживайт-е").
+        case .idle: Loc.t("Зажмите и говорите", "Hold and speak")
         }
     }
 
@@ -178,33 +193,34 @@ public struct VoiceView: View {
     }
 
     /// With results already shown the button regenerates (`pick()` → `regenerate()`), so the label and
-    /// icon must read "another set", not the first-run "find phrasings". An empty field with text on
-    /// the clipboard turns it into PASTE (see the Get-it screen for the same persona switch).
+    /// icon must read "another set", not the first-run "find phrasings". (The PASTE persona is the
+    /// system control — its label comes from iOS, not from here.)
     private var actionTitle: String {
-        if model.showsPasteAction { return Loc.t("Вставить", "Paste") }
         if model.phase == .results {
             return Loc.t("Другие варианты", "Other options",
                          "Autres options", "Otras opciones", "Andere Optionen", "Altre opzioni")
         }
+        // This button is HALF-width (it shares its row with the mic pill), so every language's
+        // longest word must fit one line there (~93 pt on the narrowest iPhone) — long words like
+        // "Formulierungen" char-wrap mid-word. Hence "options/tournures", not "formulations".
         return model.mode == .howToSay
             ? Loc.t("Подобрать варианты", "Find phrasings",
-                    "Trouver des formulations", "Buscar formulaciones",
-                    "Formulierungen finden", "Trova formulazioni")
+                    "Proposer des tournures", "Buscar opciones",
+                    "Optionen finden", "Trova opzioni")
             : Loc.t("Подобрать фразы", "Suggest phrases",
                     "Proposer des phrases", "Sugerir frases",
-                    "Phrasen vorschlagen", "Suggerisci frasi")
+                    "Phrasen finden", "Suggerisci frasi")
     }
 
     private var actionIcon: String {
-        if model.showsPasteAction { return "doc.on.clipboard" }
-        return model.phase == .results ? "arrow.triangle.2.circlepath" : "sparkles"
+        model.phase == .results ? "arrow.triangle.2.circlepath" : "sparkles"
     }
 
     private var loadingText: String {
         model.mode == .howToSay
             ? Loc.t("Подбираю варианты…", "Finding phrasings…",
-                    "Recherche de formulations…", "Buscando formulaciones…",
-                    "Suche Formulierungen…", "Ricerca formulazioni…")
+                    "Recherche de tournures…", "Buscando opciones…",
+                    "Suche Optionen…", "Ricerca opzioni…")
             : Loc.t("Подбираю фразы…", "Finding phrases…",
                     "Recherche de phrases…", "Buscando frases…",
                     "Suche Phrasen…", "Ricerca frasi…")

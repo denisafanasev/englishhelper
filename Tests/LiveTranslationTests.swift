@@ -486,5 +486,4 @@ struct SessionRecordingsPlayerTests {
 /// Deterministic empty clipboard (never reads the simulator's real one).
 private struct EmptyPasteboard: PasteboardReading {
     var hasText: Bool { false }
-    func readText() -> String? { nil }
 }

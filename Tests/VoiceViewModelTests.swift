@@ -401,7 +401,7 @@ private final class HoldingRecognizer: SpeechRecognizing, @unchecked Sendable {
         let vm = makeVM(pasteboard: VoiceMockPasteboard(text: "как сказать спасибо"))
         vm.refreshClipboardState()
         #expect(vm.showsPasteAction)
-        vm.pasteIntoInput()
+        vm.pasteIntoInput("как сказать спасибо")   // what the system paste control delivers
         #expect(vm.intent == "как сказать спасибо")
         #expect(!vm.showsPasteAction)   // now it's the mode action again
         #expect(vm.phase == .idle)      // paste never auto-submits
@@ -412,7 +412,7 @@ private final class HoldingRecognizer: SpeechRecognizing, @unchecked Sendable {
         let vm = makeVM(pasteboard: VoiceMockPasteboard(text: "   "))
         vm.refreshClipboardState()
         #expect(vm.showsPasteAction)
-        vm.pasteIntoInput()
+        vm.pasteIntoInput("   ")
         #expect(vm.intent.isEmpty)
         #expect(!vm.showsPasteAction)   // disarmed, not a do-nothing Paste button
     }
@@ -435,5 +435,4 @@ private final class VoiceMockPasteboard: PasteboardReading, @unchecked Sendable 
     var text: String?
     init(text: String?) { self.text = text }
     var hasText: Bool { text != nil }
-    func readText() -> String? { text }
 }

@@ -36,6 +36,7 @@ public struct EHButton: View {
             HStack(spacing: Tokens.Space.s8) {
                 if let icon { Image(systemName: icon) }
                 Text(title)
+                    .multilineTextAlignment(.center)   // 2-line labels center like MicButton's caption
             }
             .font(Tokens.Text.headline.font)   // scales with Dynamic Type (was a fixed 16pt)
             .tracking(-0.2)

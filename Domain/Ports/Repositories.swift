@@ -63,6 +63,33 @@ public struct TranslationCacheStats: Sendable, Equatable {
     }
 }
 
+/// How much disk the app's stored data occupies, split by kind (Settings). The DB-backed numbers
+/// (cache, history) are CONTENT sums — SQLite's own overhead (indexes, WAL, free pages) can't be
+/// attributed per table — while audio is the actual size of the recording files on disk.
+public struct StorageUsage: Sendable, Equatable {
+    /// Translation-cache payloads (keys + cached result JSON).
+    public let cacheBytes: Int
+    /// History rows (input text + result JSON; live sessions' audio is counted separately).
+    public let historyBytes: Int
+    /// Session-recording audio files.
+    public let audioBytes: Int
+    public var totalBytes: Int { cacheBytes + historyBytes + audioBytes }
+
+    public init(cacheBytes: Int, historyBytes: Int, audioBytes: Int) {
+        self.cacheBytes = cacheBytes
+        self.historyBytes = historyBytes
+        self.audioBytes = audioBytes
+    }
+
+    public static let zero = StorageUsage(cacheBytes: 0, historyBytes: 0, audioBytes: 0)
+}
+
+/// Reports the disk usage above. Concrete impl reads the SwiftData rows and the session-recordings
+/// directory (Data layer); best-effort — any read error just contributes zero.
+public protocol StorageUsageReading: Sendable {
+    func usage() async -> StorageUsage
+}
+
 /// Builds the cache key for a text-translation request. Inputs that change the result must all be in
 /// the key: the scenario `kind`, the (trimmed) input text, the `tone`/register (Say it only; nil for
 /// Translate), both languages, and the model `tier` (a per-scenario Settings choice — switching the

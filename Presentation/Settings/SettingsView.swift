@@ -60,6 +60,7 @@ public struct SettingsView: View {
                         targetCard(target: $target.language)
                         themeCard(theme: $theme.preference)
                         cacheCard
+                        storageCard
                         infoCard
                     }
                     .padding(Tokens.Space.s20)
@@ -74,6 +75,7 @@ public struct SettingsView: View {
             }
             .task { await model.check() }
             .task { await model.loadCacheStats() }
+            .task { await model.loadStorage() }
         }
     }
 
@@ -309,6 +311,36 @@ public struct SettingsView: View {
             Button(Loc.t("Очистить", "Clear"), role: .destructive) { Task { await model.clearCache() } }
             Button(Loc.t("Отмена", "Cancel"), role: .cancel) {}
         }
+    }
+
+    // MARK: Disk usage
+
+    private var storageCard: some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.s12) {
+            sectionTitle(Loc.t("Место на диске", "Disk usage"))
+            infoRow(Loc.t("Кэш переводов", "Translation cache"), byteString(model.storage.cacheBytes))
+            Divider().overlay(Tokens.Hairline.default)
+            infoRow(Loc.t("История", "History"), byteString(model.storage.historyBytes))
+            Divider().overlay(Tokens.Hairline.default)
+            infoRow(Loc.t("Аудиозаписи сессий", "Session recordings"), byteString(model.storage.audioBytes))
+            Divider().overlay(Tokens.Hairline.default)
+            infoRow(Loc.t("Всего", "Total"), byteString(model.storage.totalBytes))
+            Text(Loc.t("Тексты — оценка по содержимому записей; аудио — фактический размер файлов.",
+                       "Text sizes are estimated from the stored content; audio is the actual file size."))
+                .textStyle(Tokens.Text.footnote)
+                .foregroundStyle(Tokens.Content.tertiary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Tokens.Space.s16)
+        .glassPanel(cornerRadius: Tokens.Radius.card)
+    }
+
+    /// Localized byte count ("1,2 МБ") in the APP's interface language — the system formatter alone
+    /// would follow the device locale, which the in-app language picker deliberately overrides.
+    private func byteString(_ bytes: Int) -> String {
+        Int64(bytes).formatted(
+            .byteCount(style: .file).locale(Locale(identifier: AppLocale.currentCode()))
+        )
     }
 
     // MARK: Info
