@@ -57,6 +57,7 @@ public final class AppContainer: Sendable {
     public let recordings: any SessionRecordingsManaging
     public let understand: any UnderstandUseCase
     public let cacheAdmin: any TranslationCacheAdminUseCase   // translation-cache stats + clear (Settings)
+    public let storageUsage: any StorageUsageUseCase          // disk usage of cache/history/audio (Settings)
     public let explainExpression: any ExplainExpressionUseCase
 
     public init(
@@ -71,6 +72,7 @@ public final class AppContainer: Sendable {
         history: any HistoryRepository,
         exporter: any DeckExporting,
         cache: (any TranslationCache)? = nil,
+        storageReader: (any StorageUsageReading)? = nil,
         analytics: (any AnalyticsTracking)? = nil,
         transcriptionService: any TranscriptionServiceChecking = MockTranscriptionService(),
         liveTranslating: any LiveTranslating = MockLiveTranslating(),
@@ -132,6 +134,7 @@ public final class AppContainer: Sendable {
                                                              tier: { LLMModelChoice.currentExplain.tier },
                                                              analytics: analytics)
         self.cacheAdmin = TranslationCacheAdminInteractor(cache: cache)
+        self.storageUsage = StorageUsageInteractor(reader: storageReader)
     }
 
     /// v1: the whole graph on LIVE adapters. Swapping any engine is exactly ONE line below
@@ -168,6 +171,8 @@ public final class AppContainer: Sendable {
             exporter: AlgoAppXMLExporter(),
             // Persistent translation cache: repeat text translations skip the model (Say it + Get-it Translate).
             cache: SwiftDataTranslationCache(modelContainer: modelContainer),
+            // Disk usage shown in Settings (cache/history row contents + session-audio file sizes).
+            storageReader: StorageUsageReader(modelContainer: modelContainer, recordingsDirectory: nil),
             // Live product analytics — wired ONLY when the App ID is configured: the SDK asserts (in
             // debug) if a signal is sent before `initialize`, which the entry point calls iff the ID
             // is present. No ID (fresh clone / CI) → analytics is simply off, like the API key.
@@ -317,6 +322,7 @@ public final class AppContainer: Sendable {
             connectionHealth: connectionHealth,
             transcriptionHealth: transcriptionHealth,
             cacheAdmin: cacheAdmin,
+            storageUsage: storageUsage,
             appVersion: version,
             modelName: config.claudeModel,
             fastModelName: config.claudeFastModel,

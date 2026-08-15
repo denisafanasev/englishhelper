@@ -173,6 +173,54 @@ import Presentation
         #expect(vm.imageData == image)   // still the same photo
     }
 
+    /// Hopping Explain ↔ Translate over the SAME photo reuses each mode's earlier result instead
+    /// of re-running the request: exactly two model runs land in history, the cached results (and
+    /// the optimistic saved flag) survive the round-trip, and the switch back is instant (phase
+    /// stays .result — never .processing).
+    @Test func switchingModesReusesCachedResultsWithoutRepeatRequests() async throws {
+        let history = MockHistoryRepository()
+        let vm = makeVM(history: history)
+        vm.didPickFromLibrary(Data([0x01]))                       // Explain (default) runs
+        try await waitUntil { vm.phase == .result }
+        let cachedExplanation = try #require(vm.explanation)
+
+        vm.selectMode(.translate)                                 // first visit → runs
+        try await waitUntil { vm.phase == .result && !vm.blocks.isEmpty }
+        #expect(vm.explanation == cachedExplanation)              // explain cache survived the run
+        let block = try #require(vm.blocks.first)
+        vm.toggleSave(block)
+
+        vm.selectMode(.explain)                                   // cached → instant, no request
+        #expect(vm.phase == .result)                              // synchronously — process() would say .processing
+        #expect(vm.explanation == cachedExplanation)
+
+        vm.selectMode(.translate)                                 // cached → instant, no request
+        #expect(vm.phase == .result)
+        #expect(vm.blocks.first == block)
+        #expect(vm.isSaved(block))                                // saved flag survived the round-trip
+
+        let runs = try await history.recent(limit: 10).count
+        #expect(runs == 2)                                        // one explain + one translate, no repeats
+    }
+
+    /// A NEW photo invalidates BOTH modes' caches — switching mode after it must re-run, not show
+    /// the previous photo's cached result.
+    @Test func newPhotoDropsBothModeCaches() async throws {
+        let vm = makeVM()
+        vm.didPickFromLibrary(Data([0x01]))                       // Explain runs on photo 1
+        try await waitUntil { vm.phase == .result }
+        vm.selectMode(.translate)                                 // Translate runs on photo 1
+        try await waitUntil { vm.phase == .result && !vm.blocks.isEmpty }
+
+        vm.didPickFromLibrary(Data([0x02]))                       // NEW photo, translate mode
+        #expect(vm.explanation == nil)                            // photo 1's explain cache is gone
+        try await waitUntil { vm.phase == .result }
+        vm.selectMode(.explain)                                   // must RUN for photo 2, not restore photo 1's
+        #expect(vm.phase == .processing)
+        try await waitUntil { vm.phase == .result }
+        #expect(vm.explanation != nil)
+    }
+
     /// Switching mode after a FAILURE must re-run the same photo (not stay stuck on the error).
     @Test func switchingModeAfterFailureReRunsOnTheSamePhoto() async throws {
         let vm = makeVM(llm: FlakyLLM(failuresBeforeSuccess: 1))   // default mode Explain → first run fails

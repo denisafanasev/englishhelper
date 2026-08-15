@@ -150,16 +150,27 @@ public struct InView: View {
                     : Loc.t("Коснитесь, чтобы начать диктовку на изучаемом языке; сигнал отметит начало записи",
                             "Tap to start dictating in the language you're learning; a tone marks the start"))
 
-                // One button, two personas: with an EMPTY field and text on the clipboard it is PASTE
-                // (fills the field, then flips back to Translate/Explain for a deliberate submit);
-                // otherwise it is the mode's action. Every tap gives an impact haptic.
-                EHButton(actionTitle, icon: actionIcon, kind: .primary, fillWidth: true,
-                         accessibilityID: "getit.action") {
-                    fieldFocused = false
-                    actionTapCount += 1
-                    if model.showsPasteAction { model.pasteIntoInput() } else { model.submit() }
+                // One slot, two personas: with an EMPTY field and text on the clipboard it is the
+                // SYSTEM paste control — its tap IS the pasteboard consent, so iOS never shows the
+                // "Allow Paste?" dialog (a programmatic read prompts on every new clipboard).
+                // Otherwise it is Translate/Explain. Every tap gives an impact haptic.
+                if model.showsPasteAction {
+                    EHPasteButton { text in
+                        fieldFocused = false
+                        actionTapCount += 1
+                        model.pasteIntoInput(text)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 50)
+                    .accessibilityIdentifier("getit.action")
+                } else {
+                    EHButton(actionTitle, icon: actionIcon, kind: .primary, fillWidth: true,
+                             accessibilityID: "getit.action") {
+                        fieldFocused = false
+                        actionTapCount += 1
+                        model.submit()
+                    }
+                    .disabled(!actionEnabled)   // EHButton dims itself when disabled
                 }
-                .disabled(!actionEnabled)   // EHButton dims itself when disabled
             }
             .sensoryFeedback(.impact(weight: .medium), trigger: actionTapCount)
         }
@@ -255,14 +266,13 @@ public struct InView: View {
         model.hasActionAvailable && model.phase != .processing && !model.isListening
     }
 
+    // (The PASTE persona is the system control — its label/icon come from iOS, not from here.)
     private var actionTitle: String {
-        if model.showsPasteAction { return Loc.t("Вставить", "Paste") }
-        return model.mode == .explain ? Loc.t("Объяснить", "Explain") : Loc.t("Перевести", "Translate")
+        model.mode == .explain ? Loc.t("Объяснить", "Explain") : Loc.t("Перевести", "Translate")
     }
 
     private var actionIcon: String {
-        if model.showsPasteAction { return "doc.on.clipboard" }
-        return model.mode == .explain ? "lightbulb" : "character.book.closed"
+        model.mode == .explain ? "lightbulb" : "character.book.closed"
     }
 
     // The empty-state hint adapts to the selected mode: Explain describes the nuance breakdown,
@@ -304,7 +314,9 @@ public struct InView: View {
         switch model.micStatus {
         case .listening: Loc.t("Слушаю…", "Listening…")
         case .processing: Loc.t("Минуту…", "One moment…")
-        case .idle: Loc.t("Удерживайте и говорите", "Hold and speak")
+        // "Зажмите", not "Удерживайте": the longest word must fit the HALF-width pill's line on the
+        // narrowest iPhone (~93 pt of text width), or the caption char-wraps mid-word ("Удерживайт-е").
+        case .idle: Loc.t("Зажмите и говорите", "Hold and speak")
         }
     }
 

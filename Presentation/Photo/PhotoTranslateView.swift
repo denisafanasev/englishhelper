@@ -211,7 +211,9 @@ public struct PhotoTranslateView: View {
                     .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.card, style: .continuous))
             }
             // Translate mode → per-block cards; Explain mode → the scene explanation card.
-            if !model.blocks.isEmpty {
+            // Selected by MODE, not by which result exists: BOTH can be cached for this photo
+            // (the view model keeps each mode's result so switches don't re-run the request).
+            if model.mode == .translate {
                 ForEach(model.blocks) { block in
                     blockCard(block)
                 }

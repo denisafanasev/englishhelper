@@ -24,15 +24,19 @@ public final class SettingsViewModel {
     public let sonioxModelName: String
     /// Translation-cache usage shown in Settings (entries stored + times served from cache).
     public private(set) var cacheStats = TranslationCacheStats(entryCount: 0, hitCount: 0)
+    /// Disk usage of the app's stored data (cache / history / session audio) shown in Settings.
+    public private(set) var storage = StorageUsage.zero
 
     private let connectionHealth: any ConnectionHealthUseCase
     private let transcriptionHealth: any TranscriptionHealthUseCase
     private let cacheAdmin: any TranslationCacheAdminUseCase
+    private let storageUsage: any StorageUsageUseCase
 
     public init(
         connectionHealth: any ConnectionHealthUseCase,
         transcriptionHealth: any TranscriptionHealthUseCase,
         cacheAdmin: any TranslationCacheAdminUseCase,
+        storageUsage: any StorageUsageUseCase = StorageUsageInteractor(reader: nil),
         appVersion: String,
         modelName: String,
         fastModelName: String,
@@ -41,6 +45,7 @@ public final class SettingsViewModel {
         self.connectionHealth = connectionHealth
         self.transcriptionHealth = transcriptionHealth
         self.cacheAdmin = cacheAdmin
+        self.storageUsage = storageUsage
         self.appVersion = appVersion
         self.modelName = modelName
         self.fastModelName = fastModelName
@@ -49,9 +54,12 @@ public final class SettingsViewModel {
 
     public func loadCacheStats() async { cacheStats = await cacheAdmin.stats() }
 
+    public func loadStorage() async { storage = await storageUsage() }
+
     public func clearCache() async {
         await cacheAdmin.clear()
         cacheStats = await cacheAdmin.stats()
+        storage = await storageUsage()   // the disk-usage card shows cache bytes — keep it in sync
     }
 
     /// Probe both Claude models AND Soniox concurrently; surface each status independently.

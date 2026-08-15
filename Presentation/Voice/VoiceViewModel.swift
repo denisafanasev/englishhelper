@@ -139,15 +139,15 @@ public final class VoiceViewModel {
         clipboardHasText = pasteboard.hasText
     }
 
-    /// Put the clipboard text into the input field (explicit user tap — iOS may show its one-time
-    /// paste confirmation). The field becoming non-empty flips the button back to the mode action;
-    /// the user then submits DELIBERATELY — pasting never auto-runs the request.
-    public func pasteIntoInput() {
-        guard let text = pasteboard.readText(),
-              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            // Nothing USABLE (emptied since the last check, denied, non-text, or whitespace-only —
-            // where `hasText` would still say true). Mark the clipboard unusable directly so the
-            // button flips/disables instead of staying an enabled do-nothing Paste.
+    /// Fill the input with what the SYSTEM paste control delivered (its tap IS the pasteboard
+    /// consent, so no "Allow Paste?" dialog is ever shown — the reason the read doesn't happen
+    /// here). The field becoming non-empty flips the button back to the mode action; the user then
+    /// submits DELIBERATELY — pasting never auto-runs the request.
+    public func pasteIntoInput(_ text: String) {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            // Nothing USABLE (whitespace-only — where `hasText` would still say true). Mark the
+            // clipboard unusable so the slot flips back to the mode action instead of staying a
+            // do-nothing Paste.
             clipboardHasText = false
             return
         }
